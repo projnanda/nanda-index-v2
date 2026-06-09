@@ -1,0 +1,41 @@
+{
+  "name": "nanda-index",
+  "version": "0.1.0",
+  "description": "NANDA Index — authoritative registry of agent registries",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0 <21.0.0"
+  },
+  "scripts": {
+    "dev": "tsx watch --env-file=.env src/server.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "migrate": "tsx --env-file=.env src/db/migrate.ts",
+    "demo:seed": "DEMO_MODE=true tsx --env-file=.env scripts/seed-demo.ts",
+    "demo:run": "DEMO_MODE=true tsx --env-file=.env scripts/demo-flow.ts"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.0.2",
+    "@fastify/cors": "^11.2.0",
+    "@fastify/jwt": "^10.1.0",
+    "@fastify/oauth2": "^8.2.0",
+    "@fastify/swagger": "^9.7.0",
+    "@fastify/swagger-ui": "^5.2.6",
+    "bcryptjs": "^3.0.3",
+    "fastify": "^5.1.0",
+    "nodemailer": "^8.0.10",
+    "postgres": "^3.4.4"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20.14.0",
+    "@types/nodemailer": "^8.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

@@ -1,0 +1,72 @@
+# NANDA Index — full stack
+#
+# Spins up: Postgres DB, Index Server (Fastify), Index Web (Next.js)
+#
+# Quick start:
+#   cp .env.example .env
+#   docker compose up --build
+#
+# Index API:  http://localhost:3001
+# Index Web:  http://localhost:3000
+
+services:
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: nanda_index
+      POSTGRES_USER: nanda
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nanda-local}
+    ports:
+      - "5433:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nanda -d nanda_index"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://nanda:${POSTGRES_PASSWORD:-nanda-local}@db:5432/nanda_index
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      OAUTH_CALLBACK_BASE_URL: ${OAUTH_CALLBACK_BASE_URL:-http://localhost:3001}
+      SMTP_URL: ${SMTP_URL:-log}
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@nanda.local}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      DB_MAX_CONNECTIONS: ${DB_MAX_CONNECTIONS:-10}
+    ports:
+      - "3001:3001"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_NANDA_INDEX_API_URL: ${NEXT_PUBLIC_NANDA_INDEX_API_URL:-http://localhost:3001}
+    environment:
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - server
+    restart: unless-stopped
+
+volumes:
+  db_data:
