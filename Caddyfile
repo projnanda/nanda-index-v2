@@ -1,0 +1,14 @@
+{
+	auto_https off
+	admin off
+}
+
+# NANDA Index Web — http://<DROPLET_IP>
+:80 {
+	reverse_proxy web:3000
+}
+
+# NANDA Index API — http://<DROPLET_IP>:3001
+:3001 {
+	reverse_proxy server:3001
+}

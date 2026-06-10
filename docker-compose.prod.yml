@@ -1,0 +1,84 @@
+# NANDA Index — production stack
+#
+# Prerequisites:
+#   1. cp .env.prod.example .env.prod  — fill in all values
+#   2. Set NEXT_PUBLIC_NANDA_INDEX_API_URL=http://<DROPLET_IP>:3001 in .env.prod
+#   3. docker compose -f docker-compose.prod.yml --env-file .env.prod up --build -d
+#
+# Caddy exposes (open these ports in your Droplet firewall):
+#   :80   → Index Web  (Next.js)
+#   :3001 → Index API  (Fastify)
+#
+# Postgres is internal only — not reachable from outside.
+
+services:
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: nanda_index
+      POSTGRES_USER: nanda
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nanda -d nanda_index"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://nanda:${POSTGRES_PASSWORD}@db:5432/nanda_index
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      OAUTH_CALLBACK_BASE_URL: ${OAUTH_CALLBACK_BASE_URL}
+      SMTP_URL: ${SMTP_URL:-log}
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@nandaindex.org}
+      FRONTEND_URL: ${FRONTEND_URL}
+      DB_MAX_CONNECTIONS: ${DB_MAX_CONNECTIONS:-10}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_NANDA_INDEX_API_URL: ${NEXT_PUBLIC_NANDA_INDEX_API_URL}
+    environment:
+      PORT: 3000
+    depends_on:
+      - server
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "3001:3001"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - server
+      - web
+    restart: unless-stopped
+
+volumes:
+  db_data:
+  caddy_data:
+  caddy_config:
