@@ -2,12 +2,11 @@
 #
 # Prerequisites:
 #   1. cp .env.prod.example .env.prod  — fill in all values
-#   2. Set NEXT_PUBLIC_NANDA_INDEX_API_URL=http://<DROPLET_IP>:3001 in .env.prod
-#   3. docker compose -f docker-compose.prod.yml --env-file .env.prod up --build -d
+#   2. docker compose -f docker-compose.prod.yml --env-file .env.prod up --build -d
 #
 # Caddy exposes (open these ports in your Droplet firewall):
-#   :80   → Index Web  (Next.js)
-#   :3001 → Index API  (Fastify)
+#   :80  → HTTP (redirects to HTTPS automatically)
+#   :443 → nandaindex.org (web) + api.nandaindex.org (API)
 #
 # Postgres is internal only — not reachable from outside.
 
@@ -68,7 +67,7 @@ services:
     image: caddy:2-alpine
     ports:
       - "80:80"
-      - "3001:3001"
+      - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
