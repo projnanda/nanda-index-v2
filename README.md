@@ -48,7 +48,7 @@ docker compose up --build
 | `GITHUB_CLIENT_SECRET` | no | — | |
 | `OAUTH_CALLBACK_BASE_URL` | no | `http://localhost:3001` | Base URL for OAuth redirect URIs |
 | `FRONTEND_URL` | no | `http://localhost:3000` | Where to redirect after OAuth login |
-| `SMTP_URL` | no | `log` | SMTP connection string. `log` prints emails to console |
+| `SMTP_URL` | no | `log` | Resend API key (`re_...`). `log` prints verification links to console instead of sending |
 | `EMAIL_FROM` | no | `noreply@nanda.local` | From address for verification emails |
 | `PORT` | no | `3001` | API server port |
 | `DB_MAX_CONNECTIONS` | no | `10` | Postgres connection pool size |
@@ -84,10 +84,12 @@ docker compose up --build
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| `POST` | `/api/v1/orgs` | JWT | Register a new organization |
+| `POST` | `/api/v1/orgs` | JWT | Register a new organization (sends verification email) |
 | `GET` | `/api/v1/orgs/:org_id` | JWT | Get org (must be a member) |
 | `PUT` | `/api/v1/orgs/:org_id` | JWT | Update org fields |
-| `DELETE` | `/api/v1/orgs/:org_id` | JWT | Delete org |
+| `DELETE` | `/api/v1/orgs/:org_id` | JWT | Permanently delete org |
+| `DELETE` | `/api/v1/orgs/:org_id/suspend` | JWT | Suspend org (removes from public index) |
+| `POST` | `/api/v1/orgs/:org_id/reactivate` | JWT | Reactivate a suspended org |
 
 ### Resolution + search (public)
 
@@ -151,6 +153,7 @@ One row per registered org — the core IndexRecord.
 | `registry_url` | VARCHAR(512) | URL of the org's Registry Server |
 | `email_verified` | BOOLEAN | `true` once verification link is clicked |
 | `verify_token` | VARCHAR(64) | One-time token emailed on registration |
+| `verify_token_expires_at` | TIMESTAMPTZ | Token expiry — 24h after registration |
 | `ttl_seconds` | INTEGER | Cache hint for resolvers. Default 86400 (24h) |
 | `status` | VARCHAR(20) | `pending`, `active`, or `suspended` |
 | `created_at` | TIMESTAMPTZ | |
@@ -202,6 +205,6 @@ cd web && npm install && npm run dev
 | Framework | Fastify 5 |
 | Database | PostgreSQL 16, postgres.js (no ORM) |
 | Auth | @fastify/oauth2 (Google + GitHub), @fastify/jwt, bcryptjs |
-| Email | nodemailer (`SMTP_URL=log` in dev) |
+| Email | Resend SDK (`SMTP_URL=log` prints to console in dev) |
 | Tests | Vitest + fastify.inject() |
 | Frontend | Next.js 15, Tailwind CSS 4 |
