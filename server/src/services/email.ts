@@ -15,7 +15,7 @@ export async function sendVerificationEmail(
   }
 
   const resend = new Resend(config.email.smtpUrl);
-  await resend.emails.send({
+  const { error } = await resend.emails.send({
     from:    config.email.fromAddress,
     to,
     subject: `Verify your NANDA Index registration for ${orgId}`,
@@ -24,4 +24,5 @@ export async function sendVerificationEmail(
               <p><a href="${verifyUrl}">${verifyUrl}</a></p>
               <p>This link is valid for 24 hours.</p>`,
   });
+  if (error) throw new Error(`Resend error: ${error.message}`);
 }
