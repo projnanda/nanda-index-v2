@@ -110,17 +110,21 @@ export default function ResolvePage() {
       setIndexResult(indexData);
 
       // Hop 2: caller fetches AgentRecord directly from the registry
-      try {
-        const agentData = await fetchAgentRecord(
-          indexData.index_record.registry_url,
-          indexData.identifier,
-        );
-        setAgentResult(agentData);
-      } catch (err) {
-        if (err instanceof ApiError) {
-          setAgentError(`Registry returned ${err.status}: ${err.message}`);
-        } else {
-          setAgentError("Could not reach the registry server.");
+      if (!indexData.index_record.registry_url) {
+        setAgentError("This entry has no registry URL (DNS-AID or custom discovery).");
+      } else {
+        try {
+          const agentData = await fetchAgentRecord(
+            indexData.index_record.registry_url,
+            indexData.identifier,
+          );
+          setAgentResult(agentData);
+        } catch (err) {
+          if (err instanceof ApiError) {
+            setAgentError(`Registry returned ${err.status}: ${err.message}`);
+          } else {
+            setAgentError("Could not reach the registry server.");
+          }
         }
       }
 

@@ -1,37 +1,58 @@
 import { getSql } from '../client.js';
-import type { IndexRecord } from '../../types/api/index-record.js';
+import type { IndexRecord, PublisherBlock } from '../../types/api/index-record.js';
 
 /** Domain type — camelCase (postgres.camel maps snake_case columns). */
 export interface Organization {
   id: string;
   orgId: string;
   displayName: string;
-  domain: string;
+  domain: string | null;
   contactEmail: string;
-  registryUrl: string;
+  registryUrl: string | null;
   emailVerified: boolean;
   verifyToken: string | null;
   ttlSeconds: number;
   status: 'pending' | 'active' | 'suspended';
   createdAt: Date;
   updatedAt: Date;
+
+  // AI Catalog fields
+  identifier: string | null;
+  mediaType: string;
+  description: string | null;
+  tags: string[];
+  publisher: PublisherBlock | null;
+  catalogMetadata: Record<string, unknown> | null;
+  entryData: Record<string, unknown> | null;
 }
 
 export interface InsertOrgParams {
   orgId: string;
   displayName: string;
-  domain: string;
+  domain?: string | null;
   contactEmail: string;
-  registryUrl: string;
+  registryUrl?: string | null;
   verifyToken: string;
   ttlSeconds?: number;
+  identifier?: string;
+  mediaType?: string;
+  description?: string | null;
+  tags?: string[];
+  publisher?: PublisherBlock | null;
+  catalogMetadata?: Record<string, unknown> | null;
+  entryData?: Record<string, unknown> | null;
 }
 
 export interface UpdateOrgParams {
   displayName?: string;
   domain?: string;
-  registryUrl?: string;
+  registryUrl?: string | null;
   ttlSeconds?: number;
+  description?: string | null;
+  tags?: string[];
+  publisher?: PublisherBlock | null;
+  catalogMetadata?: Record<string, unknown> | null;
+  entryData?: Record<string, unknown> | null;
 }
 
 /** Maps a domain Organization to the wire IndexRecord shape. */
@@ -46,6 +67,13 @@ export function toIndexRecord(org: Organization): IndexRecord {
     email_verified: org.emailVerified,
     created_at:     org.createdAt.toISOString(),
     updated_at:     org.updatedAt.toISOString(),
+    identifier:     org.identifier ?? undefined,
+    media_type:     org.mediaType,
+    description:    org.description,
+    tags:           org.tags,
+    publisher:      org.publisher ?? undefined,
+    metadata:       org.catalogMetadata ?? undefined,
+    data:           org.entryData ?? undefined,
   };
 }
 
@@ -104,12 +132,21 @@ export async function findAllActive(): Promise<Organization[]> {
  */
 export async function insertOrganization(params: InsertOrgParams): Promise<Organization> {
   const sql = getSql();
+  const identifier = params.identifier ?? (params.domain ? `urn:ai:domain:${params.domain}` : null);
   const rows = await sql<Organization[]>`
     INSERT INTO organizations
-      (org_id, display_name, domain, contact_email, registry_url, verify_token, ttl_seconds)
+      (org_id, display_name, domain, contact_email, registry_url, verify_token, ttl_seconds,
+       identifier, media_type, description, tags, publisher, catalog_metadata, entry_data)
     VALUES
-      (${params.orgId}, ${params.displayName}, ${params.domain}, ${params.contactEmail},
-       ${params.registryUrl}, ${params.verifyToken}, ${params.ttlSeconds ?? 86400})
+      (${params.orgId}, ${params.displayName}, ${params.domain ?? null}, ${params.contactEmail},
+       ${params.registryUrl ?? null}, ${params.verifyToken}, ${params.ttlSeconds ?? 86400},
+       ${identifier},
+       ${params.mediaType ?? 'application/ai-catalog+json'},
+       ${params.description ?? null},
+       ${sql.array(params.tags ?? [])},
+       ${params.publisher ? sql.json(JSON.parse(JSON.stringify(params.publisher))) : null},
+       ${params.catalogMetadata ? sql.json(JSON.parse(JSON.stringify(params.catalogMetadata))) : null},
+       ${params.entryData ? sql.json(JSON.parse(JSON.stringify(params.entryData))) : null})
     RETURNING *
   `;
   return rows[0]!;
@@ -127,11 +164,16 @@ export async function updateOrganization(
   const sql = getSql();
   const rows = await sql<Organization[]>`
     UPDATE organizations SET
-      display_name = COALESCE(${patch.displayName ?? null}, display_name),
-      domain       = COALESCE(${patch.domain ?? null}, domain),
-      registry_url = COALESCE(${patch.registryUrl ?? null}, registry_url),
-      ttl_seconds  = COALESCE(${patch.ttlSeconds ?? null}, ttl_seconds),
-      updated_at   = NOW()
+      display_name     = COALESCE(${patch.displayName ?? null}, display_name),
+      domain           = COALESCE(${patch.domain ?? null}, domain),
+      registry_url     = COALESCE(${patch.registryUrl ?? null}, registry_url),
+      ttl_seconds      = COALESCE(${patch.ttlSeconds ?? null}, ttl_seconds),
+      description      = COALESCE(${patch.description ?? null}, description),
+      tags             = COALESCE(${patch.tags != null ? sql.array(patch.tags) : null}, tags),
+      publisher        = COALESCE(${patch.publisher ? sql.json(JSON.parse(JSON.stringify(patch.publisher))) : null}, publisher),
+      catalog_metadata = COALESCE(${patch.catalogMetadata ? sql.json(JSON.parse(JSON.stringify(patch.catalogMetadata))) : null}, catalog_metadata),
+      entry_data       = COALESCE(${patch.entryData ? sql.json(JSON.parse(JSON.stringify(patch.entryData))) : null}, entry_data),
+      updated_at       = NOW()
     WHERE org_id = ${orgId}
     RETURNING *
   `;

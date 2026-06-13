@@ -176,6 +176,11 @@ export default function DemoPage() {
 
     // Hop 2 — Registry Server
     const { registry_url } = indexResult.index_record;
+    if (!registry_url) {
+      setHop2({ status: "error", message: "This entry has no registry URL (DNS-AID or custom discovery)." });
+      setResolving(false);
+      return;
+    }
     const h2url = `${registry_url.replace(/\/+$/, "")}/agents/${indexResult.identifier}`;
     setHop2Url(h2url);
     setHop2({ status: "loading" });

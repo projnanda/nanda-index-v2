@@ -6,21 +6,34 @@ import { sendVerificationEmail } from '../services/email.js';
 import { INDEX_RECORD_SCHEMA } from '../types/api/index-record.js';
 import { apiErrorSchema } from '../types/api/common.js';
 import type { JwtPayload } from '../plugins/jwt.js';
+import type { PublisherBlock } from '../types/api/index-record.js';
 
 interface CreateOrgBody {
   org_id: string;
   display_name: string;
-  domain: string;
+  domain?: string | null;
   contact_email: string;
-  registry_url: string;
+  registry_url?: string | null;
   ttl_seconds?: number;
+  identifier?: string;
+  media_type?: string;
+  description?: string;
+  tags?: string[];
+  publisher?: PublisherBlock;
+  catalog_metadata?: Record<string, unknown>;
+  entry_data?: Record<string, unknown>;
 }
 
 interface UpdateOrgBody {
   display_name?: string;
   domain?: string;
-  registry_url?: string;
+  registry_url?: string | null;
   ttl_seconds?: number;
+  description?: string;
+  tags?: string[];
+  publisher?: PublisherBlock;
+  catalog_metadata?: Record<string, unknown>;
+  entry_data?: Record<string, unknown>;
 }
 
 /**
@@ -41,7 +54,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       summary: 'Register a new organization (creates index record)',
       body: {
         type: 'object',
-        required: ['org_id', 'display_name', 'domain', 'contact_email', 'registry_url'],
+        required: ['org_id', 'display_name', 'contact_email'],
         properties: {
           org_id:        { type: 'string', pattern: '^[a-z0-9][a-z0-9-]*[a-z0-9]$', minLength: 2, maxLength: 64 },
           display_name:  { type: 'string', minLength: 1, maxLength: 255 },
@@ -49,6 +62,22 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
           contact_email: { type: 'string', format: 'email' },
           registry_url:  { type: 'string', pattern: '^https?://', maxLength: 512 },
           ttl_seconds:   { type: 'integer', minimum: 3600, maximum: 604800 },
+          identifier:    { type: 'string', maxLength: 512 },
+          media_type:    { type: 'string', maxLength: 128,
+                           enum: ['application/ai-catalog+json', 'application/vnd.dns-aid+json', 'application/a2a-agent-card+json'] },
+          description:   { type: 'string', maxLength: 1000 },
+          tags:          { type: 'array', items: { type: 'string', maxLength: 64 }, maxItems: 20 },
+          publisher: {
+            type: 'object',
+            required: ['identifier', 'displayName'],
+            properties: {
+              identifier:   { type: 'string' },
+              displayName:  { type: 'string' },
+              identityType: { type: 'string' },
+            },
+          },
+          catalog_metadata: { type: 'object', additionalProperties: true },
+          entry_data:       { type: 'object', additionalProperties: true },
         },
       },
       response: {
@@ -70,13 +99,20 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
     const verifyToken = randomBytes(32).toString('hex');
 
     const org = await insertOrganization({
-      orgId:        body.org_id,
-      displayName:  body.display_name,
-      domain:       body.domain,
-      contactEmail: body.contact_email,
-      registryUrl:  body.registry_url,
+      orgId:           body.org_id,
+      displayName:     body.display_name,
+      domain:          body.domain ?? null,
+      contactEmail:    body.contact_email,
+      registryUrl:     body.registry_url ?? null,
       verifyToken,
-      ttlSeconds:   body.ttl_seconds,
+      ttlSeconds:      body.ttl_seconds,
+      identifier:      body.identifier,
+      mediaType:       body.media_type,
+      description:     body.description,
+      tags:            body.tags,
+      publisher:       body.publisher,
+      catalogMetadata: body.catalog_metadata,
+      entryData:       body.entry_data,
     });
 
     await insertMembership(user.userId, org.orgId, 'admin');
@@ -132,10 +168,23 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       body: {
         type: 'object',
         properties: {
-          display_name:  { type: 'string', minLength: 1, maxLength: 255 },
-          domain:        { type: 'string', minLength: 3, maxLength: 255 },
-          registry_url:  { type: 'string', pattern: '^https?://', maxLength: 512 },
-          ttl_seconds:   { type: 'integer', minimum: 3600, maximum: 604800 },
+          display_name:     { type: 'string', minLength: 1, maxLength: 255 },
+          domain:           { type: 'string', minLength: 3, maxLength: 255 },
+          registry_url:     { type: 'string', pattern: '^https?://', maxLength: 512 },
+          ttl_seconds:      { type: 'integer', minimum: 3600, maximum: 604800 },
+          description:      { type: 'string', maxLength: 1000 },
+          tags:             { type: 'array', items: { type: 'string', maxLength: 64 }, maxItems: 20 },
+          publisher: {
+            type: 'object',
+            required: ['identifier', 'displayName'],
+            properties: {
+              identifier:   { type: 'string' },
+              displayName:  { type: 'string' },
+              identityType: { type: 'string' },
+            },
+          },
+          catalog_metadata: { type: 'object', additionalProperties: true },
+          entry_data:       { type: 'object', additionalProperties: true },
         },
       },
       response: {
@@ -154,10 +203,15 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
     const body = request.body;
     const updated = await updateOrganization(request.params.org_id, {
-      displayName:  body.display_name,
-      domain:       body.domain,
-      registryUrl:  body.registry_url,
-      ttlSeconds:   body.ttl_seconds,
+      displayName:     body.display_name,
+      domain:          body.domain,
+      registryUrl:     body.registry_url,
+      ttlSeconds:      body.ttl_seconds,
+      description:     body.description,
+      tags:            body.tags,
+      publisher:       body.publisher,
+      catalogMetadata: body.catalog_metadata,
+      entryData:       body.entry_data,
     });
     if (!updated) {
       return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
