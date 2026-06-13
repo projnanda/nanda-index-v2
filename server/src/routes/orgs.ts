@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import { findByOrgId, insertOrganization, updateOrganization, suspendOrganization, toIndexRecord } from '../db/queries/organizations.js';
+import { findByOrgId, insertOrganization, updateOrganization, suspendOrganization, reactivateOrganization, deleteOrganization, toIndexRecord } from '../db/queries/organizations.js';
 import { insertMembership, checkMembership } from '../db/queries/orgMemberships.js';
 import { sendVerificationEmail } from '../services/email.js';
 import { INDEX_RECORD_SCHEMA } from '../types/api/index-record.js';
@@ -169,7 +169,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   // Suspend org
-  fastify.delete<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id', {
+  fastify.delete<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/suspend', {
     preHandler: [fastify.authenticate],
     schema: {
       tags: ['orgs'],
@@ -199,5 +199,71 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
     }
 
     return reply.send(toIndexRecord(suspended));
+  });
+
+  // Reactivate a suspended org
+  fastify.post<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/reactivate', {
+    preHandler: [fastify.authenticate],
+    schema: {
+      tags: ['orgs'],
+      summary: 'Reactivate a suspended organization',
+      params: {
+        type: 'object',
+        required: ['org_id'],
+        properties: { org_id: { type: 'string' } },
+      },
+      response: {
+        200: INDEX_RECORD_SCHEMA,
+        403: apiErrorSchema,
+        404: apiErrorSchema,
+      },
+    },
+  }, async (request, reply) => {
+    const user = request.user as JwtPayload;
+
+    const membership = await checkMembership(user.userId, request.params.org_id);
+    if (!membership) {
+      return reply.code(403).send({ error: 'FORBIDDEN', detail: 'you are not a member of this organization' });
+    }
+
+    const reactivated = await reactivateOrganization(request.params.org_id);
+    if (!reactivated) {
+      return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
+    }
+
+    return reply.send(toIndexRecord(reactivated));
+  });
+
+  // Hard-delete org
+  fastify.delete<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id', {
+    preHandler: [fastify.authenticate],
+    schema: {
+      tags: ['orgs'],
+      summary: 'Permanently delete your organization',
+      params: {
+        type: 'object',
+        required: ['org_id'],
+        properties: { org_id: { type: 'string' } },
+      },
+      response: {
+        204: { type: 'null' },
+        403: apiErrorSchema,
+        404: apiErrorSchema,
+      },
+    },
+  }, async (request, reply) => {
+    const user = request.user as JwtPayload;
+
+    const membership = await checkMembership(user.userId, request.params.org_id);
+    if (!membership) {
+      return reply.code(403).send({ error: 'FORBIDDEN', detail: 'you are not a member of this organization' });
+    }
+
+    const deleted = await deleteOrganization(request.params.org_id);
+    if (!deleted) {
+      return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
+    }
+
+    return reply.code(204).send();
   });
 }

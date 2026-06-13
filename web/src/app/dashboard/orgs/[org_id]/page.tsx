@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { PageShell } from "@/components/PageShell";
 import { StatusBadge } from "@/components/StatusBadge";
 import { JsonPanel } from "@/components/JsonPanel";
-import { ApiError, getOrgAsOwner, updateOrg, deleteOrg } from "@/lib/nanda-api";
+import { ApiError, getOrgAsOwner, updateOrg, suspendOrg, reactivateOrg, deleteOrg } from "@/lib/nanda-api";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import type { IndexRecord } from "@/lib/nanda-types";
 
@@ -21,6 +21,8 @@ export default function OrgDetailPage() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [suspending, setSuspending] = useState(false);
+  const [reactivating, setReactivating] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const [displayName, setDisplayName] = useState("");
   const [registryUrl, setRegistryUrl] = useState("");
@@ -66,22 +68,44 @@ export default function OrgDetailPage() {
   }
 
   async function onSuspend() {
-    if (!confirm(`Suspend "${orgId}"? This will deactivate the index record.`)) return;
+    if (!confirm(`Suspend "${orgId}"? This will remove it from public index results.`)) return;
     setSuspending(true);
+    try {
+      const updated = await suspendOrg(orgId);
+      setOrg(updated);
+    } catch (err) {
+      if (err instanceof ApiError) setError(`${err.status}: ${err.message}`);
+      else setError(`Unexpected error: ${String(err)}`);
+    } finally {
+      setSuspending(false);
+    }
+  }
+
+  async function onReactivate() {
+    if (!confirm(`Reactivate "${orgId}"? This will make it active and visible in the index again.`)) return;
+    setReactivating(true);
+    try {
+      const updated = await reactivateOrg(orgId);
+      setOrg(updated);
+    } catch (err) {
+      if (err instanceof ApiError) setError(`${err.status}: ${err.message}`);
+      else setError(`Unexpected error: ${String(err)}`);
+    } finally {
+      setReactivating(false);
+    }
+  }
+
+  async function onDelete() {
+    if (!confirm(`Permanently delete "${orgId}"? This cannot be undone.`)) return;
+    setDeleting(true);
     try {
       await deleteOrg(orgId);
       router.replace("/dashboard");
     } catch (err) {
-      console.error("[onSuspend] error:", err);
-      if (err instanceof ApiError) {
-        setError(`${err.status}: ${err.message}`);
-      } else if (err instanceof TypeError) {
-        setError(`Network error — ${(err as TypeError).message}. Make sure the backend is running on port 3001.`);
-      } else {
-        setError(`Unexpected error: ${String(err)}`);
-      }
+      if (err instanceof ApiError) setError(`${err.status}: ${err.message}`);
+      else setError(`Unexpected error: ${String(err)}`);
     } finally {
-      setSuspending(false);
+      setDeleting(false);
     }
   }
 
@@ -164,16 +188,41 @@ export default function OrgDetailPage() {
 
         <JsonPanel data={org} />
 
-        <div className="rounded-3xl border border-rose-100 bg-rose-50 p-5">
-          <h3 className="mb-2 text-sm font-semibold text-rose-800">Danger Zone</h3>
-          <p className="mb-4 text-sm text-rose-700">Suspending this organization will set its status to &ldquo;suspended&rdquo; and remove it from public index results.</p>
-          <button
-            onClick={onSuspend}
-            disabled={suspending}
-            className="rounded-2xl border border-rose-300 bg-white px-5 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-60"
-          >
-            {suspending ? "Suspending…" : "Suspend organization"}
-          </button>
+        <div className="rounded-3xl border border-rose-100 bg-rose-50 p-5 space-y-3">
+          <h3 className="text-sm font-semibold text-rose-800">Danger Zone</h3>
+          {org.status === "suspended" ? (
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-rose-700">This organization is suspended and hidden from the public index.</p>
+              <button
+                onClick={onReactivate}
+                disabled={reactivating}
+                className="ml-4 shrink-0 rounded-2xl border border-emerald-300 bg-white px-5 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-60"
+              >
+                {reactivating ? "Reactivating…" : "Reactivate"}
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-rose-700">Suspending removes this org from public index results. You can reactivate it later.</p>
+              <button
+                onClick={onSuspend}
+                disabled={suspending}
+                className="ml-4 shrink-0 rounded-2xl border border-rose-300 bg-white px-5 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-60"
+              >
+                {suspending ? "Suspending…" : "Suspend"}
+              </button>
+            </div>
+          )}
+          <div className="border-t border-rose-200 pt-3 flex items-center justify-between">
+            <p className="text-sm text-rose-700">Permanently delete this organization and all its data. This cannot be undone.</p>
+            <button
+              onClick={onDelete}
+              disabled={deleting}
+              className="ml-4 shrink-0 rounded-2xl bg-rose-600 px-5 py-2 text-sm font-medium text-white hover:bg-rose-700 disabled:opacity-60"
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </button>
+          </div>
         </div>
       </div>
     </PageShell>

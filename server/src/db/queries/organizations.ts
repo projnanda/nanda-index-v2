@@ -179,6 +179,34 @@ export async function suspendOrganization(orgId: string): Promise<Organization |
 }
 
 /**
+ * Reactivates a suspended organization by setting status back to 'active'.
+ * Returns null if org_id not found.
+ */
+export async function reactivateOrganization(orgId: string): Promise<Organization | null> {
+  const sql = getSql();
+  const rows = await sql<Organization[]>`
+    UPDATE organizations SET
+      status     = 'active',
+      updated_at = NOW()
+    WHERE org_id = ${orgId}
+    RETURNING *
+  `;
+  return rows[0] ?? null;
+}
+
+/**
+ * Hard-deletes an organization and its memberships (cascade).
+ * Returns true if a row was deleted, false if org_id not found.
+ */
+export async function deleteOrganization(orgId: string): Promise<boolean> {
+  const sql = getSql();
+  const rows = await sql`
+    DELETE FROM organizations WHERE org_id = ${orgId} RETURNING org_id
+  `;
+  return rows.length > 0;
+}
+
+/**
  * Full-text keyword search across org_id, domain, and display_name.
  * Returns active organizations matching the query.
  */

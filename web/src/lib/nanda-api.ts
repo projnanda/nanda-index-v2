@@ -150,9 +150,23 @@ export async function updateOrg(orgId: string, payload: UpdateOrgPayload): Promi
   });
 }
 
-/** DELETE /api/v1/orgs/:org_id — suspend an org (requires auth). */
-export async function deleteOrg(orgId: string): Promise<IndexRecord> {
-  return request<IndexRecord>(`/api/v1/orgs/${encodeURIComponent(orgId)}`, {
+/** DELETE /api/v1/orgs/:org_id/suspend — suspend an org (requires auth). */
+export async function suspendOrg(orgId: string): Promise<IndexRecord> {
+  return request<IndexRecord>(`/api/v1/orgs/${encodeURIComponent(orgId)}/suspend`, {
+    method: "DELETE",
+  });
+}
+
+/** POST /api/v1/orgs/:org_id/reactivate — reactivate a suspended org (requires auth). */
+export async function reactivateOrg(orgId: string): Promise<IndexRecord> {
+  return request<IndexRecord>(`/api/v1/orgs/${encodeURIComponent(orgId)}/reactivate`, {
+    method: "POST",
+  });
+}
+
+/** DELETE /api/v1/orgs/:org_id — permanently delete an org (requires auth). */
+export async function deleteOrg(orgId: string): Promise<void> {
+  await request<void>(`/api/v1/orgs/${encodeURIComponent(orgId)}`, {
     method: "DELETE",
   });
 }
