@@ -3,13 +3,16 @@ import { INDEX_RECORD_SCHEMA } from './index-record.js';
 
 /**
  * Components of a parsed URN agent locator.
- * Format: urn:<nid>:<domain>:<identifier>
- * Example: urn:ai:nasiko.com:ankit
+ * Canonical format: urn:<nid>:<domain>:<identifier>   (e.g. urn:ai:nasiko.com:ankit)
+ * host39 extended form: urn:<nid>:(domain|email):<authority>:agent:<slug>
+ *   e.g. urn:ai:domain:moonbakery.com:agent:orders -> domain=moonbakery.com, identifier=orders
+ * For email authorities, `domain` holds the email; the index has no email
+ * lookup yet, so those resolve to not_found.
  */
 export interface ParsedLocator {
   readonly urn: string;        // full URN, e.g. "urn:ai:nasiko.com:ankit"
   readonly nid: string;        // namespace identifier, e.g. "ai"
-  readonly domain: string;     // org domain component, e.g. "nasiko.com"
+  readonly domain: string;     // org domain (or email authority) component
   readonly identifier: string; // local agent id, e.g. "ankit"
 }
 

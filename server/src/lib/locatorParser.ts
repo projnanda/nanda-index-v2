@@ -53,6 +53,36 @@ export function parseLocator(raw: string): ParsedLocator {
     );
   }
 
+  // Extended host39 grammar: urn:<nid>:(domain|email):<authority>:agent:<slug>
+  // host39 publishes agent cards with this longer form, e.g.
+  //   urn:ai:domain:moonbakery.com:agent:orders   (business)
+  //   urn:ai:email:john@acme.com:agent:assistant  (personal)
+  // Map the authority segment to `domain` and the trailing slug to `identifier`
+  // so business agents resolve through the same domain lookup as the canonical
+  // four-segment form. (Personal/email authorities currently have no index
+  // lookup and will simply resolve to not_found; see resolveAgent.)
+  const nssParts = nss.split(':');
+  if (
+    nssParts.length === 4 &&
+    (nssParts[0] === 'domain' || nssParts[0] === 'email') &&
+    nssParts[2] === 'agent'
+  ) {
+    const authority = nssParts[1];
+    const slug = nssParts[3];
+    if (!authority) {
+      throw new Error(`invalid locator "${trimmed}": ${nssParts[0]} authority is empty`);
+    }
+    if (!slug) {
+      throw new Error(`invalid locator "${trimmed}": agent slug is empty`);
+    }
+    return {
+      urn: trimmed,
+      nid: nid.toLowerCase(),
+      domain: authority,
+      identifier: slug,
+    };
+  }
+
   // NSS must have at least one colon separating domain from identifier
   const domainEnd = nss.indexOf(':');
   if (domainEnd === -1) {

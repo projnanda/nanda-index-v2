@@ -44,6 +44,32 @@ describe('parseLocator (URN format)', () => {
     expect(result.urn).toBe('urn:ai:jetblue.com:scheduler');
   });
 
+  // ── host39 extended grammar: urn:<nid>:(domain|email):<authority>:agent:<slug> ──
+
+  it('parses the host39 business form (domain authority)', () => {
+    const result = parseLocator('urn:ai:domain:moonbakery.com:agent:orders');
+    expect(result).toEqual({
+      urn: 'urn:ai:domain:moonbakery.com:agent:orders',
+      nid: 'ai',
+      domain: 'moonbakery.com',
+      identifier: 'orders',
+    });
+  });
+
+  it('parses the host39 personal form (email authority into domain field)', () => {
+    const result = parseLocator('urn:ai:email:john@acme.com:agent:assistant');
+    expect(result.domain).toBe('john@acme.com');
+    expect(result.identifier).toBe('assistant');
+  });
+
+  it('throws on host39 form with empty authority', () => {
+    expect(() => parseLocator('urn:ai:domain::agent:orders')).toThrow('authority is empty');
+  });
+
+  it('throws on host39 form with empty agent slug', () => {
+    expect(() => parseLocator('urn:ai:domain:moonbakery.com:agent:')).toThrow('agent slug is empty');
+  });
+
   // ── Error paths ─────────────────────────────────────────────────────────────
 
   it('throws on missing urn: prefix', () => {
