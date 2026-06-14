@@ -1,6 +1,6 @@
 # NANDA Index
 
-The NANDA Index is the authoritative registry of registries for AI agents. It stores one `IndexRecord` per organization, pointing to where that org's agents live. Think of it as the ICANN of AI agents — it does not host agents itself, it tells you where to find them.
+The NANDA Index is the authoritative switchboard between catalogs for AI agents. It stores one `IndexRecord` per organization, pointing to where that org's agents live. Think of it as the ICANN of AI agents — it does not host agents itself, it tells you where to find them.
 
 ## How it fits in the resolution flow
 
