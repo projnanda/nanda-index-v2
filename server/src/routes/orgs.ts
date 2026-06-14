@@ -58,7 +58,11 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
         properties: {
           org_id:        { type: 'string', pattern: '^[a-z0-9][a-z0-9-]*[a-z0-9]$', minLength: 2, maxLength: 64 },
           display_name:  { type: 'string', minLength: 1, maxLength: 255 },
-          domain:        { type: 'string', minLength: 3, maxLength: 255 },
+          // Personal (email-identity) publishers have no domain. Migration 008
+          // made the column nullable and the handler/DB already accept null, so
+          // allow null here; otherwise Ajv rejects personal signups with 400
+          // before the handler runs. minLength still applies to the string case.
+          domain:        { type: ['string', 'null'], minLength: 3, maxLength: 255 },
           contact_email: { type: 'string', format: 'email' },
           registry_url:  { type: 'string', pattern: '^https?://', maxLength: 512 },
           ttl_seconds:   { type: 'integer', minimum: 3600, maximum: 604800 },

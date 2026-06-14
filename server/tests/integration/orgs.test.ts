@@ -67,6 +67,25 @@ describe('Org management routes — protected CRUD', () => {
     expect(body.email_verified).toBe(false);
   });
 
+  it('creates a personal (domain:null) org and returns 201', async () => {
+    const res = await fastify.inject({
+      method: 'POST',
+      url: '/api/v1/orgs',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        org_id:        'org-personal',
+        display_name:  'Personal Publisher',
+        domain:        null,
+        contact_email: 'me@personal.example.com',
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json();
+    expect(body.org_id).toBe('org-personal');
+    expect(body.domain).toBeNull();
+  });
+
   it('returns 409 on duplicate org_id', async () => {
     const payload = {
       org_id:        'org-dup',
