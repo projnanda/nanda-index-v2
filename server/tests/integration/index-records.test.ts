@@ -15,10 +15,10 @@ async function seedOrg(
   await sql`
     INSERT INTO organizations
       (org_id, display_name, domain, contact_email, registry_url,
-       verify_token, email_verified, status)
+       verify_token, verify_token_expires_at, email_verified, status)
     VALUES
       (${orgId}, ${displayName}, ${domain}, ${`admin@${domain}`},
-       ${`https://${domain}/registry`}, ${token},
+       ${`https://${domain}/registry`}, ${token}, NOW() + INTERVAL '24 hours',
        ${opts.emailVerified ?? true}, ${opts.status ?? 'active'})
     ON CONFLICT (org_id) DO NOTHING
   `;

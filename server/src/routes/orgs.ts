@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { findByOrgId, insertOrganization, updateOrganization, suspendOrganization, reactivateOrganization, deleteOrganization, toIndexRecord } from '../db/queries/organizations.js';
 import { insertMembership, checkMembership } from '../db/queries/orgMemberships.js';
 import { sendVerificationEmail } from '../services/email.js';
@@ -24,13 +24,42 @@ interface UpdateOrgBody {
 }
 
 /**
- * Protected org management routes.
- * All routes require a valid JWT (preHandler: fastify.authenticate).
+ * preHandler factory enforcing the caller's role on an :org_id route.
  *
- * POST   /api/v1/orgs             — create an org (sends verification email)
- * GET    /api/v1/orgs/:org_id     — get own org (must be a member)
- * PUT    /api/v1/orgs/:org_id     — update index record fields
- * DELETE /api/v1/orgs/:org_id     — suspend org
+ *   'member' — any member (admin or member) may proceed (read access)
+ *   'admin'  — only admins may proceed (mutations: update/suspend/reactivate/delete)
+ *
+ * On failure it responds 403 and short-circuits the route. `checkMembership`
+ * returns the full membership row, so the role comes from the same lookup that
+ * confirms membership — no extra query.
+ */
+function requireOrgRole(level: 'member' | 'admin') {
+  return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    const { userId } = request.user as JwtPayload;
+    const { org_id } = request.params as { org_id: string };
+
+    const membership = await checkMembership(userId, org_id);
+    if (!membership) {
+      reply.code(403).send({ error: 'FORBIDDEN', detail: 'you are not a member of this organization' });
+      return;
+    }
+    if (level === 'admin' && membership.role !== 'admin') {
+      reply.code(403).send({ error: 'FORBIDDEN', detail: 'admin role required to manage this organization' });
+      return;
+    }
+  };
+}
+
+/**
+ * Protected org management routes. All routes require a valid JWT; the
+ * :org_id routes additionally enforce a membership role via requireOrgRole.
+ *
+ *   POST   /api/v1/orgs                    — create an org (caller becomes admin; sends verification email)
+ *   GET    /api/v1/orgs/:org_id            — read own org           (member)
+ *   PUT    /api/v1/orgs/:org_id            — update index record    (admin)
+ *   DELETE /api/v1/orgs/:org_id/suspend    — suspend org            (admin)
+ *   POST   /api/v1/orgs/:org_id/reactivate — reactivate suspended   (admin)
+ *   DELETE /api/v1/orgs/:org_id            — permanently delete org (admin)
  */
 export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void> {
   // Create a new organization
@@ -89,7 +118,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Get own org (must be member)
   fastify.get<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id', {
-    preHandler: [fastify.authenticate],
+    preHandler: [fastify.authenticate, requireOrgRole('member')],
     schema: {
       tags: ['orgs'],
       summary: 'Get your organization',
@@ -105,13 +134,6 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       },
     },
   }, async (request, reply) => {
-    const user = request.user as JwtPayload;
-
-    const membership = await checkMembership(user.userId, request.params.org_id);
-    if (!membership) {
-      return reply.code(403).send({ error: 'FORBIDDEN', detail: 'you are not a member of this organization' });
-    }
-
     const org = await findByOrgId(request.params.org_id);
     if (!org) {
       return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
@@ -122,7 +144,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Update own org's index record
   fastify.put<{ Params: { org_id: string }; Body: UpdateOrgBody }>('/api/v1/orgs/:org_id', {
-    preHandler: [fastify.authenticate],
+    preHandler: [fastify.authenticate, requireOrgRole('admin')],
     schema: {
       tags: ['orgs'],
       summary: 'Update your organization\'s index record',
@@ -147,13 +169,6 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       },
     },
   }, async (request, reply) => {
-    const user = request.user as JwtPayload;
-
-    const membership = await checkMembership(user.userId, request.params.org_id);
-    if (!membership) {
-      return reply.code(403).send({ error: 'FORBIDDEN', detail: 'you are not a member of this organization' });
-    }
-
     const body = request.body;
     const updated = await updateOrganization(request.params.org_id, {
       displayName:  body.display_name,
@@ -170,7 +185,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Suspend org
   fastify.delete<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/suspend', {
-    preHandler: [fastify.authenticate],
+    preHandler: [fastify.authenticate, requireOrgRole('admin')],
     schema: {
       tags: ['orgs'],
       summary: 'Suspend your organization',
@@ -186,13 +201,6 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       },
     },
   }, async (request, reply) => {
-    const user = request.user as JwtPayload;
-
-    const membership = await checkMembership(user.userId, request.params.org_id);
-    if (!membership) {
-      return reply.code(403).send({ error: 'FORBIDDEN', detail: 'you are not a member of this organization' });
-    }
-
     const suspended = await suspendOrganization(request.params.org_id);
     if (!suspended) {
       return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
@@ -203,7 +211,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Reactivate a suspended org
   fastify.post<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/reactivate', {
-    preHandler: [fastify.authenticate],
+    preHandler: [fastify.authenticate, requireOrgRole('admin')],
     schema: {
       tags: ['orgs'],
       summary: 'Reactivate a suspended organization',
@@ -219,13 +227,6 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       },
     },
   }, async (request, reply) => {
-    const user = request.user as JwtPayload;
-
-    const membership = await checkMembership(user.userId, request.params.org_id);
-    if (!membership) {
-      return reply.code(403).send({ error: 'FORBIDDEN', detail: 'you are not a member of this organization' });
-    }
-
     const reactivated = await reactivateOrganization(request.params.org_id);
     if (!reactivated) {
       return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
@@ -236,7 +237,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Hard-delete org
   fastify.delete<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id', {
-    preHandler: [fastify.authenticate],
+    preHandler: [fastify.authenticate, requireOrgRole('admin')],
     schema: {
       tags: ['orgs'],
       summary: 'Permanently delete your organization',
@@ -252,13 +253,6 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       },
     },
   }, async (request, reply) => {
-    const user = request.user as JwtPayload;
-
-    const membership = await checkMembership(user.userId, request.params.org_id);
-    if (!membership) {
-      return reply.code(403).send({ error: 'FORBIDDEN', detail: 'you are not a member of this organization' });
-    }
-
     const deleted = await deleteOrganization(request.params.org_id);
     if (!deleted) {
       return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });

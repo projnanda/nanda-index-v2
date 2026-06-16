@@ -8,10 +8,33 @@ async function makeToken(fastify: FastifyInstance, userId: string, email: string
   return fastify.jwt.sign({ userId, email, displayName: null });
 }
 
+/** Creates an org via the API as `token` (the creator becomes an admin member). */
+async function createOrg(fastify: FastifyInstance, token: string, orgId: string): Promise<void> {
+  await fastify.inject({
+    method: 'POST', url: '/api/v1/orgs',
+    headers: { authorization: `Bearer ${token}` },
+    payload: {
+      org_id:        orgId,
+      display_name:  'Role Test',
+      domain:        `${orgId}.example.com`,
+      contact_email: `a@${orgId}.com`,
+      registry_url:  `https://${orgId}.example.com/r`,
+    },
+  });
+}
+
+/** Seeds a membership row directly (the API has no member-invite path yet). */
+async function addMember(orgId: string, userId: string, role: 'admin' | 'member'): Promise<void> {
+  const sql = getSql();
+  await sql`INSERT INTO org_memberships (user_id, org_id, role) VALUES (${userId}, ${orgId}, ${role})`;
+}
+
 describe('Org management routes — protected CRUD', () => {
   let fastify: FastifyInstance;
   let userId: string;
   let token: string;
+  let memberUserId: string;
+  let memberToken: string;
 
   beforeAll(async () => {
     const built = await buildServer({ logger: false });
@@ -28,6 +51,17 @@ describe('Org management routes — protected CRUD', () => {
     });
     userId = user.id;
     token  = await makeToken(fastify, userId, user.email);
+
+    // Seed a second user used to test non-admin (member-role) access
+    const member = await upsertUser({
+      email:       'orgs-member-test@example.com',
+      displayName: 'Orgs Member Test',
+      avatarUrl:   null,
+      provider:    'github',
+      providerId:  'orgs-member-test-provider-id',
+    });
+    memberUserId = member.id;
+    memberToken  = await makeToken(fastify, memberUserId, member.email);
   });
 
   afterAll(async () => {
@@ -184,10 +218,119 @@ describe('Org management routes — protected CRUD', () => {
 
     const res = await fastify.inject({
       method: 'DELETE',
-      url: '/api/v1/orgs/org-delete',
+      url: '/api/v1/orgs/org-delete/suspend',
       headers: { authorization: `Bearer ${token}` },
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().status).toBe('suspended');
+  });
+
+  // ── Role enforcement: admin vs member ────────────────────────────────────────
+
+  it('forbids a non-admin member from updating an org (PUT → 403)', async () => {
+    await createOrg(fastify, token, 'org-role-put');
+    await addMember('org-role-put', memberUserId, 'member');
+
+    const res = await fastify.inject({
+      method: 'PUT',
+      url: '/api/v1/orgs/org-role-put',
+      headers: { authorization: `Bearer ${memberToken}` },
+      payload: { registry_url: 'https://hacked.example.com/r' },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().detail).toMatch(/admin/i);
+  });
+
+  it('forbids a non-admin member from suspending an org (DELETE /suspend → 403)', async () => {
+    await createOrg(fastify, token, 'org-role-suspend');
+    await addMember('org-role-suspend', memberUserId, 'member');
+
+    const res = await fastify.inject({
+      method: 'DELETE',
+      url: '/api/v1/orgs/org-role-suspend/suspend',
+      headers: { authorization: `Bearer ${memberToken}` },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().detail).toMatch(/admin/i);
+  });
+
+  it('forbids a non-admin member from reactivating an org (POST /reactivate → 403)', async () => {
+    await createOrg(fastify, token, 'org-role-react');
+    await addMember('org-role-react', memberUserId, 'member');
+
+    const res = await fastify.inject({
+      method: 'POST',
+      url: '/api/v1/orgs/org-role-react/reactivate',
+      headers: { authorization: `Bearer ${memberToken}` },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().detail).toMatch(/admin/i);
+  });
+
+  it('forbids a non-admin member from deleting an org (DELETE → 403)', async () => {
+    await createOrg(fastify, token, 'org-role-del');
+    await addMember('org-role-del', memberUserId, 'member');
+
+    const res = await fastify.inject({
+      method: 'DELETE',
+      url: '/api/v1/orgs/org-role-del',
+      headers: { authorization: `Bearer ${memberToken}` },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().detail).toMatch(/admin/i);
+  });
+
+  it('forbids a non-member from mutating an org (PUT → 403, not a member)', async () => {
+    await createOrg(fastify, token, 'org-nonmember');
+    // memberUser is deliberately NOT added to this org
+
+    const res = await fastify.inject({
+      method: 'PUT',
+      url: '/api/v1/orgs/org-nonmember',
+      headers: { authorization: `Bearer ${memberToken}` },
+      payload: { registry_url: 'https://nope.example.com/r' },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().detail).toMatch(/not a member/i);
+  });
+
+  it('allows a non-admin member to read an org (GET → 200)', async () => {
+    await createOrg(fastify, token, 'org-role-read');
+    await addMember('org-role-read', memberUserId, 'member');
+
+    const res = await fastify.inject({
+      method: 'GET',
+      url: '/api/v1/orgs/org-role-read',
+      headers: { authorization: `Bearer ${memberToken}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().org_id).toBe('org-role-read');
+  });
+
+  it('allows an admin to suspend → reactivate → hard-delete the full lifecycle', async () => {
+    await createOrg(fastify, token, 'org-admin-lifecycle');
+
+    const suspended = await fastify.inject({
+      method: 'DELETE',
+      url: '/api/v1/orgs/org-admin-lifecycle/suspend',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(suspended.statusCode).toBe(200);
+    expect(suspended.json().status).toBe('suspended');
+
+    const reactivated = await fastify.inject({
+      method: 'POST',
+      url: '/api/v1/orgs/org-admin-lifecycle/reactivate',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(reactivated.statusCode).toBe(200);
+    expect(reactivated.json().status).toBe('active');
+
+    const deleted = await fastify.inject({
+      method: 'DELETE',
+      url: '/api/v1/orgs/org-admin-lifecycle',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(deleted.statusCode).toBe(204);
   });
 });
