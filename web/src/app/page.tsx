@@ -5,11 +5,11 @@ import { ArchitectureSection } from "@/components/ArchitectureSection";
 import { SectionHeading } from "@/components/SectionHeading";
 
 const cards = [
-  { href: "/login", title: "Sign In", desc: "Login with Google or GitHub to manage your index record" },
-  { href: "/dashboard", title: "Dashboard", desc: "Manage your organization's index record" },
-  { href: "/registries", title: "Browse", desc: "View all active organizations in the index" },
-  { href: "/resolve", title: "Resolve", desc: "Lookup an agent by locator" },
-  { href: "/query", title: "Query", desc: "Search index records by org ID or keyword" },
+  { href: "/login", title: "Sign In", desc: "Login with Google or GitHub to manage your organization's index record" },
+  { href: "/dashboard", title: "Dashboard", desc: "Register and update your AI Catalog, DNS-AID, gateway, or agent card entry" },
+  { href: "/registries", title: "Browse", desc: "View all active organizations and their discovery paths in the index" },
+  { href: "/resolve", title: "Resolve", desc: "Resolve any domain, email, or URN identity to its next discovery object" },
+  { href: "/query", title: "Query", desc: "Search index records by organization, identity type, or keyword" },
   { href: "/registry", title: "Registry Manager", desc: "Manage agents on your Registry Server" },
 ];
 
@@ -21,8 +21,8 @@ export default function HomePage() {
       <section className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <SectionHeading
           eyebrow="Quick actions"
-          title="Build the front door first"
-          description="The spec expects a clean, operational UI with all main entry points exposed."
+          title="Resolve, register, and browse"
+          description="Look up any agent identity, register your organization's index record, or browse all active entries in the switchboard."
         />
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

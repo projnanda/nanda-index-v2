@@ -5,24 +5,24 @@ export function ArchitectureSection() {
   return (
     <section className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       <SectionHeading
-        eyebrow="Reference"
-        title="Architecture layers"
-        description="Three layers shown in the spec: root, switchboard, and registry."
+        eyebrow="Who it serves"
+        title="Three practical use cases"
+        description="NandaIndex serves enterprises with heterogeneous discovery, SMBs whose runtime and agent card live apart, and individuals without a domain name."
       />
 
       <div className="overflow-hidden rounded-3xl border border-black/10 bg-white shadow-sm">
         <div className="grid grid-cols-1 divide-y divide-black/5 md:grid-cols-4 md:divide-y-0 md:divide-x">
           <div className="px-5 py-4 text-xs uppercase tracking-[0.2em] text-slate-500">
-            Layer
+            Context
           </div>
           <div className="px-5 py-4 text-xs uppercase tracking-[0.2em] text-slate-500">
-            Function
+            Scenario
           </div>
           <div className="px-5 py-4 text-xs uppercase tracking-[0.2em] text-slate-500">
-            DNS Analogy
+            Example Identity
           </div>
           <div className="px-5 py-4 text-xs uppercase tracking-[0.2em] text-slate-500">
-            Hosted Here
+            NandaIndex Role
           </div>
         </div>
 
@@ -33,7 +33,7 @@ export function ArchitectureSection() {
           >
             <div className="font-medium text-slate-950">{row.layer}</div>
             <div className="text-slate-600">{row.function}</div>
-            <div className="text-slate-600">{row.analogy}</div>
+            <div className="font-mono text-sm text-slate-500">{row.analogy}</div>
             <div className="text-slate-600">{row.hosted}</div>
           </div>
         ))}

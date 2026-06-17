@@ -92,9 +92,22 @@ export async function resolveAgent(locator: string): Promise<ResolveResponse> {
   return request<ResolveResponse>(`/api/v1/resolve?locator=${encodeURIComponent(locator)}`);
 }
 
-/** Fetch a single CatalogEntry from a Registry Server (hop 2). */
-export async function fetchAgentRecord(registryUrl: string, agentId: string): Promise<CatalogEntry> {
-  const url = `${registryUrl.replace(/\/+$/, "")}/agents/${encodeURIComponent(agentId)}`;
+/**
+ * Fetch an agent card for hop 2.
+ *
+ * - If mediaType is 'application/a2a-agent-card+json', registryUrl IS the card —
+ *   fetch it directly.
+ * - Otherwise (ai-catalog registry), append /agents/<agentId> to the base URL.
+ */
+export async function fetchAgentRecord(
+  registryUrl: string,
+  agentId: string,
+  mediaType?: string,
+): Promise<CatalogEntry> {
+  const isDirectCard = mediaType === "application/a2a-agent-card+json";
+  const url = isDirectCard
+    ? registryUrl
+    : `${registryUrl.replace(/\/+$/, "")}/agents/${encodeURIComponent(agentId)}`;
   const res = await fetch(url, {
     headers: { Accept: "application/json" },
     cache: "no-store",

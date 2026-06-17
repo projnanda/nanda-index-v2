@@ -1,85 +1,116 @@
-import type { ParsedLocator } from '../types/api/resolve.js';
+export type LocatorType = 'domain' | 'email';
 
-/**
- * NID validation: 1–31 chars, letters/digits/hyphens, not starting with hyphen.
- * The reserved value "urn" itself is disallowed as an NID.
- */
+export interface ParsedLocator {
+  readonly urn: string;
+  readonly nid: string;
+  readonly type: LocatorType;
+  /** The org domain — set for domain-type URNs, null for email-type. */
+  readonly domain: string | null;
+  /** The agent slug — set when the URN includes `:agent:<slug>`, null otherwise. */
+  readonly agentSlug: string | null;
+  /** The email address — set for email-type URNs, null for domain-type. */
+  readonly email: string | null;
+  /**
+   * The identifier passed back in the resolution response.
+   * For agent URNs this is the slug ("ankit").
+   * For email URNs this is the full URN.
+   */
+  readonly identifier: string;
+}
+
 const NID_RE = /^[a-z0-9][a-z0-9-]{0,30}$/i;
 
 /**
- * URN agent locator into its components.
+ * Parses a NANDA URN into its components.
  *
- * Format: urn:<nid>:<domain>:<identifier>
- * Example: urn:ai:nasiko.com:ankit
- *
- * The NID (e.g. "ai") is schema-agnostic — the caller selects the NID when
- * registering agents; this parser accepts any RFC 8141-valid NID so the URN
- * schema can evolve without a parser change.
- *
- * @param raw - the raw URN string
- * @returns ParsedLocator with urn, nid, domain, and identifier
- * @throws Error with a descriptive message on any malformed input
+ * Supported formats:
+ *   urn:ai:domain:<domain>               → org-level domain entry
+ *   urn:ai:domain:<domain>:agent:<slug>  → specific agent under a domain
+ *   urn:ai:email:<email>                 → email-identity (personal agent)
+ *   urn:ai:<domain>:<slug>               → legacy format (backward compat)
  */
 export function parseLocator(raw: string): ParsedLocator {
   const trimmed = raw.trim();
 
   if (!trimmed.toLowerCase().startsWith('urn:')) {
-    throw new Error(
-      `invalid locator "${trimmed}": must start with "urn:" (RFC 8141)`,
-    );
+    throw new Error(`invalid locator "${trimmed}": must start with "urn:"`);
   }
 
-  // After "urn:", split into NID and NSS on the first colon
   const rest = trimmed.slice(4); // drop "urn:"
   const nidEnd = rest.indexOf(':');
   if (nidEnd === -1) {
-    throw new Error(
-      `invalid locator "${trimmed}": missing NID — expected urn:<nid>:<domain>:<identifier>`,
-    );
+    throw new Error(`invalid locator "${trimmed}": missing NID`);
   }
 
-  const nid = rest.slice(0, nidEnd);
-  const nss = rest.slice(nidEnd + 1); // Namespace Specific String
+  const nid = rest.slice(0, nidEnd).toLowerCase();
+  const nss = rest.slice(nidEnd + 1);
 
   if (!NID_RE.test(nid)) {
-    throw new Error(
-      `invalid locator "${trimmed}": NID "${nid}" is not a valid namespace identifier`,
-    );
+    throw new Error(`invalid locator "${trimmed}": NID "${nid}" is not valid`);
   }
 
-  if (nid.toLowerCase() === 'urn') {
-    throw new Error(
-      `invalid locator "${trimmed}": "urn" is a reserved NID and cannot be used (§2)`,
-    );
+  const segments = nss.split(':');
+
+  // ── Email-identity: urn:ai:email:<email> ──────────────────────────────────
+  if (segments[0]?.toLowerCase() === 'email') {
+    const email = segments.slice(1).join(':'); // re-join in case email had colons
+    if (!email) {
+      throw new Error(`invalid locator "${trimmed}": email component is empty`);
+    }
+    return {
+      urn: trimmed,
+      nid,
+      type: 'email',
+      domain: null,
+      agentSlug: null,
+      email,
+      identifier: trimmed, // full URN used as identifier for email lookups
+    };
   }
 
-  // NSS must have at least one colon separating domain from identifier
-  const domainEnd = nss.indexOf(':');
-  if (domainEnd === -1) {
-    throw new Error(
-      `invalid locator "${trimmed}": NSS "${nss}" must be <domain>:<identifier>`,
-    );
+  // ── Spec domain format: urn:ai:domain:<domain>[:agent:<slug>] ─────────────
+  if (segments[0]?.toLowerCase() === 'domain') {
+    const domain = segments[1];
+    if (!domain) {
+      throw new Error(`invalid locator "${trimmed}": domain component is empty`);
+    }
+
+    // Optional :agent:<slug>
+    let agentSlug: string | null = null;
+    if (segments[2]?.toLowerCase() === 'agent') {
+      agentSlug = segments[3] ?? null;
+      if (!agentSlug) {
+        throw new Error(`invalid locator "${trimmed}": agent slug is empty after ":agent:"`);
+      }
+    }
+
+    return {
+      urn: trimmed,
+      nid,
+      type: 'domain',
+      domain,
+      agentSlug,
+      email: null,
+      identifier: agentSlug ?? domain,
+    };
   }
 
-  const domain = nss.slice(0, domainEnd);
-  const identifier = nss.slice(domainEnd + 1);
+  // ── Legacy format: urn:ai:<domain>:<slug> ────────────────────────────────
+  // First segment is the actual domain (contains a dot or is a known slug)
+  const domain = segments[0]!;
+  const agentSlug = segments[1] ?? null;
 
   if (!domain) {
     throw new Error(`invalid locator "${trimmed}": domain component is empty`);
   }
-  if (!identifier) {
-    throw new Error(`invalid locator "${trimmed}": identifier component is empty`);
-  }
-  if (identifier.includes(':')) {
-    throw new Error(
-      `invalid locator "${trimmed}": identifier "${identifier}" must not contain colons`,
-    );
-  }
 
   return {
     urn: trimmed,
-    nid: nid.toLowerCase(),
+    nid,
+    type: 'domain',
     domain,
-    identifier,
+    agentSlug,
+    email: null,
+    identifier: agentSlug ?? domain,
   };
 }

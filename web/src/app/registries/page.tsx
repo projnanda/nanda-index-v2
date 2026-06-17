@@ -131,17 +131,33 @@ export default function RegistriesPage() {
                 <div className="rounded-3xl border border-black/10 bg-white p-5 shadow-sm">
                   <h2 className="text-xl font-semibold">{selected.display_name}</h2>
                   <p className="mt-1 text-sm text-slate-500">{selected.domain}</p>
+                  {selected.description && (
+                    <p className="mt-2 text-sm text-slate-500">{selected.description}</p>
+                  )}
+                  {selected.tags && selected.tags.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {selected.tags.map((tag) => (
+                        <span key={tag} className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-xs font-mono text-slate-600">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   <div className="mt-4 grid gap-2 text-sm text-slate-700">
                     <div>
                       <span className="font-medium">Registry URL:</span>{" "}
-                      <a
-                        href={selected.registry_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="break-all font-mono text-xs text-indigo-600 hover:underline"
-                      >
-                        {selected.registry_url}
-                      </a>
+                      {selected.registry_url ? (
+                        <a
+                          href={selected.registry_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="break-all font-mono text-xs text-indigo-600 hover:underline"
+                        >
+                          {selected.registry_url}
+                        </a>
+                      ) : (
+                        <span className="text-slate-400 italic">—</span>
+                      )}
                     </div>
                     <div>
                       <span className="font-medium">TTL:</span> {selected.ttl_seconds}s

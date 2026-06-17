@@ -7,7 +7,7 @@ export function InfoCards() {
       <SectionHeading
         eyebrow="Overview"
         title="What NANDA Index is and is not"
-        description="The root layer is intentionally boring, stable, and narrowly scoped."
+        description="NandaIndex does not replace existing discovery systems — it federates them into a single resolution layer."
       />
 
       <div className="grid gap-6 md:grid-cols-2">

@@ -1,15 +1,30 @@
 export type OrgStatus = "active" | "pending" | "suspended";
 
+export interface PublisherBlock {
+  identifier: string;
+  displayName: string;
+  identityType?: string;
+}
+
 export interface IndexRecord {
   org_id: string;
   display_name: string;
-  domain: string;
-  registry_url: string;
+  domain: string | null;
+  registry_url: string | null;
   ttl_seconds: number;
   status: OrgStatus;
   email_verified: boolean;
   created_at: string;
   updated_at: string;
+
+  // AI Catalog fields
+  identifier?: string;
+  media_type?: string;
+  description?: string | null;
+  tags?: string[];
+  publisher?: PublisherBlock;
+  metadata?: Record<string, unknown>;
+  data?: Record<string, unknown>;
 }
 
 /** AI Catalog CatalogEntry (application/ai-catalog+json). */
@@ -59,18 +74,33 @@ export interface SearchResponse {
   results: IndexRecord[];
 }
 
+export type HostingPath = "registry" | "dns-aid" | "smb" | "personal";
+
 export interface CreateOrgPayload {
   org_id: string;
   display_name: string;
-  domain: string;
+  hosting_path?: HostingPath;
+  domain?: string | null;
   contact_email: string;
-  registry_url: string;
+  registry_url?: string | null;
   ttl_seconds?: number;
+  identifier?: string;
+  media_type?: string;
+  description?: string;
+  tags?: string[];
+  publisher?: PublisherBlock;
+  catalog_metadata?: Record<string, unknown>;
+  entry_data?: Record<string, unknown>;
 }
 
 export interface UpdateOrgPayload {
   display_name?: string;
   domain?: string;
-  registry_url?: string;
+  registry_url?: string | null;
   ttl_seconds?: number;
+  description?: string;
+  tags?: string[];
+  publisher?: PublisherBlock;
+  catalog_metadata?: Record<string, unknown>;
+  entry_data?: Record<string, unknown>;
 }

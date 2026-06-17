@@ -9,16 +9,18 @@ export function Hero() {
             Nanda Index
           </p>
           <h1 className="mt-4 max-w-3xl font-serif text-5xl italic tracking-tight text-slate-950 sm:text-6xl">
-            The authoritative index of AI agent registries worldwide.
+            Federated resolution for the agentic web.
           </h1>
           <p className="mt-6 max-w-2xl text-base leading-7 text-slate-600">
-            A DNS-inspired trust framework for cross-organization agent discovery.
-            Minimal. Cryptographically signed. Open. Verify on claim, authenticate
-            on update, attest on read.
+            NandaIndex is a global switchboard that connects discovery islands across
+            enterprises, SMBs, and individuals. It uses the AI Catalog format as its
+            native record format and maps any identity — domain, email, or URN — to the
+            correct next discovery object: AI Catalog, DNS-AID, A2A Agent Card, MCP
+            descriptor, gateway, or personal agent card.
           </p>
 
           <div className="mt-8 flex flex-wrap gap-3">
-            {["Verify on claim", "Authenticate on update", "Attest on read"].map((item) => (
+            {["Enterprise", "SMB", "Individual"].map((item) => (
               <span
                 key={item}
                 className="rounded-full border border-black/10 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm"

@@ -8,43 +8,43 @@ export const navigation = [
 ];
 
 export const heroStats = [
-  { value: "3", label: "registered registries" },
+  { value: "3", label: "registered organizations" },
   { value: "3", label: "active / verified" },
   { value: "2026041103", label: "root serial" },
   { value: "24h", label: "default TTL" },
 ];
 
 export const whatNandaIndexIs = [
-  "A registry of registries",
-  "A trust anchor for discovery",
-  "The first hop in agent lookup",
-  "A thin, stable root layer",
+  "A global switchboard for federated agent resolution",
+  "An AI Catalog-formatted index of resolution records",
+  "A bridge between discovery islands — AI Catalog, DNS-AID, gateways, and personal agent cards",
+  "A resolver mapping any identity (domain, email, URN) to the correct next discovery object",
 ];
 
 export const whatNandaIndexIsNot = [
-  "A registry of agents",
-  "An agent executor",
-  "A search engine",
-  "A marketplace",
+  "A replacement for AI Catalog, DNS-AID, or any other discovery system",
+  "Required when enterprise-to-enterprise AI Catalog discovery works natively",
+  "An agent executor or marketplace",
+  "An identity authority or DNS root",
 ];
 
 export const architectureLayers = [
   {
-    layer: "NANDA Index",
-    function: "Authoritative index of all agent registries",
-    analogy: "DNS Root Zone File",
-    hosted: "This site",
+    layer: "Enterprise",
+    function: "Exposes agents via AI Catalog, DNS-AID, or gateways",
+    analogy: "urn:ai:domain:example.com",
+    hosted: "Optional — fallback and anti-squatting",
   },
   {
-    layer: "SWITCHBOARD",
-    function: "Federated discovery across registries",
-    analogy: "DNS Resolvers",
-    hosted: "Public utility",
+    layer: "SMB",
+    function: "Agent runtime on AWS/GCP; agent card hosted by a third party",
+    analogy: "orders@moonbakery.com",
+    hosted: "Primary resolver via NandaIndex",
   },
   {
-    layer: "REGISTRY",
-    function: "Agent catalog per organization",
-    analogy: "Authoritative Name Server",
-    hosted: "Each org's own infra",
+    layer: "Individual",
+    function: "No domain needed; email identity with delegated card hosting",
+    analogy: "john@hotmail.com",
+    hosted: "Primary resolver via NandaIndex",
   },
 ];

@@ -79,15 +79,20 @@ export default function QueryPage() {
         const indexData = await resolveAgent(q);
         let agent = null;
         let agentError: string | undefined;
-        try {
-          agent = await fetchAgentRecord(
-            indexData.index_record.registry_url,
-            indexData.identifier,
-          );
-        } catch (err) {
-          agentError = err instanceof ApiError
-            ? `Registry returned ${err.status}: ${err.message}`
-            : "Could not reach the registry server.";
+        if (!indexData.index_record.registry_url) {
+          agentError = "This entry has no registry URL (DNS-AID or custom discovery).";
+        } else {
+          try {
+            agent = await fetchAgentRecord(
+              indexData.index_record.registry_url,
+              indexData.identifier,
+              indexData.index_record.media_type,
+            );
+          } catch (err) {
+            agentError = err instanceof ApiError
+              ? `Registry returned ${err.status}: ${err.message}`
+              : "Could not reach the registry server.";
+          }
         }
         setResult({ kind: "resolve", resolve: indexData, agent, agentError });
       } else if (mode === "org_id") {

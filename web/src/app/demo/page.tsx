@@ -88,7 +88,7 @@ function HopResult({ hop }: { hop: HopState }) {
 
 const DEFAULT_REGISTRY = "http://localhost:3002";
 const DEFAULT_TOKEN    = "dev-token-change-in-production";
-const DEFAULT_LOCATOR  = "urn:ai:nasiko.com:ankit";
+const DEFAULT_LOCATOR  = "urn:ai:domain:acme.com:agent:time";
 
 export default function DemoPage() {
   // ── Register panel state ─────────────────────────────────────────────────
@@ -117,6 +117,12 @@ export default function DemoPage() {
   const [hop1, setHop1] = useState<HopState>({ status: "idle" });
   const [hop2, setHop2] = useState<HopState>({ status: "idle" });
   const [hop3, setHop3] = useState<HopState>({ status: "idle" });
+
+  // Talk with agent state
+  const [agentEndpoint, setAgentEndpoint] = useState("");
+  const [taskMessage, setTaskMessage]     = useState("what time is it?");
+  const [talking, setTalking]             = useState(false);
+  const [talkResult, setTalkResult]       = useState<HopState>({ status: "idle" });
 
   // ── Handlers ─────────────────────────────────────────────────────────────
 
@@ -155,6 +161,8 @@ export default function DemoPage() {
     setHop1Url("");
     setHop2Url("");
     setHop3Url("");
+    setAgentEndpoint("");
+    setTalkResult({ status: "idle" });
 
     // Hop 1 — NANDA Index
     const h1url = `${process.env.NEXT_PUBLIC_NANDA_INDEX_API_URL ?? "http://localhost:3001"}/api/v1/resolve?locator=${encodeURIComponent(locator.trim())}`;
@@ -176,13 +184,22 @@ export default function DemoPage() {
 
     // Hop 2 — Registry Server
     const { registry_url } = indexResult.index_record;
-    const h2url = `${registry_url.replace(/\/+$/, "")}/agents/${indexResult.identifier}`;
+    if (!registry_url) {
+      setHop2({ status: "error", message: "This entry has no registry URL (DNS-AID or custom discovery)." });
+      setResolving(false);
+      return;
+    }
+    const mediaType = indexResult.index_record.media_type;
+    const isDirectCard = mediaType === "application/a2a-agent-card+json";
+    const h2url = isDirectCard
+      ? registry_url
+      : `${registry_url.replace(/\/+$/, "")}/agents/${indexResult.identifier}`;
     setHop2Url(h2url);
     setHop2({ status: "loading" });
 
     let catalogEntry: CatalogEntry;
     try {
-      catalogEntry = await fetchAgentRecord(registry_url, indexResult.identifier);
+      catalogEntry = await fetchAgentRecord(registry_url, indexResult.identifier, mediaType);
       setHop2({ status: "ok", data: catalogEntry });
     } catch (err) {
       setHop2({
@@ -201,6 +218,9 @@ export default function DemoPage() {
     try {
       const facts = await fetchFactsUrl(h3url);
       setHop3({ status: "ok", data: facts });
+      // Extract agent runtime endpoint from the facts doc
+      const endpoint = (facts as Record<string, unknown>)?.url as string | undefined;
+      if (endpoint) setAgentEndpoint(endpoint);
     } catch (err) {
       setHop3({
         status: "error",
@@ -211,6 +231,34 @@ export default function DemoPage() {
       });
     } finally {
       setResolving(false);
+    }
+  }
+
+  async function onTalk(e: React.FormEvent) {
+    e.preventDefault();
+    if (!agentEndpoint) return;
+    setTalking(true);
+    setTalkResult({ status: "loading" });
+    try {
+      const runUrl = `${agentEndpoint.replace(/\/+$/, "")}/run`;
+      const res = await fetch(runUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: `task-${Date.now()}`,
+          message: { role: "user", parts: [{ text: taskMessage }] },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(JSON.stringify(data));
+      setTalkResult({ status: "ok", data });
+    } catch (err) {
+      setTalkResult({
+        status: "error",
+        message: err instanceof Error ? err.message : "Agent invocation failed.",
+      });
+    } finally {
+      setTalking(false);
     }
   }
 
@@ -426,21 +474,56 @@ export default function DemoPage() {
                   </div>
 
                   {hop2.status !== "idle" && (
-                    <div className="space-y-2">
+                    <div className="space-y-5">
                       {/* Hop 3 */}
-                      <HopBadge
-                        n={3}
-                        label="Facts URL — agent capabilities & endpoint"
-                        url={hop3Url || "GET <catalog_entry.url>"}
-                      />
-                      <div className="ml-9">
-                        <HopResult hop={hop3} />
-                        {hop3.status === "error" && (
-                          <p className="mt-1 text-xs text-slate-400">
-                            In production the agent caches this URL after the first successful fetch.
-                          </p>
-                        )}
+                      <div className="space-y-2">
+                        <HopBadge
+                          n={3}
+                          label="Facts URL — agent capabilities & endpoint"
+                          url={hop3Url || "GET <catalog_entry.url>"}
+                        />
+                        <div className="ml-9">
+                          <HopResult hop={hop3} />
+                          {hop3.status === "error" && (
+                            <p className="mt-1 text-xs text-slate-400">
+                              In production the agent caches this URL after the first successful fetch.
+                            </p>
+                          )}
+                        </div>
                       </div>
+
+                      {/* Step 4 — Talk with agent */}
+                      {hop3.status !== "idle" && (
+                        <div className="space-y-2">
+                          <HopBadge
+                            n={4}
+                            label="Talk with agent"
+                            url={agentEndpoint ? `${agentEndpoint.replace(/\/+$/, "")}/run` : "POST <agent.url>/run"}
+                          />
+                          <div className="ml-9 space-y-2">
+                            <form onSubmit={onTalk} className="flex gap-2">
+                              <Input
+                                value={taskMessage}
+                                onChange={(e) => setTaskMessage(e.target.value)}
+                                placeholder="what time is it?"
+                                className="flex-1"
+                                disabled={!agentEndpoint}
+                              />
+                              <button
+                                type="submit"
+                                disabled={talking || !agentEndpoint}
+                                className="shrink-0 rounded-2xl bg-emerald-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                              >
+                                {talking ? "…" : "Send"}
+                              </button>
+                            </form>
+                            {!agentEndpoint && hop3.status === "ok" && (
+                              <p className="text-xs text-slate-400">Agent endpoint not found in facts doc.</p>
+                            )}
+                            <HopResult hop={talkResult} />
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
