@@ -14,19 +14,19 @@ export function JsonPanel({ data }: { data: unknown }) {
   }
 
   return (
-    <div className="min-w-0 rounded-3xl border border-black/10 bg-slate-950 text-slate-100 shadow-sm">
+    <div className="min-w-0 rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-code-bg)] text-[color:var(--color-code-fg)] shadow-[var(--shadow-card)]">
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-        <span className="text-xs uppercase tracking-[0.2em] text-slate-400">
+        <span className="text-xs font-semibold uppercase tracking-wide text-white/60">
           Raw JSON
         </span>
         <button
           onClick={copy}
-          className="rounded-lg border border-white/15 px-3 py-1.5 text-xs hover:bg-white/10"
+          className="rounded-[var(--radius-control)] border border-white/15 bg-white/10 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-white/20"
         >
           {copied ? "Copied" : "Copy JSON"}
         </button>
       </div>
-      <pre className="max-h-[60vh] overflow-auto whitespace-pre-wrap break-all p-4 text-xs leading-6">{json}</pre>
+      <pre className="max-h-[60vh] overflow-auto whitespace-pre-wrap break-all p-4 font-mono text-xs leading-6">{json}</pre>
     </div>
   );
 }

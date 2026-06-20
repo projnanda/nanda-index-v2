@@ -14,13 +14,13 @@ export function TableEmptyState({
   actionHref,
 }: Props) {
   return (
-    <div className="rounded-3xl border border-black/10 bg-white p-8 text-center shadow-sm">
-      <h3 className="text-lg font-semibold text-slate-950">{title}</h3>
-      <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
+    <div className="rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-8 text-center shadow-[var(--shadow-card)]">
+      <h3 className="text-lg font-semibold text-[color:var(--color-fg-strong)]">{title}</h3>
+      <p className="mt-2 text-sm leading-relaxed text-[color:var(--color-fg-muted)]">{description}</p>
       {actionLabel && actionHref ? (
         <Link
           href={actionHref}
-          className="mt-5 inline-flex rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-medium text-white"
+          className="mt-5 inline-flex h-10 items-center rounded-[var(--radius-control)] bg-[color:var(--color-primary)] px-4 text-sm font-medium text-white transition-colors hover:bg-[color:var(--color-primary-hover)]"
         >
           {actionLabel}
         </Link>

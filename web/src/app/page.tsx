@@ -28,10 +28,14 @@ export default function HomePage() {
             <Link
               key={card.href}
               href={card.href}
-              className="rounded-3xl border border-black/10 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+              className="group rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-6 shadow-[var(--shadow-card)] transition hover:-translate-y-0.5 hover:border-[color:var(--color-border-strong)] hover:shadow-[var(--shadow-card-hover)]"
             >
-              <h2 className="text-xl font-semibold text-slate-950">{card.title}</h2>
-              <p className="mt-2 text-sm text-slate-600">{card.desc}</p>
+              <h2 className="text-lg font-semibold text-[color:var(--color-fg-strong)] group-hover:text-[color:var(--color-primary)]">
+                {card.title}
+              </h2>
+              <p className="mt-2 text-sm leading-relaxed text-[color:var(--color-fg-muted)]">
+                {card.desc}
+              </p>
             </Link>
           ))}
         </div>

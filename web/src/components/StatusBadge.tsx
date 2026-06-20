@@ -5,17 +5,17 @@ type StatusValue = OrgStatus | "active" | "inactive";
 
 export function StatusBadge({ status }: { status: StatusValue }) {
   const styles: Record<string, string> = {
-    active:    "border-emerald-200 bg-emerald-50 text-emerald-700",
-    pending:   "border-amber-200 bg-amber-50 text-amber-700",
-    suspended: "border-rose-200 bg-rose-50 text-rose-700",
-    inactive:  "border-slate-200 bg-slate-50 text-slate-500",
+    active:    "bg-[color:var(--color-accent-soft)] text-[color:var(--color-accent)]",
+    pending:   "bg-[color:var(--color-warning-soft)] text-[color:var(--color-warning)]",
+    suspended: "bg-[color:var(--color-danger-soft)] text-[color:var(--color-danger)]",
+    inactive:  "bg-[color:var(--color-surface-2)] text-[color:var(--color-fg-weak)]",
   };
 
   return (
     <span
       className={cn(
-        "inline-flex rounded-full border px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.18em]",
-        styles[status] ?? "border-slate-200 bg-slate-50 text-slate-700",
+        "inline-flex rounded-full border border-transparent px-2.5 py-0.5 text-xs font-medium uppercase tracking-wide",
+        styles[status] ?? "bg-[color:var(--color-surface-2)] text-[color:var(--color-fg-default)]",
       )}
     >
       {status}
