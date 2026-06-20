@@ -164,8 +164,8 @@ export default function OrgDetailPage() {
               <input value={domain} onChange={(e) => setDomain(e.target.value)} className={inputCls} />
             </label>
             <label className="block">
-              <span className={labelCls}>Registry / Agent Card URL</span>
-              <input value={registryUrl} onChange={(e) => setRegistryUrl(e.target.value)} className={inputCls} placeholder="https://registry.example.com" />
+              <span className={labelCls}>Catalog / Agent Card URL</span>
+              <input value={registryUrl} onChange={(e) => setRegistryUrl(e.target.value)} className={inputCls} placeholder="https://catalog.example.com" />
             </label>
             <label className="block">
               <span className={labelCls}>Description (optional)</span>
@@ -196,7 +196,7 @@ export default function OrgDetailPage() {
             <div className="grid gap-2 text-sm text-slate-700">
               <div><span className="font-medium">Domain:</span> {org.domain}</div>
               <div>
-                <span className="font-medium">Registry URL:</span>{" "}
+                <span className="font-medium">Catalog URL:</span>{" "}
                 {org.registry_url ? (
                   <a href={org.registry_url} target="_blank" rel="noopener noreferrer" className="break-all font-mono text-xs text-indigo-600 hover:underline">{org.registry_url}</a>
                 ) : (

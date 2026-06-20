@@ -128,7 +128,7 @@ export default function ResolvePage() {
     const { registry_url, media_type } = indexData.index_record;
 
     if (!registry_url) {
-      setHop2({ status: "skipped", url: "No registry URL — DNS-AID or custom discovery path." });
+      setHop2({ status: "skipped", url: "No catalog URL — DNS-AID or custom discovery path." });
       setResolving(false);
       setLatency(Math.round(performance.now() - t0));
       return;
@@ -217,7 +217,7 @@ export default function ResolvePage() {
   return (
     <PageShell
       title="Resolve Agent"
-      description="Enter a URN to trace the full resolution path — from index to registry to agent card to invocation."
+      description="Enter a URN to trace the full resolution path — from index to agent source to agent card to invocation."
     >
       {/* Search bar */}
       <form onSubmit={onResolve} className="mb-8 flex gap-3">
@@ -249,7 +249,7 @@ export default function ResolvePage() {
             <HopCard
               n={1}
               label="NANDA Index"
-              subtitle="Who manages this domain or identity? Returns an IndexRecord with a registry_url."
+              subtitle="Who manages this domain or identity? Returns an IndexRecord with a catalog or card URL."
               hop={hop1}
             />
 
@@ -259,7 +259,7 @@ export default function ResolvePage() {
 
                 <HopCard
                   n={2}
-                  label="Registry"
+                  label="Agent Source"
                   subtitle="What is this specific agent's facts URL? Returns a CatalogEntry."
                   hop={hop2}
                 />

@@ -12,11 +12,10 @@ export function Hero() {
             Federated resolution for the agentic web.
           </h1>
           <p className="mt-6 max-w-2xl text-base leading-7 text-slate-600">
-            NandaIndex is a global switchboard that connects discovery islands across
-            enterprises, SMBs, and individuals. It uses the AI Catalog format as its
-            native record format and maps any identity (domain, email, or URN) to the
-            correct next discovery object: AI Catalog, DNS-AID, A2A Agent Card, MCP
-            descriptor, gateway, or personal agent card.
+            NandaIndex resolves any agent identity (domain, email, or URN) to the
+            correct next discovery object: AI Catalog, DNS-AID, A2A Agent Card, or
+            personal agent card. It bridges agent discovery across enterprises, small
+            businesses, and individuals without replacing existing discovery systems.
           </p>
 
           <div className="mt-8 flex flex-wrap gap-3">

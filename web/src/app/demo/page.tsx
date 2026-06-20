@@ -204,7 +204,7 @@ export default function DemoPage() {
     } catch (err) {
       setHop2({
         status: "error",
-        message: err instanceof ApiError ? err.message : "Registry Server unreachable.",
+        message: err instanceof ApiError ? err.message : "Agent source unreachable.",
       });
       setResolving(false);
       return;
@@ -274,7 +274,7 @@ export default function DemoPage() {
             NANDA Demo
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Register an agent into a Registry Server, then resolve it end-to-end across all 3 hops.
+            Register an agent into a catalog server, then resolve it end-to-end across all 4 hops.
           </p>
         </div>
 
@@ -287,10 +287,10 @@ export default function DemoPage() {
                 Step 1
               </p>
               <h2 className="text-base font-semibold text-slate-950 mt-0.5">
-                Register Agent into Registry
+                Register Agent into Catalog
               </h2>
               <p className="text-xs text-slate-500 mt-1">
-                The org runs their own Registry Server. This form calls{" "}
+                The org runs their own catalog server. This form calls{" "}
                 <span className="font-mono">POST /agents</span> on it.
               </p>
             </div>
@@ -298,9 +298,9 @@ export default function DemoPage() {
             <form onSubmit={onRegister} className="space-y-4">
               {/* Connection */}
               <div className="rounded-2xl bg-slate-50 p-4 space-y-3">
-                <p className="text-xs font-medium text-slate-500">Registry connection</p>
+                <p className="text-xs font-medium text-slate-500">Catalog connection</p>
                 <div>
-                  <Label>Registry URL</Label>
+                  <Label>Catalog URL</Label>
                   <Input
                     value={registryUrl}
                     onChange={(e) => setRegistryUrl(e.target.value)}
@@ -465,7 +465,7 @@ export default function DemoPage() {
                   <div className="space-y-2">
                     <HopBadge
                       n={2}
-                      label="Registry Server — what is this agent's facts URL?"
+                      label="Agent Source — what is this agent's facts URL?"
                       url={hop2Url || "GET <registry_url>/agents/<identifier>"}
                     />
                     <div className="ml-9">

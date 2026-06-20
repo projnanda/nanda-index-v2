@@ -145,7 +145,7 @@ export default function RegistriesPage() {
                   )}
                   <div className="mt-4 grid gap-2 text-sm text-slate-700">
                     <div>
-                      <span className="font-medium">Registry URL:</span>{" "}
+                      <span className="font-medium">Catalog URL:</span>{" "}
                       {selected.registry_url ? (
                         <a
                           href={selected.registry_url}

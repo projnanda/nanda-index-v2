@@ -1,210 +1,306 @@
 # NANDA Index
 
-The NANDA Index is the authoritative switchboard between catalogs for AI agents. It stores one `IndexRecord` per organization, pointing to where that org's agents live. Think of it as the ICANN of AI agents — it does not host agents itself, it tells you where to find them.
+A global switchboard for AI agent discovery. NANDA Index stores one index record per organization and maps any identity (domain, email, or URN) to the correct next discovery object: an AI Catalog, DNS-AID path, A2A Agent Card, or personal agent card.
 
-## How it fits in the resolution flow
+It is the first hop in a three-hop resolution chain:
 
 ```
-Caller  →  NANDA Index          GET /api/v1/resolve?locator=urn:ai:nasiko.com:ankit
-        ←  { registry_url }     "agents for nasiko.com live at https://registry.nasiko.com"
-
-Caller  →  Registry Server      GET https://registry.nasiko.com/agents/ankit
-        ←  { url }              "ankit's facts document is at https://nasiko.com/agents/ankit.json"
-
-Caller  →  Facts URL            GET https://nasiko.com/agents/ankit.json
-        ←  Agent capability document  (A2A card or equivalent)
+Requester → NANDA Index → Registry / Agent Card Host → Agent Runtime
 ```
 
-The NANDA Index handles hop 1 only. It never proxies agent traffic.
+NANDA Index does not host agents. It tells you where to find them.
 
 ---
 
-## Quick start
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        NANDA Index                          │
+│                                                             │
+│  org_id     media_type                    registry_url      │
+│  ─────────  ─────────────────────────     ────────────────  │
+│  acme-corp  application/ai-catalog+json   https://reg.acme  │
+│  skyblue    application/vnd.dns-aid+json  (data field)      │
+│  moonbakery application/a2a-agent-card    https://host39.org │
+│  john       application/a2a-agent-card    https://host39.org │
+└─────────────────────────────────────────────────────────────┘
+```
+
+Four registration types:
+
+| Type | Who | How resolved |
+|------|-----|-------------|
+| Enterprise Registry | Orgs running their own nanda-registry | Hop 2: `GET registry_url/agents/<slug>` |
+| DNS-AID | Domain-controlled discovery via DNS | Hop 2: DNS-AID lookup using `data` field |
+| SMB Agent Card | Small businesses using host39.org | Hop 2: fetch card directly from `registry_url` |
+| Personal Agent | Individuals, email identity | Hop 2: fetch card directly from `registry_url` |
+
+---
+
+## Stack
+
+- **API:** Fastify 5, TypeScript, Node.js 20
+- **Database:** PostgreSQL 16, postgres.js v3
+- **Frontend:** Next.js 16, TailwindCSS v4
+- **Auth:** Email/password + Google OAuth + GitHub OAuth, JWT
+- **Proxy:** Caddy 2 (TLS auto-provisioned)
+
+---
+
+## Local Development
 
 ```bash
+git clone https://github.com/your-org/nanda-index
+cd nanda-index
 cp .env.example .env
-# Edit .env — set JWT_SECRET to a strong random value
 docker compose up --build
 ```
 
-| Service    | URL                    |
-|------------|------------------------|
-| API        | http://localhost:3001  |
-| Web UI     | http://localhost:3000  |
-| API Docs   | http://localhost:3001/docs |
+| Service | URL |
+|---------|-----|
+| Web UI  | http://localhost:3000 |
+| API     | http://localhost:3001 |
+| DB      | localhost:5433 |
 
 ---
 
-## Environment variables
+## Production Deployment
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `DATABASE_URL` | yes | — | Postgres connection string |
-| `JWT_SECRET` | yes (prod) | dev default | Must be ≥ 32 chars in production |
-| `JWT_EXPIRES_IN` | no | `7d` | Token lifetime |
-| `GOOGLE_CLIENT_ID` | no | — | OAuth — create at console.cloud.google.com |
-| `GOOGLE_CLIENT_SECRET` | no | — | |
-| `GITHUB_CLIENT_ID` | no | — | OAuth — create at github.com/settings/developers |
-| `GITHUB_CLIENT_SECRET` | no | — | |
-| `OAUTH_CALLBACK_BASE_URL` | no | `http://localhost:3001` | Base URL for OAuth redirect URIs |
-| `FRONTEND_URL` | no | `http://localhost:3000` | Where to redirect after OAuth login |
-| `SMTP_URL` | no | `log` | Resend API key (`re_...`). `log` prints verification links to console instead of sending |
-| `EMAIL_FROM` | no | `noreply@nanda.local` | From address for verification emails |
-| `PORT` | no | `3001` | API server port |
-| `DB_MAX_CONNECTIONS` | no | `10` | Postgres connection pool size |
-| `SIGNING_KEY_ID` | no | — | Key ID for signed IndexRecord responses |
-| `SIGNING_PRIVATE_KEY` | no | — | ed25519 private key (base64) for signing |
+### Prerequisites
+
+- VPS with 2GB RAM (1GB works with swap — see below)
+- Docker and Docker Compose installed
+- DNS A records pointing to your server:
+  - `nandaindex.org` → server IP
+  - `api.nandaindex.org` → server IP
+
+### Steps
+
+```bash
+# 1. Clone the repo
+git clone https://github.com/your-org/nanda-index
+cd nanda-index
+
+# 2. Configure environment
+cp .env.prod.example .env.prod
+# Edit .env.prod and fill in every value
+
+# 3. Add 2GB swap (required on 1GB servers — Next.js build is memory heavy)
+fallocate -l 2G /swapfile && chmod 600 /swapfile
+mkswap /swapfile && swapon /swapfile
+echo '/swapfile none swap sw 0 0' >> /etc/fstab
+
+# 4. Build and start
+docker compose -f docker-compose.prod.yml --env-file .env.prod up --build -d
+
+# 5. Verify
+curl https://api.nandaindex.org/health
+```
+
+### Environment Variables
+
+```env
+# Database
+POSTGRES_PASSWORD=          # strong random password
+
+# JWT — generate with: openssl rand -hex 64
+JWT_SECRET=
+JWT_EXPIRES_IN=7d
+
+# OAuth (optional — leave blank to disable)
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+OAUTH_CALLBACK_BASE_URL=https://api.nandaindex.org
+
+# Email — use Resend in production, "log" prints to console in dev
+SMTP_URL=re_YOUR_RESEND_API_KEY
+EMAIL_FROM=noreply@nandaindex.org
+
+# URLs
+FRONTEND_URL=https://nandaindex.org
+NEXT_PUBLIC_NANDA_INDEX_API_URL=https://api.nandaindex.org
+
+DB_MAX_CONNECTIONS=10
+```
 
 ---
 
-## API reference
+## Registering an Organization
+
+### Via the Web UI
+
+Go to `https://nandaindex.org` → Sign in → Dashboard → New Organization.
+
+Choose your registration type, fill in the form, and verify your email. Your record goes live once verified.
+
+### Via the API
+
+```bash
+# Step 1: Create an account
+curl -X POST https://api.nandaindex.org/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"you@example.com","password":"yourpassword"}'
+# Returns: { "token": "eyJ..." }
+
+# Step 2: Register your organization
+TOKEN="eyJ..."
+
+curl -X POST https://api.nandaindex.org/api/v1/orgs \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "org_id": "acme",
+    "display_name": "Acme Corp",
+    "hosting_path": "registry",
+    "domain": "acme.com",
+    "contact_email": "agents@acme.com",
+    "registry_url": "https://registry.acme.com",
+    "identifier": "urn:ai:domain:acme.com",
+    "media_type": "application/ai-catalog+json",
+    "description": "Acme enterprise AI Catalog.",
+    "tags": ["enterprise","ai-catalog"],
+    "publisher": {
+      "identifier": "urn:ai:domain:acme.com",
+      "displayName": "Acme Corp",
+      "identityType": "dns"
+    },
+    "catalog_metadata": {
+      "org.projectnanda.preferredDiscovery": "ai-catalog",
+      "org.projectnanda.resolutionRole": "nested-ai-catalog"
+    }
+  }'
+
+# Step 3: Verify your email
+# Check inbox for a verification link. For testing, activate directly:
+# docker compose exec db psql -U nanda -d nanda_index -c \
+#   "UPDATE organizations SET status='active', email_verified=true WHERE org_id='acme';"
+```
+
+---
+
+## Schema
+
+### IndexRecord
+
+```typescript
+interface IndexRecord {
+  org_id:         string;
+  display_name:   string;
+  domain:         string | null;   // null for personal (email-identity) entries
+  registry_url:   string | null;   // null for DNS-AID entries
+  ttl_seconds:    number;
+  status:         "pending" | "active" | "suspended";
+  email_verified: boolean;
+  created_at:     string;
+  updated_at:     string;
+
+  // AI Catalog fields
+  identifier:  string;             // URN, e.g. "urn:ai:domain:acme.com"
+  media_type:  string;
+  description: string | null;
+  tags:        string[];
+  publisher:   { identifier: string; displayName: string; identityType: string };
+  metadata:    Record<string, unknown>;  // NANDA routing hints
+  data:        Record<string, unknown>;  // DNS-AID discovery data
+}
+```
+
+### media_type values
+
+| Value | Meaning |
+|-------|---------|
+| `application/ai-catalog+json` | Self-hosted enterprise registry |
+| `application/vnd.dns-aid+json` | DNS-AID discovery |
+| `application/a2a-agent-card+json` | Direct A2A Agent Card (SMB or personal) |
+
+### identifier URN formats
+
+| Type | Format | Example |
+|------|--------|---------|
+| Enterprise / org | `urn:ai:domain:<domain>` | `urn:ai:domain:acme.com` |
+| Enterprise / agent | `urn:ai:domain:<domain>:agent:<slug>` | `urn:ai:domain:acme.com:agent:support` |
+| Personal | `urn:ai:email:<email>` | `urn:ai:email:john@hotmail.com` |
+| Custom | any valid URN | `urn:ai:org.agntcy` |
+
+---
+
+## API Reference
 
 ### Auth
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| `GET` | `/auth/providers` | — | Which OAuth providers are configured |
-| `GET` | `/auth/google` | — | Start Google OAuth flow |
-| `GET` | `/auth/google/callback` | — | Google OAuth callback |
-| `GET` | `/auth/github` | — | Start GitHub OAuth flow |
-| `GET` | `/auth/github/callback` | — | GitHub OAuth callback |
-| `POST` | `/auth/register` | — | Create account with email + password |
-| `POST` | `/auth/login` | — | Sign in, returns JWT |
-| `GET` | `/api/v1/me` | JWT | Current user profile + org memberships |
+| Method | Path | Body | Response |
+|--------|------|------|----------|
+| `POST` | `/auth/register` | `{ email, password, display_name? }` | `{ token }` |
+| `POST` | `/auth/login` | `{ email, password }` | `{ token }` |
+| `GET`  | `/auth/me` | — | User profile |
+| `GET`  | `/auth/providers` | — | `{ google, github }` |
+| `GET`  | `/auth/google/callback` | — | OAuth redirect |
+| `GET`  | `/auth/github/callback` | — | OAuth redirect |
 
-### Index records (public)
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| `GET` | `/api/v1/index` | — | List all active IndexRecords |
-| `GET` | `/api/v1/index/:org_id` | — | Get one IndexRecord by org ID |
-| `GET` | `/api/v1/verify-email` | — | Verify org email (`?token=`) |
-
-### Organizations (protected)
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| `POST` | `/api/v1/orgs` | JWT | Register a new organization (sends verification email) |
-| `GET` | `/api/v1/orgs/:org_id` | JWT | Get org (must be a member) |
-| `PUT` | `/api/v1/orgs/:org_id` | JWT | Update org fields |
-| `DELETE` | `/api/v1/orgs/:org_id` | JWT | Permanently delete org |
-| `DELETE` | `/api/v1/orgs/:org_id/suspend` | JWT | Suspend org (removes from public index) |
-| `POST` | `/api/v1/orgs/:org_id/reactivate` | JWT | Reactivate a suspended org |
-
-### Resolution + search (public)
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| `GET` | `/api/v1/resolve` | — | Resolve a URN locator (`?locator=urn:ai:domain:agent`) |
-| `GET` | `/api/v1/search` | — | Search orgs by keyword or URN (`?q=`) |
-
-### Health
+### Public Index
 
 | Method | Path | Description |
-|---|---|---|
-| `GET` | `/health` | Liveness probe — `{ status, db }` |
+|--------|------|-------------|
+| `GET` | `/api/v1/index` | List all active organizations |
+| `GET` | `/api/v1/index/:org_id` | Get a single IndexRecord |
+| `GET` | `/api/v1/resolve?locator=<urn>` | Resolve a URN to an IndexRecord |
+| `GET` | `/api/v1/search?q=<query>` | Keyword or URN search |
+| `GET` | `/api/v1/verify-email?token=<token>` | Activate org via email link |
 
-#### Agent locator format
+### Organization Management (JWT required)
 
-```
-urn:ai:nasiko.com:ankit
- ↑   ↑  ↑          ↑
- |   |  domain     identifier
- |   nid (namespace — any RFC 8141-valid value)
- urn  (required prefix)
-```
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST`   | `/api/v1/orgs` | Register a new organization |
+| `GET`    | `/api/v1/orgs/:org_id` | Get your own org |
+| `PUT`    | `/api/v1/orgs/:org_id` | Update org fields |
+| `DELETE` | `/api/v1/orgs/:org_id` | Permanently delete |
+| `DELETE` | `/api/v1/orgs/:org_id/suspend` | Suspend (removes from public index) |
+| `POST`   | `/api/v1/orgs/:org_id/reactivate` | Reactivate a suspended org |
 
-#### Error shape
-
-All errors return:
-```json
-{ "error": "ERROR_CODE", "detail": "human-readable message" }
-```
-
----
-
-## Database schema
-
-### `users`
-Accounts created via OAuth (Google/GitHub) or email/password.
-
-| Column | Type | Notes |
-|---|---|---|
-| `id` | UUID | Primary key |
-| `email` | VARCHAR(255) | Unique |
-| `display_name` | VARCHAR(255) | Optional |
-| `avatar_url` | VARCHAR(512) | OAuth only |
-| `provider` | VARCHAR(20) | `google`, `github`, or `email` |
-| `provider_id` | VARCHAR(255) | OAuth provider's user ID |
-| `password_hash` | VARCHAR(255) | Email/password accounts only |
-| `created_at` | TIMESTAMPTZ | |
-| `updated_at` | TIMESTAMPTZ | |
-
-### `organizations`
-One row per registered org — the core IndexRecord.
-
-| Column | Type | Notes |
-|---|---|---|
-| `id` | UUID | Primary key |
-| `org_id` | VARCHAR(64) | Unique slug, e.g. `nasiko`. Lowercase, hyphens. Permanent. |
-| `display_name` | VARCHAR(255) | Human-readable name |
-| `domain` | VARCHAR(255) | Unique. Agents are addressable under this domain. |
-| `contact_email` | VARCHAR(255) | Used for email verification |
-| `registry_url` | VARCHAR(512) | URL of the org's Registry Server |
-| `email_verified` | BOOLEAN | `true` once verification link is clicked |
-| `verify_token` | VARCHAR(64) | One-time token emailed on registration |
-| `verify_token_expires_at` | TIMESTAMPTZ | Token expiry — 24h after registration |
-| `ttl_seconds` | INTEGER | Cache hint for resolvers. Default 86400 (24h) |
-| `status` | VARCHAR(20) | `pending`, `active`, or `suspended` |
-| `created_at` | TIMESTAMPTZ | |
-| `updated_at` | TIMESTAMPTZ | |
-
-### `org_memberships`
-Which users can manage which organizations.
-
-| Column | Type | Notes |
-|---|---|---|
-| `id` | UUID | Primary key |
-| `user_id` | UUID | FK → `users.id` |
-| `org_id` | VARCHAR(64) | FK → `organizations.org_id` |
-| `role` | VARCHAR(20) | `admin` or `member` |
-| `created_at` | TIMESTAMPTZ | |
-
----
-
-## Local development (without Docker)
+### Resolution Example
 
 ```bash
-# 1. Start Postgres
-docker compose up db -d
+curl "https://api.nandaindex.org/api/v1/resolve?locator=urn:ai:domain:acme.com:agent:flights"
 
-# 2. Install dependencies
-cd server && npm install
-
-# 3. Create .env in server/
-cp ../.env.example .env
-# Set DATABASE_URL=postgresql://nanda:nanda-local@localhost:5433/nanda_index
-
-# 4. Run migrations + start
-npm run migrate
-npm run dev
-```
-
-```bash
-# Web (separate terminal)
-cd web && npm install && npm run dev
+{
+  "locator": "urn:ai:domain:acme.com:agent:flights",
+  "identifier": "flights",
+  "index_record": {
+    "org_id": "acme",
+    "registry_url": "https://registry.acme.com",
+    "media_type": "application/ai-catalog+json",
+    ...
+  }
+}
 ```
 
 ---
 
-## Tech stack
+## Resolution Chain
 
-| Concern | Technology |
-|---|---|
-| Runtime | Node.js 20, TypeScript |
-| Framework | Fastify 5 |
-| Database | PostgreSQL 16, postgres.js (no ORM) |
-| Auth | @fastify/oauth2 (Google + GitHub), @fastify/jwt, bcryptjs |
-| Email | Resend SDK (`SMTP_URL=log` prints to console in dev) |
-| Tests | Vitest + fastify.inject() |
-| Frontend | Next.js 15, Tailwind CSS 4 |
+```
+1. GET /api/v1/resolve?locator=urn:ai:domain:acme.com:agent:flights
+   Returns: IndexRecord { registry_url, identifier }
+
+2. GET <registry_url>/agents/<identifier>
+   Returns: CatalogEntry { url (facts URL) }
+
+3. GET <catalogEntry.url>
+   Returns: A2A Agent Card { url (runtime endpoint) }
+
+4. POST <agentCard.url>/run
+   Returns: Agent response
+```
+
+---
+
+## Health Check
+
+```bash
+curl https://api.nandaindex.org/health
+# { "status": "ok", "db": "ok" }
+```

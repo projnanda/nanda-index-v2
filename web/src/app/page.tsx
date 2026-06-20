@@ -20,7 +20,7 @@ export default function HomePage() {
         <SectionHeading
           eyebrow="Quick actions"
           title="Resolve, register, and browse"
-          description="Look up any agent identity, register your organization's index record, or browse all active entries in the switchboard."
+          description="Look up any agent identity, register your organization's index record, or browse all active entries in the index."
         />
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
