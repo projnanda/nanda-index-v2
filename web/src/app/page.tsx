@@ -28,6 +28,10 @@ function getTypeBadge(record: IndexRecord): string {
   if (mt === "application/vnd.dns-aid+json") return "DNS-AID";
   if (mt === "application/a2a-agent-card+json" && tags.includes("personal-agent")) return "PERSONAL";
   if (mt === "application/a2a-agent-card+json" && tags.includes("smb")) return "SMB";
+  if (mt === "application/mcp-server-card+json" && tags.includes("enterprise")) return "MCP ENTERPRISE";
+  if (mt === "application/mcp-server-card+json") return "MCP";
+  if (mt === "application/agentskill+zip" && tags.includes("enterprise")) return "SKILL ENTERPRISE";
+  if (mt === "application/agentskill+zip") return "SKILL";
   const first = tags[0];
   return first ? first.toUpperCase() : "CUSTOM";
 }

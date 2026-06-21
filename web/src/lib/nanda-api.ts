@@ -104,7 +104,9 @@ export async function fetchAgentRecord(
   agentId: string,
   mediaType?: string,
 ): Promise<CatalogEntry> {
-  const isDirectCard = mediaType === "application/a2a-agent-card+json";
+  const isDirectCard = mediaType === "application/a2a-agent-card+json" ||
+    mediaType === "application/mcp-server-card+json" ||
+    mediaType === "application/agentskill+zip";
   const url = isDirectCard
     ? registryUrl
     : `${registryUrl.replace(/\/+$/, "")}/agents/${encodeURIComponent(agentId)}`;

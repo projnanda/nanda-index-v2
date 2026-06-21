@@ -190,7 +190,9 @@ export default function DemoPage() {
       return;
     }
     const mediaType = indexResult.index_record.media_type;
-    const isDirectCard = mediaType === "application/a2a-agent-card+json";
+    const isDirectCard = mediaType === "application/a2a-agent-card+json" ||
+      mediaType === "application/mcp-server-card+json" ||
+      mediaType === "application/agentskill+zip";
     const h2url = isDirectCard
       ? registry_url
       : `${registry_url.replace(/\/+$/, "")}/agents/${indexResult.identifier}`;

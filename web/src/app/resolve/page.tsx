@@ -134,7 +134,9 @@ export default function ResolvePage() {
       return;
     }
 
-    const isDirectCard = media_type === "application/a2a-agent-card+json";
+    const isDirectCard = media_type === "application/a2a-agent-card+json" ||
+      media_type === "application/mcp-server-card+json" ||
+      media_type === "application/agentskill+zip";
     const h2url = isDirectCard
       ? registry_url
       : `${registry_url.replace(/\/+$/, "")}/agents/${indexData.identifier}`;
