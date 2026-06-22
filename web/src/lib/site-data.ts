@@ -1,5 +1,6 @@
 export const navigation = [
   { href: "/", label: "Overview" },
+  { href: "/how-it-works", label: "How it works" },
   { href: "/registries", label: "Browse" },
   { href: "/resolve", label: "Resolve" },
   { href: "/login", label: "Login" },
@@ -23,7 +24,7 @@ export const architectureLayers = [
   {
     layer: "SMB",
     function: "Agent runtime on AWS/GCP; agent card hosted by a third party",
-    analogy: "urn:ai:domain:moonbakery.com:agent:orders",
+    analogy: "urn:ai:domain:moonbakery39.com:agent:orders",
     hosted: "Primary resolver via NandaIndex",
   },
   {
