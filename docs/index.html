@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NANDA Index — Documentation</title>
+  <meta name="description" content="Developer documentation for NANDA Index: a global switchboard for AI agent discovery. Architecture, data model, registration lifecycle, DNS TXT domain verification, full API reference, and deployment." />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="NANDA Index — Documentation" />
+  <meta property="og:description" content="A global switchboard for AI agent discovery. Resolve any agent identity to where its agents actually live." />
+  <meta property="og:url" content="https://nandaindex.org" />
+
+  <link rel="icon" href="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'&gt;&lt;rect width='100' height='100' rx='22' fill='%230d274d'/&gt;&lt;text x='50' y='68' font-size='58' font-family='Arial' font-weight='bold' fill='%23187adc' text-anchor='middle'&gt;N&lt;/text&gt;&lt;/svg&gt;" />
+
+  <style>
+    :root {
+      --surface:        #f5f8fd;
+      --surface-light:  #fbfcfe;
+      --surface-strong: #eff3fc;
+      --surface-tag:    #e3eafa;
+      --ink:        #3c4551;
+      --ink-strong: #00142b;
+      --ink-medium: #59616b;
+      --ink-weak:   #777d85;
+      --line:        #d5dff7;
+      --line-strong: #c8d5f5;
+      --brand-200: #e8f1ff;
+      --brand-500: #187adc;
+      --brand-600: #0051af;
+      --brand-800: #0d274d;
+      --teal:     #dff1f5;
+      --teal-ink: #0f6e85;
+      --warn:     #fdeccc;
+      --warn-ink: #8a5a06;
+      --danger:    #b42318;
+      --danger-soft: #fef3f2;
+      --radius: 12px;
+      --radius-sm: 6px;
+      --shadow-card: 0 4px 4px 0 rgba(200, 213, 245, 0.33);
+      --sidebar-w: 264px;
+      --sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--surface);
+      color: var(--ink);
+      font-family: var(--sans);
+      line-height: 1.65;
+      font-size: 15.5px;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+    ::selection { background: var(--brand-200); color: var(--brand-800); }
+    a { color: var(--brand-600); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    h1, h2, h3, h4 { color: var(--ink-strong); line-height: 1.25; letter-spacing: -0.01em; scroll-margin-top: 84px; }
+    code { font-family: var(--mono); font-size: 0.86em; background: var(--surface-strong); color: var(--brand-600); padding: 2px 6px; border-radius: 4px; }
+    pre { font-family: var(--mono); }
+
+    /* ── Top bar ─────────────────────────────────────────────── */
+    header.top {
+      position: sticky; top: 0; z-index: 60;
+      background: rgba(251, 252, 254, 0.9);
+      backdrop-filter: saturate(180%) blur(8px);
+      border-bottom: 1px solid var(--line);
+      height: 60px; display: flex; align-items: center;
+    }
+    .top-inner { width: 100%; max-width: 1280px; margin: 0 auto; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--ink-strong); }
+    .brand:hover { text-decoration: none; }
+    .logo { width: 30px; height: 30px; border-radius: 8px; background: var(--brand-800); color: var(--brand-500); display: grid; place-items: center; font-weight: 800; font-size: 17px; }
+    .top-links { display: flex; gap: 18px; align-items: center; font-size: 14px; }
+    .top-links a { color: var(--ink-medium); font-weight: 500; }
+    .top-links a:hover { color: var(--brand-600); text-decoration: none; }
+    .btn { display: inline-flex; align-items: center; gap: 7px; padding: 7px 15px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 600; }
+    .btn-primary { background: var(--brand-500); color: #fff; }
+    .btn-primary:hover { background: var(--brand-600); text-decoration: none; }
+
+    /* ── Layout ──────────────────────────────────────────────── */
+    .shell { max-width: 1280px; margin: 0 auto; display: grid; grid-template-columns: var(--sidebar-w) minmax(0, 1fr); gap: 0; }
+
+    nav.side {
+      position: sticky; top: 60px; align-self: start;
+      height: calc(100vh - 60px); overflow-y: auto;
+      padding: 28px 18px 60px 24px; border-right: 1px solid var(--line);
+    }
+    nav.side .group { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-weak); margin: 22px 0 8px; }
+    nav.side .group:first-child { margin-top: 0; }
+    nav.side a { display: block; padding: 5px 10px; border-radius: 6px; color: var(--ink-medium); font-size: 14px; }
+    nav.side a:hover { background: var(--surface-strong); color: var(--brand-600); text-decoration: none; }
+
+    main { padding: 40px 48px 96px; min-width: 0; }
+    .content { max-width: 820px; }
+
+    /* ── Typography blocks ───────────────────────────────────── */
+    h1.page { font-size: 38px; font-weight: 700; margin: 0 0 6px; }
+    .tagline { font-size: 18px; color: var(--ink-medium); margin: 0 0 8px; }
+    section { padding-top: 30px; margin-top: 30px; border-top: 1px solid var(--line); }
+    section:first-of-type { border-top: none; margin-top: 22px; }
+    h2 { font-size: 26px; font-weight: 600; margin: 0 0 4px; }
+    h3 { font-size: 18px; font-weight: 600; margin: 28px 0 6px; }
+    h4 { font-size: 15px; font-weight: 600; margin: 20px 0 4px; }
+    p { margin: 12px 0; }
+    ul, ol { padding-left: 22px; }
+    li { margin: 6px 0; }
+
+    /* ── Code ────────────────────────────────────────────────── */
+    pre.code {
+      background: var(--brand-800); color: #e6eefb; border-radius: var(--radius);
+      padding: 18px 20px; margin: 16px 0; overflow-x: auto; font-size: 13px; line-height: 1.7;
+    }
+    pre.code code { background: none; color: inherit; padding: 0; font-size: inherit; }
+    pre.code .c { color: #7fa6d8; }
+    pre.code .k { color: #6fd0e0; }
+    pre.code .s { color: #b7e3a0; }
+
+    .chain {
+      background: var(--brand-800); color: #cfe0f5; border-radius: var(--radius);
+      padding: 18px 20px; margin: 16px 0; overflow-x: auto;
+      font-family: var(--mono); font-size: 13.5px; line-height: 2;
+    }
+    .chain .arrow { color: var(--brand-500); }
+    .chain b { color: #fff; }
+
+    /* ── Tables ──────────────────────────────────────────────── */
+    .table-wrap { margin: 16px 0; overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-light); }
+    table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    th, td { text-align: left; padding: 11px 16px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { background: var(--surface-strong); color: var(--ink-strong); font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; }
+    tr:last-child td { border-bottom: none; }
+    td code, th code { font-size: 12px; }
+    .method { font-family: var(--mono); font-weight: 700; font-size: 11px; padding: 2px 7px; border-radius: 4px; color: #fff; display: inline-block; }
+    .m-get { background: #0f6e85; }
+    .m-post { background: #187adc; }
+    .m-put { background: #8a5a06; }
+    .m-del { background: #b42318; }
+
+    /* ── Callouts ────────────────────────────────────────────── */
+    .note { border-radius: var(--radius); padding: 14px 18px; margin: 18px 0; font-size: 14.5px; border: 1px solid var(--line); background: var(--surface-light); }
+    .note.info { border-color: var(--line-strong); background: var(--brand-200); color: var(--brand-800); }
+    .note.warn { border-color: #f0d68a; background: var(--warn); color: var(--warn-ink); }
+    .note.teal { border-color: #b6dde5; background: var(--teal); color: var(--teal-ink); }
+    .note strong { color: inherit; }
+
+    /* ── Misc ────────────────────────────────────────────────── */
+    .pillrow { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+    .pill { background: var(--surface-tag); color: var(--ink); font-size: 12.5px; font-weight: 600; padding: 4px 12px; border-radius: 9999px; }
+    .steps { counter-reset: step; list-style: none; padding-left: 0; }
+    .steps > li { counter-increment: step; position: relative; padding-left: 42px; margin: 18px 0; }
+    .steps > li::before { content: counter(step); position: absolute; left: 0; top: -2px; width: 28px; height: 28px; border-radius: 9999px; background: var(--brand-500); color: #fff; font-weight: 700; font-size: 14px; display: grid; place-items: center; }
+    .steps h4 { margin-top: 0; }
+    hr.soft { border: none; border-top: 1px solid var(--line); margin: 28px 0; }
+
+    footer.docs { border-top: 1px solid var(--line); padding: 28px 48px; color: var(--ink-weak); font-size: 13.5px; max-width: 820px; }
+    footer.docs a { margin-right: 18px; }
+
+    /* ── Responsive ──────────────────────────────────────────── */
+    @media (max-width: 980px) {
+      .shell { grid-template-columns: 1fr; }
+      nav.side { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--line); padding: 18px 24px; }
+      main { padding: 28px 24px 72px; }
+      .top-links a:not(.btn) { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="top-inner">
+      <a class="brand" href="#overview"><span class="logo">N</span><span>NANDA Index<span style="color:var(--ink-weak);font-weight:500"> · Docs</span></span></a>
+      <div class="top-links">
+        <a href="#api">API</a>
+        <a href="#deployment">Deploy</a>
+        <a href="https://github.com/projnanda/nanda-index-v2">GitHub</a>
+        <a class="btn btn-primary" href="https://nandaindex.org">Open app →</a>
+      </div>
+    </div>
+  </header>
+
+  <div class="shell">
+    <!-- ── Sidebar ──────────────────────────────────────────── -->
+    <nav class="side">
+      <div class="group">Introduction</div>
+      <a href="#overview">Overview</a>
+      <a href="#concepts">Core concepts</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#resolution">Resolution chain</a>
+
+      <div class="group">Data model</div>
+      <a href="#index-record">IndexRecord</a>
+      <a href="#media-types">Media types</a>
+      <a href="#urn">Identity URNs</a>
+      <a href="#database">Database schema</a>
+
+      <div class="group">Guides</div>
+      <a href="#local-dev">Local development</a>
+      <a href="#register">Register an organization</a>
+      <a href="#domain-verification">DNS TXT verification</a>
+
+      <div class="group">Reference</div>
+      <a href="#api">API reference</a>
+      <a href="#errors">Errors</a>
+      <a href="#health">Health &amp; monitoring</a>
+
+      <div class="group">Operations</div>
+      <a href="#deployment">Production deployment</a>
+      <a href="#env">Environment variables</a>
+      <a href="#stack">Tech stack</a>
+    </nav>
+
+    <!-- ── Content ──────────────────────────────────────────── -->
+    <main>
+      <div class="content">
+        <!-- OVERVIEW -->
+        <section id="overview" style="border:none;margin-top:0;padding-top:0">
+          <h1 class="page">NANDA Index</h1>
+          <p class="tagline">A global switchboard for AI agent discovery — federated resolution for the agentic web.</p>
+          <p>
+            NANDA Index stores <strong>one index record per organization</strong> and maps any identity
+            — a domain, an email, or a URN — to the correct <em>next</em> discovery object: an AI Catalog,
+            a DNS-AID path, an A2A Agent Card, or a personal agent card.
+          </p>
+          <p>It is the first hop in a three-hop resolution chain:</p>
+          <div class="chain">Requester <span class="arrow">→</span> <b>NANDA Index</b> <span class="arrow">→</span> Registry / Agent Card Host <span class="arrow">→</span> Agent Runtime</div>
+          <div class="note info"><strong>NANDA Index does not host agents.</strong> It tells you where to find them. Discovery is delegated to whichever system the organization already uses.</div>
+          <div class="pillrow">
+            <span class="pill">Enterprise</span>
+            <span class="pill">SMB</span>
+            <span class="pill">Individual</span>
+            <span class="pill">Open URN identity</span>
+          </div>
+        </section>
+
+        <!-- CONCEPTS -->
+        <section id="concepts">
+          <h2>Core concepts</h2>
+          <h3>The index record</h3>
+          <p>Every registered organization has exactly one <code>IndexRecord</code>. It carries just enough information to route a requester to the next hop — never the agent itself.</p>
+          <h3>Four registration types</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Type</th><th><code>hosting_path</code></th><th>Who</th><th>How it resolves (hop 2)</th></tr></thead>
+              <tbody>
+                <tr><td>Enterprise Registry</td><td><code>registry</code></td><td>Orgs running their own nanda-registry</td><td><code>GET registry_url/agents/&lt;slug&gt;</code></td></tr>
+                <tr><td>DNS-AID</td><td><code>dns-aid</code></td><td>Domain-controlled discovery via DNS</td><td>DNS-AID lookup using the <code>data</code> field</td></tr>
+                <tr><td>SMB Agent Card</td><td><code>smb</code></td><td>Small businesses on a shared host</td><td>Fetch the card directly from <code>registry_url</code></td></tr>
+                <tr><td>Personal Agent</td><td><code>personal</code></td><td>Individuals, email identity (no domain)</td><td>Fetch the card directly from <code>registry_url</code></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note teal"><strong>Signed records.</strong> Index and EntityOwner records are signed with Ed25519 over a canonical-JSON projection (keys sorted, no whitespace), so any implementation can verify a record byte-for-byte.</div>
+        </section>
+
+        <!-- ARCHITECTURE -->
+        <section id="architecture">
+          <h2>Architecture</h2>
+          <p>The index is a thin, queryable mapping. A single row points a requester at the right downstream system:</p>
+          <pre class="code"><code>┌───────────────────────────────────────────────────────────────┐
+│                          NANDA Index                          │
+│                                                               │
+│  org_id      media_type                    registry_url       │
+│  ──────────  ─────────────────────────     ────────────────   │
+│  acme-corp   application/ai-catalog+json   https://reg.acme   │
+│  skyblue     application/vnd.dns-aid+json  (data field)       │
+│  moonbakery  application/a2a-agent-card    https://host39.org │
+│  john        application/a2a-agent-card    https://host39.org │
+└───────────────────────────────────────────────────────────────┘</code></pre>
+          <h3>Where each layer fits</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Layer</th><th>Function</th><th>Example identity</th></tr></thead>
+              <tbody>
+                <tr><td>Enterprise</td><td>Exposes agents via AI Catalog, DNS-AID, or gateways</td><td><code>urn:ai:domain:example.com</code></td></tr>
+                <tr><td>SMB</td><td>Agent runtime on a cloud host; card hosted by a third party</td><td><code>urn:ai:domain:moonbakery39.com:agent:orders</code></td></tr>
+                <tr><td>Individual</td><td>No domain needed; email identity with delegated card hosting</td><td><code>urn:ai:email:john@hotmail.com</code></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- RESOLUTION -->
+        <section id="resolution">
+          <h2>Resolution chain</h2>
+          <p>Give the index a locator; it returns the next discovery object. Each hop narrows from identity → registry → agent card → live runtime.</p>
+          <pre class="code"><span class="c"># 1 — Resolve a locator to an IndexRecord</span>
+GET /api/v1/resolve?locator=<span class="k">urn:ai:domain:acme.com:agent:flights</span>
+   <span class="c">→ IndexRecord { registry_url, identifier }</span>
+
+<span class="c"># 2 — Fetch the catalog entry from the org's registry</span>
+GET &lt;registry_url&gt;/agents/&lt;identifier&gt;
+   <span class="c">→ CatalogEntry { url }   (the facts URL)</span>
+
+<span class="c"># 3 — Fetch the A2A Agent Card</span>
+GET &lt;catalogEntry.url&gt;
+   <span class="c">→ A2A Agent Card { url }   (the runtime endpoint)</span>
+
+<span class="c"># 4 — Talk to the agent</span>
+POST &lt;agentCard.url&gt;/run
+   <span class="c">→ Agent response</span></pre>
+          <h3>Example response</h3>
+          <pre class="code">curl <span class="s">"https://api.nandaindex.org/api/v1/resolve?locator=urn:ai:domain:acme.com:agent:flights"</span>
+
+{
+  <span class="k">"locator"</span>: <span class="s">"urn:ai:domain:acme.com:agent:flights"</span>,
+  <span class="k">"identifier"</span>: <span class="s">"flights"</span>,
+  <span class="k">"index_record"</span>: {
+    <span class="k">"org_id"</span>: <span class="s">"acme"</span>,
+    <span class="k">"registry_url"</span>: <span class="s">"https://registry.acme.com"</span>,
+    <span class="k">"media_type"</span>: <span class="s">"application/ai-catalog+json"</span>
+  }
+}</pre>
+        </section>
+
+        <!-- INDEX RECORD -->
+        <section id="index-record">
+          <h2>IndexRecord</h2>
+          <p>The wire shape returned for any registered organization.</p>
+          <pre class="code"><span class="k">interface</span> IndexRecord {
+  org_id:          <span class="k">string</span>;
+  display_name:    <span class="k">string</span>;
+  domain:          <span class="k">string</span> | <span class="k">null</span>;   <span class="c">// null for personal (email-identity) entries</span>
+  registry_url:    <span class="k">string</span> | <span class="k">null</span>;   <span class="c">// null for DNS-AID entries</span>
+  ttl_seconds:     <span class="k">number</span>;          <span class="c">// 3600–604800 (default 86400 / 24h)</span>
+  status:          <span class="s">"pending"</span> | <span class="s">"active"</span> | <span class="s">"suspended"</span>;
+  email_verified:  <span class="k">boolean</span>;
+  domain_verified: <span class="k">boolean</span>;         <span class="c">// activation is gated on this</span>
+  created_at:      <span class="k">string</span>;
+  updated_at:      <span class="k">string</span>;
+
+  <span class="c">// Catalog fields (optional)</span>
+  identifier?:  <span class="k">string</span>;             <span class="c">// URN, e.g. "urn:ai:domain:acme.com"</span>
+  media_type?:  <span class="k">string</span>;
+  description?: <span class="k">string</span> | <span class="k">null</span>;
+  tags?:        <span class="k">string</span>[];
+  publisher?:   { identifier: <span class="k">string</span>; displayName: <span class="k">string</span>; identityType?: <span class="k">string</span> };
+  metadata?:    Record&lt;<span class="k">string</span>, <span class="k">unknown</span>&gt;;  <span class="c">// NANDA routing hints</span>
+  data?:        Record&lt;<span class="k">string</span>, <span class="k">unknown</span>&gt;;  <span class="c">// DNS-AID discovery data</span>
+}</pre>
+          <div class="note warn"><strong>Two-step activation.</strong> A new record starts as <code>pending</code>. Verifying the contact email sets <code>email_verified</code> but does <em>not</em> activate the record. The org only becomes <code>active</code> (and appears in the public index) after <strong>DNS TXT domain verification</strong> succeeds — see <a href="#domain-verification">below</a>.</div>
+        </section>
+
+        <!-- MEDIA TYPES -->
+        <section id="media-types">
+          <h2>Media types</h2>
+          <p>The <code>media_type</code> declares what the next hop returns.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Value</th><th>Meaning</th></tr></thead>
+              <tbody>
+                <tr><td><code>application/ai-catalog+json</code></td><td>Self-hosted enterprise registry / AI Catalog</td></tr>
+                <tr><td><code>application/vnd.dns-aid+json</code></td><td>DNS-AID discovery</td></tr>
+                <tr><td><code>application/a2a-agent-card+json</code></td><td>Direct A2A Agent Card (SMB or personal)</td></tr>
+                <tr><td><code>application/mcp-server-card+json</code></td><td>MCP server card</td></tr>
+                <tr><td><code>application/agentskill+zip</code></td><td>Packaged agent skill bundle</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- URN -->
+        <section id="urn">
+          <h2>Identity URNs</h2>
+          <p>Locators are URNs. The resolver parses these forms:</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Type</th><th>Format</th><th>Example</th></tr></thead>
+              <tbody>
+                <tr><td>Enterprise / org</td><td><code>urn:ai:domain:&lt;domain&gt;</code></td><td><code>urn:ai:domain:acme.com</code></td></tr>
+                <tr><td>Enterprise / agent</td><td><code>urn:ai:domain:&lt;domain&gt;:agent:&lt;slug&gt;</code></td><td><code>urn:ai:domain:acme.com:agent:support</code></td></tr>
+                <tr><td>Personal</td><td><code>urn:ai:email:&lt;email&gt;</code></td><td><code>urn:ai:email:john@hotmail.com</code></td></tr>
+                <tr><td>Legacy</td><td><code>urn:ai:&lt;domain&gt;:&lt;slug&gt;</code></td><td><code>urn:ai:nasiko.com:ankit</code></td></tr>
+                <tr><td>Custom</td><td>any valid URN</td><td><code>urn:ai:org.agntcy</code></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>For agent URNs the returned <code>identifier</code> is the slug; for email URNs it is the full URN.</p>
+        </section>
+
+        <!-- DATABASE -->
+        <section id="database">
+          <h2>Database schema</h2>
+          <p>PostgreSQL, migrated by lexically-ordered <code>*.sql</code> files tracked in <code>schema_migrations</code> (each file runs in its own transaction). Core tables:</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Table</th><th>Holds</th></tr></thead>
+              <tbody>
+                <tr><td><code>organizations</code></td><td>One row per org — the source of every <code>IndexRecord</code> (status, email/domain verification, challenge token, catalog fields)</td></tr>
+                <tr><td><code>users</code></td><td>Accounts (email/password or OAuth identity)</td></tr>
+                <tr><td><code>org_memberships</code></td><td>User ↔ org links with a <code>role</code> of <code>admin</code> or <code>member</code></td></tr>
+                <tr><td><code>entity_owners</code></td><td>Signed EntityOwner records (public key, DMARC policy, signature)</td></tr>
+                <tr><td><code>pending_registrations</code></td><td>In-flight challenge/registration state</td></tr>
+                <tr><td><code>audit_log</code></td><td>Change diffs</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- LOCAL DEV -->
+        <section id="local-dev">
+          <h2>Local development</h2>
+          <p>The whole stack runs in Docker Compose — API, web, and Postgres.</p>
+          <pre class="code">git clone https://github.com/projnanda/nanda-index-v2
+cd nanda-index-v2
+cp .env.example .env
+docker compose up --build</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Service</th><th>URL</th></tr></thead>
+              <tbody>
+                <tr><td>Web UI</td><td><code>http://localhost:3000</code></td></tr>
+                <tr><td>API</td><td><code>http://localhost:3001</code></td></tr>
+                <tr><td>Database</td><td><code>localhost:5433</code></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note info">In development, email defaults to <code>SMTP_URL=log</code> (verification links print to the API console) and the JWT secret falls back to a dev value. Both are rejected at startup in production.</div>
+        </section>
+
+        <!-- REGISTER -->
+        <section id="register">
+          <h2>Register an organization</h2>
+          <h3>Lifecycle</h3>
+          <div class="chain">create (<b>pending</b>) <span class="arrow">→</span> verify email <span class="arrow">→</span> DNS TXT challenge <span class="arrow">→</span> verify domain <span class="arrow">→</span> <b>active</b></div>
+
+          <h3>Via the web UI</h3>
+          <p>Go to <a href="https://nandaindex.org">nandaindex.org</a> → sign in → <strong>Dashboard → New Organization</strong>. Pick a registration type, fill the form, verify your email, then complete domain verification. Your record goes live once the domain is verified.</p>
+
+          <h3>Via the API</h3>
+          <ol class="steps">
+            <li>
+              <h4>Create an account</h4>
+              <pre class="code">curl -X POST https://api.nandaindex.org/auth/register \
+  -H <span class="s">"Content-Type: application/json"</span> \
+  -d <span class="s">'{"email":"you@example.com","password":"yourpassword"}'</span>
+<span class="c"># → 201 { "token": "eyJ..." }</span></pre>
+            </li>
+            <li>
+              <h4>Register your organization (you become its admin)</h4>
+              <pre class="code">TOKEN=<span class="s">"eyJ..."</span>
+
+curl -X POST https://api.nandaindex.org/api/v1/orgs \
+  -H <span class="s">"Content-Type: application/json"</span> \
+  -H <span class="s">"Authorization: Bearer $TOKEN"</span> \
+  -d <span class="s">'{
+    "org_id": "acme",
+    "display_name": "Acme Corp",
+    "hosting_path": "registry",
+    "domain": "acme.com",
+    "contact_email": "agents@acme.com",
+    "registry_url": "https://registry.acme.com",
+    "identifier": "urn:ai:domain:acme.com",
+    "media_type": "application/ai-catalog+json",
+    "description": "Acme enterprise AI Catalog.",
+    "tags": ["enterprise","ai-catalog"],
+    "publisher": {
+      "identifier": "urn:ai:domain:acme.com",
+      "displayName": "Acme Corp",
+      "identityType": "dns"
+    }
+  }'</span>
+<span class="c"># → 201 IndexRecord (status: "pending")</span></pre>
+              <p><strong>Validation:</strong> <code>org_id</code> is lowercase <code>^[a-z0-9][a-z0-9-]*[a-z0-9]$</code> (2–64 chars); <code>domain</code> is required for every path except <code>personal</code>; <code>registry_url</code> is required for every path except <code>dns-aid</code>; <code>ttl_seconds</code> is 3600–604800.</p>
+            </li>
+            <li>
+              <h4>Verify the contact email</h4>
+              <p>Open the link from the email, or call it directly. This sets <code>email_verified</code> — it does not activate the org.</p>
+              <pre class="code">curl <span class="s">"https://api.nandaindex.org/api/v1/verify-email?token=&lt;token&gt;"</span></pre>
+            </li>
+            <li>
+              <h4>Verify the domain</h4>
+              <p>Prove control of the domain via a DNS TXT record — this is what flips the org to <code>active</code>. See the next section.</p>
+            </li>
+          </ol>
+        </section>
+
+        <!-- DOMAIN VERIFICATION -->
+        <section id="domain-verification">
+          <h2>DNS TXT domain verification</h2>
+          <p>ACME <code>dns-01</code>-style proof of domain control. To prove you control <code>acme.com</code>, you publish a TXT record the index issued, then ask the index to check it.</p>
+          <ol class="steps">
+            <li>
+              <h4>Request a challenge (admin only)</h4>
+              <pre class="code">curl -X POST https://api.nandaindex.org/api/v1/orgs/acme/domain-challenge \
+  -H <span class="s">"Authorization: Bearer $TOKEN"</span>
+
+{
+  <span class="k">"domain"</span>:       <span class="s">"acme.com"</span>,
+  <span class="k">"record_name"</span>:  <span class="s">"_nanda-challenge.acme.com"</span>,
+  <span class="k">"record_type"</span>:  <span class="s">"TXT"</span>,
+  <span class="k">"record_value"</span>: <span class="s">"nanda-verify=&lt;token&gt;"</span>,
+  <span class="k">"expires_at"</span>:   <span class="s">"2026-06-25T12:00:00.000Z"</span>
+}</pre>
+            </li>
+            <li>
+              <h4>Publish the TXT record</h4>
+              <p>At your DNS provider, create a <code>TXT</code> record at <code>_nanda-challenge.acme.com</code> with value <code>nanda-verify=&lt;token&gt;</code>. Challenges are valid long enough to absorb DNS propagation.</p>
+            </li>
+            <li>
+              <h4>Verify &amp; activate (admin only)</h4>
+              <pre class="code">curl -X POST https://api.nandaindex.org/api/v1/orgs/acme/verify-domain \
+  -H <span class="s">"Authorization: Bearer $TOKEN"</span>
+<span class="c"># → 200 IndexRecord (status: "active", domain_verified: true)</span></pre>
+              <p>If the record isn't found yet the endpoint returns <code>400 DOMAIN_NOT_VERIFIED</code> with the TXT values it actually observed — DNS can take time to propagate, so retry shortly.</p>
+            </li>
+          </ol>
+          <div class="note teal">Personal (email-identity) orgs have no domain to verify. Calling <code>verify-domain</code> on one returns <code>400 NO_DOMAIN</code>.</div>
+        </section>
+
+        <!-- API -->
+        <section id="api">
+          <h2>API reference</h2>
+          <p>Base URL: <code>https://api.nandaindex.org</code>. Public read endpoints need no auth; management endpoints require a <code>Bearer</code> JWT, and <code>:org_id</code> routes additionally enforce a membership role.</p>
+
+          <h3>Authentication</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Method</th><th>Path</th><th>Body / params</th><th>Response</th></tr></thead>
+              <tbody>
+                <tr><td><span class="method m-post">POST</span></td><td><code>/auth/register</code></td><td><code>{ email, password, display_name? }</code></td><td><code>201 { token }</code></td></tr>
+                <tr><td><span class="method m-post">POST</span></td><td><code>/auth/login</code></td><td><code>{ email, password }</code></td><td><code>200 { token }</code></td></tr>
+                <tr><td><span class="method m-get">GET</span></td><td><code>/auth/providers</code></td><td>—</td><td><code>{ google, github }</code></td></tr>
+                <tr><td><span class="method m-get">GET</span></td><td><code>/auth/google/callback</code></td><td>OAuth code</td><td>Redirect to frontend with token</td></tr>
+                <tr><td><span class="method m-get">GET</span></td><td><code>/auth/github/callback</code></td><td>OAuth code</td><td>Redirect to frontend with token</td></tr>
+                <tr><td><span class="method m-get">GET</span></td><td><code>/api/v1/me</code></td><td><em>JWT</em></td><td>User profile + org memberships</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Public index</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Method</th><th>Path</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><span class="method m-get">GET</span></td><td><code>/api/v1/index</code></td><td>List all <code>active</code> organizations</td></tr>
+                <tr><td><span class="method m-get">GET</span></td><td><code>/api/v1/index/:org_id</code></td><td>Get a single <code>IndexRecord</code></td></tr>
+                <tr><td><span class="method m-get">GET</span></td><td><code>/api/v1/resolve?locator=&lt;urn&gt;</code></td><td>Resolve a URN to an <code>IndexRecord</code></td></tr>
+                <tr><td><span class="method m-get">GET</span></td><td><code>/api/v1/search?q=&lt;query&gt;</code></td><td>Keyword search over org_id, domain, display_name (min 2 chars)</td></tr>
+                <tr><td><span class="method m-get">GET</span></td><td><code>/api/v1/verify-email?token=&lt;token&gt;</code></td><td>Mark contact email verified</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Organization management <span style="font-weight:400;font-size:14px;color:var(--ink-weak)">(JWT required)</span></h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Method</th><th>Path</th><th>Role</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><span class="method m-post">POST</span></td><td><code>/api/v1/orgs</code></td><td>any</td><td>Register a new org (caller becomes admin)</td></tr>
+                <tr><td><span class="method m-get">GET</span></td><td><code>/api/v1/orgs/:org_id</code></td><td>member</td><td>Read your org</td></tr>
+                <tr><td><span class="method m-post">POST</span></td><td><code>/api/v1/orgs/:org_id/domain-challenge</code></td><td>admin</td><td>Issue (or rotate) a DNS TXT challenge</td></tr>
+                <tr><td><span class="method m-post">POST</span></td><td><code>/api/v1/orgs/:org_id/verify-domain</code></td><td>admin</td><td>Check DNS &amp; activate the org</td></tr>
+                <tr><td><span class="method m-put">PUT</span></td><td><code>/api/v1/orgs/:org_id</code></td><td>admin</td><td>Update index record fields</td></tr>
+                <tr><td><span class="method m-del">DELETE</span></td><td><code>/api/v1/orgs/:org_id/suspend</code></td><td>admin</td><td>Suspend (removes from public index)</td></tr>
+                <tr><td><span class="method m-post">POST</span></td><td><code>/api/v1/orgs/:org_id/reactivate</code></td><td>admin</td><td>Reactivate a suspended org</td></tr>
+                <tr><td><span class="method m-del">DELETE</span></td><td><code>/api/v1/orgs/:org_id</code></td><td>admin</td><td>Permanently delete</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note info">Interactive OpenAPI/Swagger docs are served by the API itself at <code>/docs</code> (e.g. <code>https://api.nandaindex.org/docs</code>).</div>
+        </section>
+
+        <!-- ERRORS -->
+        <section id="errors">
+          <h2>Errors</h2>
+          <p>Errors share one shape:</p>
+          <pre class="code">{ <span class="k">"error"</span>: <span class="s">"CODE"</span>, <span class="k">"detail"</span>: <span class="s">"human-readable explanation"</span> }</pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Example code</th><th>When</th></tr></thead>
+              <tbody>
+                <tr><td><code>400</code></td><td><code>VALIDATION</code>, <code>DOMAIN_NOT_VERIFIED</code>, <code>NO_ACTIVE_CHALLENGE</code></td><td>Bad input or unmet precondition</td></tr>
+                <tr><td><code>401</code></td><td><code>UNAUTHORIZED</code></td><td>Missing/invalid credentials or JWT</td></tr>
+                <tr><td><code>403</code></td><td><code>FORBIDDEN</code></td><td>Not a member, or lacks the required role</td></tr>
+                <tr><td><code>404</code></td><td><code>NOT_FOUND</code></td><td>Org, record, or token not found</td></tr>
+                <tr><td><code>409</code></td><td><code>CONFLICT</code></td><td><code>org_id</code> or email already taken</td></tr>
+                <tr><td><code>422</code></td><td><code>query_too_short</code></td><td>Search query under 2 characters</td></tr>
+                <tr><td><code>503</code></td><td><code>db_unreachable</code></td><td>Database ping failed (health probe)</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- HEALTH -->
+        <section id="health">
+          <h2>Health &amp; monitoring</h2>
+          <pre class="code">curl https://api.nandaindex.org/health
+<span class="c"># → 200 { "status": "ok", "db": "ok" }</span>
+<span class="c"># → 503 { "error": "db_unreachable", ... } when Postgres is down</span></pre>
+          <p>No auth, no caching — suitable for orchestrator liveness checks and uptime monitors.</p>
+        </section>
+
+        <!-- DEPLOYMENT -->
+        <section id="deployment">
+          <h2>Production deployment</h2>
+          <h4>Prerequisites</h4>
+          <ul>
+            <li>A VPS with ~2 GB RAM (1 GB works with swap — the Next.js build is memory-heavy)</li>
+            <li>Docker &amp; Docker Compose</li>
+            <li>DNS A records: <code>nandaindex.org</code> and <code>api.nandaindex.org</code> → server IP</li>
+          </ul>
+          <pre class="code"><span class="c"># 1. Clone and configure</span>
+git clone https://github.com/projnanda/nanda-index-v2
+cd nanda-index-v2
+cp .env.prod.example .env.prod   <span class="c"># fill in every value</span>
+
+<span class="c"># 2. Add 2GB swap (only needed on 1GB servers)</span>
+fallocate -l 2G /swapfile &amp;&amp; chmod 600 /swapfile
+mkswap /swapfile &amp;&amp; swapon /swapfile
+echo '/swapfile none swap sw 0 0' &gt;&gt; /etc/fstab
+
+<span class="c"># 3. Build &amp; start</span>
+docker compose -f docker-compose.prod.yml --env-file .env.prod up --build -d
+
+<span class="c"># 4. Verify</span>
+curl https://api.nandaindex.org/health</pre>
+          <div class="note teal"><strong>TLS is automatic.</strong> Caddy 2 fronts the stack and provisions/renews certificates for both hostnames — no manual certbot step.</div>
+        </section>
+
+        <!-- ENV -->
+        <section id="env">
+          <h2>Environment variables</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Variable</th><th>Required</th><th>Notes</th></tr></thead>
+              <tbody>
+                <tr><td><code>DATABASE_URL</code></td><td>yes</td><td>Postgres connection string</td></tr>
+                <tr><td><code>DB_MAX_CONNECTIONS</code></td><td>no</td><td>Pool size (default 10)</td></tr>
+                <tr><td><code>PORT</code></td><td>no</td><td>API port (default 3001)</td></tr>
+                <tr><td><code>NODE_ENV</code></td><td>no</td><td><code>production</code> enforces a strong JWT secret</td></tr>
+                <tr><td><code>JWT_SECRET</code></td><td>prod</td><td>≥32 chars in prod — <code>openssl rand -hex 64</code></td></tr>
+                <tr><td><code>JWT_EXPIRES_IN</code></td><td>no</td><td>Default <code>7d</code></td></tr>
+                <tr><td><code>GOOGLE_CLIENT_ID</code> / <code>_SECRET</code></td><td>no</td><td>Enables Google OAuth when both set</td></tr>
+                <tr><td><code>GITHUB_CLIENT_ID</code> / <code>_SECRET</code></td><td>no</td><td>Enables GitHub OAuth when both set</td></tr>
+                <tr><td><code>OAUTH_CALLBACK_BASE_URL</code></td><td>no</td><td>Public API base for OAuth redirects</td></tr>
+                <tr><td><code>SMTP_URL</code></td><td>no</td><td>Resend API key in prod; <code>log</code> prints to console</td></tr>
+                <tr><td><code>EMAIL_FROM</code></td><td>no</td><td>Verification sender address</td></tr>
+                <tr><td><code>FRONTEND_URL</code></td><td>no</td><td>Web app origin (default <code>http://localhost:3000</code>)</td></tr>
+                <tr><td><code>SIGNING_PRIVATE_KEY</code> / <code>SIGNING_KEY_ID</code></td><td>no</td><td>Ed25519 key for signing records</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- STACK -->
+        <section id="stack">
+          <h2>Tech stack</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Area</th><th>Technology</th></tr></thead>
+              <tbody>
+                <tr><td>API</td><td>Fastify 5 · TypeScript · Node.js 20</td></tr>
+                <tr><td>Database</td><td>PostgreSQL 16 · postgres.js v3</td></tr>
+                <tr><td>Frontend</td><td>Next.js 16 · TailwindCSS v4</td></tr>
+                <tr><td>Auth</td><td>Email/password (bcrypt) · Google &amp; GitHub OAuth · JWT</td></tr>
+                <tr><td>Signing</td><td>Ed25519 over canonical JSON</td></tr>
+                <tr><td>Proxy</td><td>Caddy 2 (automatic TLS)</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <footer class="docs">
+        <div style="margin-bottom:10px">
+          <a href="https://github.com/projnanda/nanda-index-v2">GitHub</a>
+          <a href="https://nandaindex.org">Web app</a>
+          <a href="https://api.nandaindex.org/docs">API (Swagger)</a>
+          <a href="https://api.nandaindex.org/health">Status</a>
+        </div>
+        NANDA Index — a Project NANDA component for the agentic web.
+      </footer>
+    </main>
+  </div>
+</body>
+</html>
