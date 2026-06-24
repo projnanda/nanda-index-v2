@@ -1,14 +1,33 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { findByOrgId, insertOrganization, updateOrganization, suspendOrganization, reactivateOrganization, deleteOrganization, toIndexRecord } from '../db/queries/organizations.js';
+import { findByOrgId, insertOrganization, updateOrganization, suspendOrganization, reactivateOrganization, deleteOrganization, setDomainChallenge, markDomainVerified, toIndexRecord } from '../db/queries/organizations.js';
 import { insertMembership, checkMembership } from '../db/queries/orgMemberships.js';
 import { sendVerificationEmail } from '../services/email.js';
+import {
+  challengeRecordName,
+  challengeRecordValue,
+  lookupDomainToken,
+  CHALLENGE_TTL_MS,
+} from '../services/domainVerification.js';
 import { INDEX_RECORD_SCHEMA } from '../types/api/index-record.js';
 import { apiErrorSchema } from '../types/api/common.js';
 import type { JwtPayload } from '../plugins/jwt.js';
 import type { PublisherBlock } from '../types/api/index-record.js';
 
 type HostingPath = 'registry' | 'dns-aid' | 'smb' | 'personal';
+
+/** Wire shape returned when an org admin requests a DNS challenge. */
+const DOMAIN_CHALLENGE_SCHEMA = {
+  type: 'object',
+  required: ['domain', 'record_name', 'record_type', 'record_value', 'expires_at'],
+  properties: {
+    domain:       { type: 'string' },
+    record_name:  { type: 'string' },
+    record_type:  { type: 'string' },
+    record_value: { type: 'string' },
+    expires_at:   { type: 'string' },
+  },
+} as const;
 
 interface CreateOrgBody {
   org_id: string;
@@ -70,12 +89,14 @@ function requireOrgRole(level: 'member' | 'admin') {
  * Protected org management routes. All routes require a valid JWT; the
  * :org_id routes additionally enforce a membership role via requireOrgRole.
  *
- *   POST   /api/v1/orgs                    — create an org (caller becomes admin; sends verification email)
- *   GET    /api/v1/orgs/:org_id            — read own org           (member)
- *   PUT    /api/v1/orgs/:org_id            — update index record    (admin)
- *   DELETE /api/v1/orgs/:org_id/suspend    — suspend org            (admin)
- *   POST   /api/v1/orgs/:org_id/reactivate — reactivate suspended   (admin)
- *   DELETE /api/v1/orgs/:org_id            — permanently delete org (admin)
+ *   POST   /api/v1/orgs                          — create an org (caller becomes admin; sends verification email)
+ *   GET    /api/v1/orgs/:org_id                  — read own org              (member)
+ *   POST   /api/v1/orgs/:org_id/domain-challenge — issue a DNS TXT challenge (admin)
+ *   POST   /api/v1/orgs/:org_id/verify-domain    — check DNS, activate org   (admin)
+ *   PUT    /api/v1/orgs/:org_id                  — update index record       (admin)
+ *   DELETE /api/v1/orgs/:org_id/suspend          — suspend org               (admin)
+ *   POST   /api/v1/orgs/:org_id/reactivate       — reactivate suspended      (admin)
+ *   DELETE /api/v1/orgs/:org_id                  — permanently delete org    (admin)
  */
 export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void> {
   // Create a new organization
@@ -202,6 +223,102 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
     }
 
     return reply.send(toIndexRecord(org));
+  });
+
+  // Issue (or rotate) a DNS TXT challenge for the org's domain
+  fastify.post<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/domain-challenge', {
+    preHandler: [fastify.authenticate, requireOrgRole('admin')],
+    schema: {
+      tags: ['orgs'],
+      summary: 'Issue a DNS TXT challenge to prove domain ownership',
+      params: {
+        type: 'object',
+        required: ['org_id'],
+        properties: { org_id: { type: 'string' } },
+      },
+      response: {
+        200: DOMAIN_CHALLENGE_SCHEMA,
+        403: apiErrorSchema,
+        404: apiErrorSchema,
+      },
+    },
+  }, async (request, reply) => {
+    const org = await findByOrgId(request.params.org_id);
+    if (!org) {
+      return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
+    }
+
+    const token = randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + CHALLENGE_TTL_MS);
+
+    const updated = await setDomainChallenge(org.orgId, token, expiresAt);
+    if (!updated) {
+      return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
+    }
+
+    return reply.send({
+      domain:       updated.domain,
+      record_name:  challengeRecordName(updated.domain!),
+      record_type:  'TXT',
+      record_value: challengeRecordValue(token),
+      expires_at:   expiresAt.toISOString(),
+    });
+  });
+
+  // Check the DNS TXT record and, on success, mark the domain verified + activate
+  fastify.post<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/verify-domain', {
+    preHandler: [fastify.authenticate, requireOrgRole('admin')],
+    schema: {
+      tags: ['orgs'],
+      summary: 'Verify the DNS TXT challenge and activate the organization',
+      params: {
+        type: 'object',
+        required: ['org_id'],
+        properties: { org_id: { type: 'string' } },
+      },
+      response: {
+        200: INDEX_RECORD_SCHEMA,
+        400: apiErrorSchema,
+        403: apiErrorSchema,
+        404: apiErrorSchema,
+      },
+    },
+  }, async (request, reply) => {
+    const org = await findByOrgId(request.params.org_id);
+    if (!org) {
+      return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
+    }
+
+    if (!org.domainChallenge || !org.domainChallengeExpiresAt || org.domainChallengeExpiresAt <= new Date()) {
+      return reply.code(400).send({
+        error: 'NO_ACTIVE_CHALLENGE',
+        detail: 'no active domain challenge — request one via POST /domain-challenge first',
+      });
+    }
+
+    if (!org.domain) {
+      return reply.code(400).send({ error: 'NO_DOMAIN', detail: 'this org has no domain to verify (personal email-identity org)' });
+    }
+
+    const expectedValue = challengeRecordValue(org.domainChallenge);
+    const { verified, found } = await lookupDomainToken(org.domain, expectedValue);
+
+    if (!verified) {
+      const seen = found.length
+        ? ` Found instead: ${found.slice(0, 5).map((v) => `"${v}"`).join(', ')}.`
+        : '';
+      return reply.code(400).send({
+        error: 'DOMAIN_NOT_VERIFIED',
+        detail: `expected TXT "${expectedValue}" at ${challengeRecordName(org.domain)}, but it was not found. DNS changes can take time to propagate — try again shortly.${seen}`,
+      });
+    }
+
+    const updated = await markDomainVerified(org.orgId);
+    if (!updated) {
+      return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
+    }
+
+    return reply.send(toIndexRecord(updated));
   });
 
   // Update own org's index record

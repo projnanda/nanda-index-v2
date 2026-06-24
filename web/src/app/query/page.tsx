@@ -44,7 +44,7 @@ function IndexRecordCard({ org }: { org: IndexRecord }) {
       </div>
       <div className="ml-4 shrink-0 text-right text-xs text-slate-400">
         TTL {org.ttl_seconds}s
-        {org.email_verified && (
+        {org.domain_verified && (
           <span className="ml-2 text-emerald-600">✓ verified</span>
         )}
       </div>

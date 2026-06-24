@@ -106,33 +106,25 @@ export default function RegistriesPage() {
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => {
-                  const isSelected = selected?.org_id === item.org_id;
-                  return (
-                    <tr
-                      key={item.org_id}
-                      onClick={() => setSelected(item)}
-                      className={
-                        "cursor-pointer border-t border-line transition-colors " +
-                        (isSelected
-                          ? "bg-brand-200"
-                          : "hover:bg-surface-strong")
-                      }
-                    >
-                      <td className="px-4 py-3 align-top">
-                        <div className="font-semibold text-ink-strong break-words">{item.display_name}</div>
-                        <div className="font-mono text-xs text-ink-weak break-all">{item.org_id}</div>
-                      </td>
-                      <td className="px-4 py-3 align-top text-sm text-ink-medium break-all">{item.domain}</td>
-                      <td className="px-4 py-3 align-top">
-                        <StatusBadge status={item.status} />
-                      </td>
-                      <td className="px-4 py-3 align-top text-sm text-ink-medium">
-                        {item.email_verified ? "✓" : "-"}
-                      </td>
-                    </tr>
-                  );
-                })}
+                {items.map((item) => (
+                  <tr
+                    key={item.org_id}
+                    onClick={() => setSelected(item)}
+                    className="cursor-pointer border-t hover:bg-slate-50"
+                  >
+                    <td className="px-4 py-4 align-top">
+                      <div className="font-medium text-slate-950 break-words">{item.display_name}</div>
+                      <div className="text-sm text-slate-500 break-all">{item.org_id}</div>
+                    </td>
+                    <td className="px-4 py-4 align-top break-all">{item.domain}</td>
+                    <td className="px-4 py-4 align-top">
+                      <StatusBadge status={item.status} />
+                    </td>
+                    <td className="px-4 py-4 align-top text-sm">
+                      {item.domain_verified ? "✓" : "—"}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -178,8 +170,8 @@ export default function RegistriesPage() {
                       <span className="font-semibold text-ink-strong">TTL:</span> {selected.ttl_seconds}s
                     </div>
                     <div>
-                      <span className="font-semibold text-ink-strong">Email verified:</span>{" "}
-                      {selected.email_verified ? "Yes" : "No"}
+                      <span className="font-medium">Domain verified:</span>{" "}
+                      {selected.domain_verified ? "Yes" : "No"}
                     </div>
                     <div>
                       <span className="font-semibold text-ink-strong">Created:</span>{" "}

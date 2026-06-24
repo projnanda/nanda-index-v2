@@ -99,7 +99,7 @@ describe('NANDA Index — public read routes', () => {
 
   // ── GET /api/v1/verify-email ────────────────────────────────────────────────
 
-  it('activates an org via valid verify token', async () => {
+  it('marks email verified via valid token but does NOT activate (domain gate)', async () => {
     const token = randomBytes(16).toString('hex');
     await seedOrg('idx-verify', 'verify.example.com', 'Verify Org', {
       status: 'pending',
@@ -112,8 +112,10 @@ describe('NANDA Index — public read routes', () => {
       url: `/api/v1/verify-email?token=${token}`,
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json().status).toBe('active');
     expect(res.json().email_verified).toBe(true);
+    // Activation is gated on domain ownership — email alone must not activate.
+    expect(res.json().status).toBe('pending');
+    expect(res.json().domain_verified).toBe(false);
   });
 
   it('returns 400 when token query param is missing', async () => {

@@ -24,13 +24,14 @@ export async function registerMeRoute(fastify: FastifyInstance): Promise<void> {
               type: 'array',
               items: {
                 type: 'object',
-                required: ['org_id', 'display_name', 'role', 'status', 'email_verified'],
+                required: ['org_id', 'display_name', 'role', 'status', 'email_verified', 'domain_verified'],
                 properties: {
-                  org_id:         { type: 'string' },
-                  display_name:   { type: 'string' },
-                  role:           { type: 'string' },
-                  status:         { type: 'string', enum: ['pending', 'active', 'suspended'] },
-                  email_verified: { type: 'boolean' },
+                  org_id:          { type: 'string' },
+                  display_name:    { type: 'string' },
+                  role:            { type: 'string' },
+                  status:          { type: 'string', enum: ['pending', 'active', 'suspended'] },
+                  email_verified:  { type: 'boolean' },
+                  domain_verified: { type: 'boolean' },
                 },
               },
             },
@@ -56,11 +57,12 @@ export async function registerMeRoute(fastify: FastifyInstance): Promise<void> {
       display_name: user.displayName,
       avatar_url:   user.avatarUrl,
       orgs: memberships.map(m => ({
-        org_id:         m.orgId,
-        display_name:   m.displayName,
-        role:           m.role,
-        status:         m.status,
-        email_verified: m.emailVerified,
+        org_id:          m.orgId,
+        display_name:    m.displayName,
+        role:            m.role,
+        status:          m.status,
+        email_verified:  m.emailVerified,
+        domain_verified: m.domainVerified,
       })),
     });
   });

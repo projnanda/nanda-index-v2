@@ -30,6 +30,7 @@ export interface MembershipWithOrg extends OrgMembership {
   displayName: string;
   status: 'pending' | 'active' | 'suspended';
   emailVerified: boolean;
+  domainVerified: boolean;
 }
 
 /**
@@ -40,7 +41,7 @@ export async function findMembershipsByUserId(
 ): Promise<MembershipWithOrg[]> {
   const sql = getSql();
   return sql<MembershipWithOrg[]>`
-    SELECT m.*, o.display_name, o.status, o.email_verified
+    SELECT m.*, o.display_name, o.status, o.email_verified, o.domain_verified
     FROM org_memberships m
     JOIN organizations o ON o.org_id = m.org_id
     WHERE m.user_id = ${userId}

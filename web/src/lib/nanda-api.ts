@@ -7,6 +7,7 @@ import type {
   User,
   CreateOrgPayload,
   UpdateOrgPayload,
+  DomainChallenge,
 } from "./nanda-types";
 
 const API_BASE = process.env.NEXT_PUBLIC_NANDA_INDEX_API_URL ?? "";
@@ -189,6 +190,20 @@ export async function deleteOrg(orgId: string): Promise<void> {
 /** GET /api/v1/orgs/:org_id — get own org (requires auth + membership). */
 export async function getOrgAsOwner(orgId: string): Promise<IndexRecord> {
   return request<IndexRecord>(`/api/v1/orgs/${encodeURIComponent(orgId)}`);
+}
+
+/** POST /api/v1/orgs/:org_id/domain-challenge — issue a DNS TXT challenge (admin). */
+export async function requestDomainChallenge(orgId: string): Promise<DomainChallenge> {
+  return request<DomainChallenge>(`/api/v1/orgs/${encodeURIComponent(orgId)}/domain-challenge`, {
+    method: "POST",
+  });
+}
+
+/** POST /api/v1/orgs/:org_id/verify-domain — check DNS and activate (admin). */
+export async function verifyDomain(orgId: string): Promise<IndexRecord> {
+  return request<IndexRecord>(`/api/v1/orgs/${encodeURIComponent(orgId)}/verify-domain`, {
+    method: "POST",
+  });
 }
 
 export interface CreateAgentPayload {

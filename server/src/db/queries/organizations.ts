@@ -12,6 +12,10 @@ export interface Organization {
   emailVerified: boolean;
   verifyToken: string | null;
   verifyTokenExpiresAt: Date | null;
+  domainVerified: boolean;
+  domainChallenge: string | null;
+  domainChallengeExpiresAt: Date | null;
+  domainVerifiedAt: Date | null;
   ttlSeconds: number;
   status: 'pending' | 'active' | 'suspended';
   createdAt: Date;
@@ -67,6 +71,7 @@ export function toIndexRecord(org: Organization): IndexRecord {
     ttl_seconds:    org.ttlSeconds,
     status:         org.status,
     email_verified: org.emailVerified,
+    domain_verified: org.domainVerified,
     created_at:     org.createdAt.toISOString(),
     updated_at:     org.updatedAt.toISOString(),
     identifier:     org.identifier ?? undefined,
@@ -171,6 +176,13 @@ export async function insertOrganization(params: InsertOrgParams): Promise<Organ
 /**
  * Applies a partial update to an organization.
  * Only provided fields are changed; updated_at is always refreshed.
+ *
+ * Changing the `domain` invalidates the ownership proof: the prior verification
+ * was for the old domain, so domain_verified and any pending challenge are
+ * cleared, and an active org reverts to 'pending' until the new domain is
+ * re-verified. This keeps the invariant "active ⇒ domain_verified" — otherwise
+ * an admin could verify one domain then silently swap in another they don't own.
+ *
  * Returns null if org_id not found.
  */
 export async function updateOrganization(
@@ -178,10 +190,11 @@ export async function updateOrganization(
   patch: UpdateOrgParams,
 ): Promise<Organization | null> {
   const sql = getSql();
+  const newDomain = patch.domain ?? null;
   const rows = await sql<Organization[]>`
     UPDATE organizations SET
       display_name     = COALESCE(${patch.displayName ?? null}, display_name),
-      domain           = COALESCE(${patch.domain ?? null}, domain),
+      domain           = COALESCE(${newDomain}, domain),
       registry_url     = COALESCE(${patch.registryUrl ?? null}, registry_url),
       ttl_seconds      = COALESCE(${patch.ttlSeconds ?? null}, ttl_seconds),
       description      = COALESCE(${patch.description ?? null}, description),
@@ -189,6 +202,21 @@ export async function updateOrganization(
       publisher        = COALESCE(${patch.publisher ? sql.json(JSON.parse(JSON.stringify(patch.publisher))) : null}, publisher),
       catalog_metadata = COALESCE(${patch.catalogMetadata ? sql.json(JSON.parse(JSON.stringify(patch.catalogMetadata))) : null}, catalog_metadata),
       entry_data       = COALESCE(${patch.entryData ? sql.json(JSON.parse(JSON.stringify(patch.entryData))) : null}, entry_data),
+      domain_verified = CASE
+        WHEN ${newDomain}::text IS NOT NULL AND ${newDomain}::text <> domain THEN FALSE
+        ELSE domain_verified END,
+      domain_verified_at = CASE
+        WHEN ${newDomain}::text IS NOT NULL AND ${newDomain}::text <> domain THEN NULL
+        ELSE domain_verified_at END,
+      domain_challenge = CASE
+        WHEN ${newDomain}::text IS NOT NULL AND ${newDomain}::text <> domain THEN NULL
+        ELSE domain_challenge END,
+      domain_challenge_expires_at = CASE
+        WHEN ${newDomain}::text IS NOT NULL AND ${newDomain}::text <> domain THEN NULL
+        ELSE domain_challenge_expires_at END,
+      status = CASE
+        WHEN ${newDomain}::text IS NOT NULL AND ${newDomain}::text <> domain AND status = 'active' THEN 'pending'
+        ELSE status END,
       updated_at       = NOW()
     WHERE org_id = ${orgId}
     RETURNING *
@@ -197,20 +225,66 @@ export async function updateOrganization(
 }
 
 /**
- * Marks an organization's email as verified and sets status to 'active'.
- * Clears the verify_token. Returns null if no org matched the token.
+ * Marks an organization's contact email as verified and clears the token.
+ *
+ * This proves contact-email reachability only — it does NOT activate the org.
+ * Activation is gated on domain ownership (see markDomainVerified). Returns
+ * null if no org matched the token or the token has expired.
  */
-export async function activateByVerifyToken(token: string): Promise<Organization | null> {
+export async function markEmailVerifiedByToken(token: string): Promise<Organization | null> {
   const sql = getSql();
   const rows = await sql<Organization[]>`
     UPDATE organizations SET
       email_verified           = TRUE,
       verify_token             = NULL,
       verify_token_expires_at  = NULL,
-      status                   = 'active',
       updated_at               = NOW()
     WHERE verify_token = ${token}
       AND verify_token_expires_at > NOW()
+    RETURNING *
+  `;
+  return rows[0] ?? null;
+}
+
+/**
+ * Stores (or replaces) the pending DNS TXT challenge for an org's domain.
+ * Regenerating invalidates any previously issued challenge. Returns null if
+ * org_id not found.
+ */
+export async function setDomainChallenge(
+  orgId: string,
+  challenge: string,
+  expiresAt: Date,
+): Promise<Organization | null> {
+  const sql = getSql();
+  const rows = await sql<Organization[]>`
+    UPDATE organizations SET
+      domain_challenge            = ${challenge},
+      domain_challenge_expires_at = ${expiresAt},
+      updated_at                  = NOW()
+    WHERE org_id = ${orgId}
+    RETURNING *
+  `;
+  return rows[0] ?? null;
+}
+
+/**
+ * Marks an org's domain as verified after a successful DNS TXT check, clears
+ * the challenge, and activates the org if it was still pending. A suspended
+ * org is NOT auto-reactivated — only 'pending' transitions to 'active'.
+ * Returns null if org_id not found.
+ */
+export async function markDomainVerified(orgId: string): Promise<Organization | null> {
+  const sql = getSql();
+  const rows = await sql<Organization[]>`
+    UPDATE organizations SET
+      domain_verified             = TRUE,
+      domain_verified_at          = NOW(),
+      domain_challenge            = NULL,
+      domain_challenge_expires_at = NULL,
+      status                      = CASE WHEN status = 'pending' THEN 'active' ELSE status END,
+      updated_at                  = NOW()
+    WHERE org_id = ${orgId}
     RETURNING *
   `;
   return rows[0] ?? null;

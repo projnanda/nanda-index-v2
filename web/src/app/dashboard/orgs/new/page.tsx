@@ -254,12 +254,17 @@ function SuccessScreen({ record, path }: { record: IndexRecord; path: HostingPat
         <p className="mt-1 font-mono text-sm text-emerald-700">{record.org_id}</p>
       </div>
       <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
-        <p className="text-sm font-semibold text-amber-800">Check your email</p>
+        <p className="text-sm font-semibold text-amber-800">Verify your domain to go live</p>
         <p className="mt-0.5 text-xs text-amber-700">
-          Your record is <span className="font-semibold">pending</span> until you verify ownership via the link sent to your contact email.
+          Your record is <span className="font-semibold">pending</span> and hidden from the public index until you prove ownership of <span className="font-mono">{record.domain}</span> by adding a DNS TXT record. Open your org to get the record. (We&apos;ve also emailed a link to confirm your contact address.)
         </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
+        <Link href={`/dashboard/orgs/${record.org_id}`}
+          className="flex flex-col rounded-2xl border border-amber-300 bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-sm">
+          <span className="text-sm font-semibold text-slate-950">Verify domain →</span>
+          <span className="mt-0.5 text-xs text-slate-500">Get your DNS TXT record and activate this org.</span>
+        </Link>
         {path === "registry" && (
           <Link href="/rap" className="flex flex-col rounded-2xl border border-black/10 bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-sm">
             <span className="text-sm font-semibold text-slate-950">Add agents →</span>
@@ -279,11 +284,6 @@ function SuccessScreen({ record, path }: { record: IndexRecord; path: HostingPat
             <span className="mt-0.5 text-xs text-slate-500">Resolvers will query your DNS-AID records directly.</span>
           </div>
         )}
-        <Link href={`/dashboard/orgs/${record.org_id}`}
-          className="flex flex-col rounded-2xl border border-black/10 bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-sm">
-          <span className="text-sm font-semibold text-slate-950">View org →</span>
-          <span className="mt-0.5 text-xs text-slate-500">See your org record and edit settings.</span>
-        </Link>
       </div>
       <p className="text-center">
         <Link href="/dashboard" className="text-xs text-slate-400 hover:text-slate-700">Back to dashboard</Link>

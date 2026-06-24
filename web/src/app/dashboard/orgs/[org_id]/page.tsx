@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { PageShell } from "@/components/PageShell";
 import { StatusBadge } from "@/components/StatusBadge";
 import { JsonPanel } from "@/components/JsonPanel";
+import { DomainVerification } from "@/components/DomainVerification";
 import { ApiError, getOrgAsOwner, updateOrg, suspendOrg, reactivateOrg, deleteOrg } from "@/lib/nanda-api";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import type { IndexRecord } from "@/lib/nanda-types";
@@ -140,8 +141,17 @@ export default function OrgDetailPage() {
   return (
     <PageShell title={org.display_name} description={`org_id: ${org.org_id}`}>
       <div className="space-y-6">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <StatusBadge status={org.status} />
+          {org.domain_verified ? (
+            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-0.5 text-xs font-medium text-emerald-700">
+              Domain verified
+            </span>
+          ) : (
+            <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-0.5 text-xs font-medium text-amber-700">
+              Domain not verified
+            </span>
+          )}
           {org.email_verified ? (
             <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-0.5 text-xs font-medium text-emerald-700">
               Email verified
@@ -152,6 +162,8 @@ export default function OrgDetailPage() {
             </span>
           )}
         </div>
+
+        <DomainVerification org={org} onVerified={setOrg} />
 
         {editing ? (
           <div className="rounded-3xl border border-black/10 bg-white p-5 shadow-sm space-y-4">

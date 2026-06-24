@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { findAllActive, findByOrgId, activateByVerifyToken, toIndexRecord } from '../db/queries/organizations.js';
+import { findAllActive, findByOrgId, markEmailVerifiedByToken, toIndexRecord } from '../db/queries/organizations.js';
 import { INDEX_RECORD_SCHEMA } from '../types/api/index-record.js';
 import { apiErrorSchema } from '../types/api/common.js';
 
@@ -8,7 +8,7 @@ import { apiErrorSchema } from '../types/api/common.js';
  *
  * GET /api/v1/index           — list all active organizations as IndexRecord[]
  * GET /api/v1/index/:org_id   — get a single IndexRecord, 404 on miss
- * GET /api/v1/verify-email    — activate org via email verification token
+ * GET /api/v1/verify-email    — mark org contact email verified (does not activate)
  */
 export async function registerIndexRecordRoutes(fastify: FastifyInstance): Promise<void> {
   // List all active index records
@@ -48,11 +48,11 @@ export async function registerIndexRecordRoutes(fastify: FastifyInstance): Promi
     return reply.send(toIndexRecord(org));
   });
 
-  // Email verification — activates org
+  // Email verification — marks contact email verified (activation is gated on domain ownership)
   fastify.get<{ Querystring: { token?: string } }>('/api/v1/verify-email', {
     schema: {
       tags: ['auth'],
-      summary: 'Verify org contact email and activate the index record',
+      summary: 'Verify org contact email (activation requires domain verification)',
       querystring: {
         type: 'object',
         required: ['token'],
@@ -69,7 +69,7 @@ export async function registerIndexRecordRoutes(fastify: FastifyInstance): Promi
     if (!token) {
       return reply.code(400).send({ error: 'BAD_REQUEST', detail: 'token query parameter is required' });
     }
-    const org = await activateByVerifyToken(token);
+    const org = await markEmailVerifiedByToken(token);
     if (!org) {
       return reply.code(404).send({ error: 'NOT_FOUND', detail: 'verification token not found or already used' });
     }
