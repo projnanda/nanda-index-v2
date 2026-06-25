@@ -51,8 +51,8 @@ Four registration types:
 ## Local Development
 
 ```bash
-git clone https://github.com/your-org/nanda-index
-cd nanda-index
+git clone https://github.com/projnanda/nanda-index-v2
+cd nanda-index-v2
 cp .env.example .env
 docker compose up --build
 ```
@@ -79,8 +79,8 @@ docker compose up --build
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/your-org/nanda-index
-cd nanda-index
+git clone https://github.com/projnanda/nanda-index-v2
+cd nanda-index-v2
 
 # 2. Configure environment
 cp .env.prod.example .env.prod
@@ -235,7 +235,7 @@ interface IndexRecord {
 |--------|------|------|----------|
 | `POST` | `/auth/register` | `{ email, password, display_name? }` | `{ token }` |
 | `POST` | `/auth/login` | `{ email, password }` | `{ token }` |
-| `GET`  | `/auth/me` | — | User profile |
+| `GET`  | `/api/v1/me` | — | User profile + org memberships |
 | `GET`  | `/auth/providers` | — | `{ google, github }` |
 | `GET`  | `/auth/google/callback` | — | OAuth redirect |
 | `GET`  | `/auth/github/callback` | — | OAuth redirect |
