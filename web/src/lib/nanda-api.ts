@@ -145,6 +145,25 @@ export async function loginWithPassword(email: string, password: string): Promis
   return res.token;
 }
 
+/**
+ * POST /auth/forgot-password — request a reset link.
+ * Always resolves on a 200 (the server never reveals whether the email exists).
+ */
+export async function forgotPassword(email: string): Promise<void> {
+  await request<{ ok: boolean }>("/auth/forgot-password", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+/** POST /auth/reset-password — set a new password using an emailed token. */
+export async function resetPassword(token: string, password: string): Promise<void> {
+  await request<{ ok: boolean }>("/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify({ token, password }),
+  });
+}
+
 /** GET /api/v1/me — authenticated user profile + org memberships. */
 export async function getMe(): Promise<User> {
   return request<User>("/api/v1/me");

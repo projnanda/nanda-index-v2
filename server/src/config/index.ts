@@ -60,6 +60,23 @@ export interface EmailConfig {
   readonly fromAddress: string;
 }
 
+export interface CookieConfig {
+  readonly secret: string;
+}
+
+export interface AuthConfig {
+  /** Max requests per window allowed on auth mutation routes (per IP). */
+  readonly rateLimitMax: number;
+  /** Rate-limit window, e.g. '1 minute' (see @fastify/rate-limit). */
+  readonly rateLimitWindow: string;
+  /** Failed logins before an account is temporarily locked. */
+  readonly maxLoginAttempts: number;
+  /** How long an account stays locked after hitting the threshold. */
+  readonly lockoutMinutes: number;
+  /** Lifetime of a password-reset token. */
+  readonly resetTokenTtlMinutes: number;
+}
+
 export interface SigningConfig {
   readonly privateKey: string | undefined;
   readonly keyId: string;
@@ -72,6 +89,8 @@ export interface Config {
   readonly oauth: OAuthConfig;
   readonly jwt: JwtConfig;
   readonly email: EmailConfig;
+  readonly cookie: CookieConfig;
+  readonly auth: AuthConfig;
   readonly frontendUrl: string;
   readonly signing: SigningConfig;
 }
@@ -83,12 +102,14 @@ export interface Config {
  * with code 1 if any required variable is missing or invalid.
  */
 const DEV_JWT_SECRET = 'dev-secret-change-in-production';
+const DEV_COOKIE_SECRET = 'dev-cookie-secret-change-in-production';
 const MIN_JWT_SECRET_LENGTH = 32;
 
 export function buildConfig(): Config {
   const rawSigningKey = process.env['SIGNING_PRIVATE_KEY'];
   const nodeEnv = optionalEnv('NODE_ENV', 'development');
   const jwtSecret = optionalEnv('JWT_SECRET', DEV_JWT_SECRET);
+  const cookieSecret = optionalEnv('COOKIE_SECRET', DEV_COOKIE_SECRET);
 
   // Refuse to start in production with a weak or default JWT secret
   if (nodeEnv === 'production') {
@@ -98,6 +119,10 @@ export function buildConfig(): Config {
     }
     if (jwtSecret.length < MIN_JWT_SECRET_LENGTH) {
       console.error(`FATAL: JWT_SECRET must be at least ${MIN_JWT_SECRET_LENGTH} characters in production`);
+      process.exit(1);
+    }
+    if (cookieSecret === DEV_COOKIE_SECRET) {
+      console.error('FATAL: COOKIE_SECRET must be set in production — do not use the default dev secret');
       process.exit(1);
     }
   }
@@ -126,6 +151,24 @@ export function buildConfig(): Config {
     email: {
       smtpUrl:     optionalEnv('SMTP_URL', 'log'),
       fromAddress: optionalEnv('EMAIL_FROM', 'noreply@nanda.local'),
+    },
+    cookie: {
+      secret: cookieSecret,
+    },
+    auth: {
+      rateLimitMax: parsePositiveInt(
+        'AUTH_RATE_LIMIT_MAX', optionalEnv('AUTH_RATE_LIMIT_MAX', '10'),
+      ),
+      rateLimitWindow: optionalEnv('AUTH_RATE_LIMIT_WINDOW', '1 minute'),
+      maxLoginAttempts: parsePositiveInt(
+        'AUTH_MAX_LOGIN_ATTEMPTS', optionalEnv('AUTH_MAX_LOGIN_ATTEMPTS', '5'),
+      ),
+      lockoutMinutes: parsePositiveInt(
+        'AUTH_LOCKOUT_MINUTES', optionalEnv('AUTH_LOCKOUT_MINUTES', '15'),
+      ),
+      resetTokenTtlMinutes: parsePositiveInt(
+        'AUTH_RESET_TOKEN_TTL_MINUTES', optionalEnv('AUTH_RESET_TOKEN_TTL_MINUTES', '60'),
+      ),
     },
     frontendUrl: optionalEnv('FRONTEND_URL', 'http://localhost:3000'),
     signing: {

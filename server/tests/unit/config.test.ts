@@ -97,8 +97,9 @@ describe('buildConfig', () => {
     process.env.DATABASE_URL = 'x';
     process.env.PORT = '4000';
     process.env.NODE_ENV = 'production';
-    // JWT_SECRET must be set and long enough when NODE_ENV=production (JWT hardening)
+    // JWT_SECRET and COOKIE_SECRET must be set in production (auth hardening)
     process.env.JWT_SECRET = 'a-secret-that-is-long-enough-for-production-use';
+    process.env.COOKIE_SECRET = 'a-production-cookie-secret';
     process.env.SIGNING_KEY_ID = 'custom';
     process.env.DB_MAX_CONNECTIONS = '20';
 
@@ -109,6 +110,7 @@ describe('buildConfig', () => {
     expect(cfg.db.maxConnections).toBe(20);
 
     delete process.env.JWT_SECRET;
+    delete process.env.COOKIE_SECRET;
   });
 
   it('exits when DATABASE_URL is missing', () => {
@@ -136,5 +138,47 @@ describe('buildConfig', () => {
 
     const cfg = buildConfig();
     expect(cfg.email.smtpUrl).toBe('log');
+  });
+
+  it('applies cookie + auth defaults', () => {
+    process.env.DATABASE_URL = 'x';
+    delete process.env.NODE_ENV;
+    delete process.env.COOKIE_SECRET;
+    delete process.env.AUTH_RATE_LIMIT_MAX;
+    delete process.env.AUTH_MAX_LOGIN_ATTEMPTS;
+    delete process.env.AUTH_LOCKOUT_MINUTES;
+    delete process.env.AUTH_RESET_TOKEN_TTL_MINUTES;
+
+    const cfg = buildConfig();
+    expect(cfg.cookie.secret).toBe('dev-cookie-secret-change-in-production');
+    expect(cfg.auth.rateLimitMax).toBe(10);
+    expect(cfg.auth.rateLimitWindow).toBe('1 minute');
+    expect(cfg.auth.maxLoginAttempts).toBe(5);
+    expect(cfg.auth.lockoutMinutes).toBe(15);
+    expect(cfg.auth.resetTokenTtlMinutes).toBe(60);
+  });
+
+  it('reads auth overrides from env', () => {
+    process.env.DATABASE_URL = 'x';
+    process.env.AUTH_MAX_LOGIN_ATTEMPTS = '7';
+    process.env.AUTH_RATE_LIMIT_MAX = '25';
+
+    const cfg = buildConfig();
+    expect(cfg.auth.maxLoginAttempts).toBe(7);
+    expect(cfg.auth.rateLimitMax).toBe(25);
+  });
+
+  it('exits when COOKIE_SECRET is left as the dev default in production', () => {
+    process.env.DATABASE_URL = 'x';
+    process.env.NODE_ENV = 'production';
+    process.env.JWT_SECRET = 'a-secret-that-is-long-enough-for-production-use';
+    delete process.env.COOKIE_SECRET;
+
+    const exitSpy = mockExit();
+    expect(() => buildConfig()).toThrow('__mock_exit__');
+    expect(exitSpy).toHaveBeenCalledWith(1);
+
+    delete process.env.JWT_SECRET;
+    delete process.env.NODE_ENV;
   });
 });

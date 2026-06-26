@@ -2,7 +2,9 @@ import { fileURLToPath } from 'url';
 import Fastify from 'fastify';
 import { buildConfig } from './config/index.js';
 import { registerErrorHandler } from './plugins/errorHandler.js';
+import { registerHelmet } from './plugins/helmet.js';
 import { registerCors } from './plugins/cors.js';
+import { registerRateLimit } from './plugins/rateLimit.js';
 import { registerDb } from './plugins/db.js';
 import { registerSwagger } from './plugins/swagger.js';
 import { registerCookiePlugin } from './plugins/cookie.js';
@@ -36,7 +38,10 @@ export async function buildServer(options: BuildServerOptions = {}) {
 
   // Error handler first — wraps all subsequent plugin/route errors
   await registerErrorHandler(fastify);
+  // Security headers + rate limiting before routes
+  await registerHelmet(fastify);
   await registerCors(fastify);
+  await registerRateLimit(fastify);
   await registerDb(fastify);
   await registerCookiePlugin(fastify);
   await registerJwtPlugin(fastify);

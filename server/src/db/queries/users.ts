@@ -9,6 +9,8 @@ export interface User {
   provider: 'google' | 'github' | 'email';
   providerId: string;
   passwordHash: string | null;
+  failedLoginAttempts: number;
+  lockedUntil: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -96,6 +98,75 @@ export async function createUserWithPassword(
   const rows = await sql<User[]>`
     INSERT INTO users (email, display_name, provider, provider_id, password_hash)
     VALUES (${email}, ${displayName}, 'email', ${email}, ${passwordHash})
+    RETURNING *
+  `;
+  return rows[0]!;
+}
+
+/**
+ * Records a failed login attempt. Increments the counter and, once it reaches
+ * `maxAttempts`, sets a temporary `locked_until` window. Returns the fresh row.
+ */
+export async function recordFailedLogin(
+  userId: string,
+  maxAttempts: number,
+  lockoutMinutes: number,
+): Promise<User> {
+  // SET expressions read the OLD row values, so the nested CASE computes the
+  // "effective" attempt count: an expired lock resets the streak to 1, giving
+  // the user a fresh window rather than re-locking on a single later typo.
+  const sql = getSql();
+  const rows = await sql<User[]>`
+    UPDATE users
+    SET failed_login_attempts =
+          CASE WHEN locked_until IS NOT NULL AND locked_until <= NOW()
+               THEN 1
+               ELSE failed_login_attempts + 1 END,
+        locked_until =
+          CASE
+            WHEN (CASE WHEN locked_until IS NOT NULL AND locked_until <= NOW()
+                       THEN 1 ELSE failed_login_attempts + 1 END) >= ${maxAttempts}
+            THEN NOW() + make_interval(mins => ${lockoutMinutes})
+            ELSE NULL
+          END,
+        updated_at = NOW()
+    WHERE id = ${userId}
+    RETURNING *
+  `;
+  return rows[0]!;
+}
+
+/**
+ * Clears the failed-login counter and any active lock (called on a successful
+ * login or a completed password reset). Returns the fresh row.
+ */
+export async function clearLoginFailures(userId: string): Promise<User> {
+  const sql = getSql();
+  const rows = await sql<User[]>`
+    UPDATE users
+    SET failed_login_attempts = 0,
+        locked_until = NULL,
+        updated_at = NOW()
+    WHERE id = ${userId}
+    RETURNING *
+  `;
+  return rows[0]!;
+}
+
+/**
+ * Sets a new password hash for a user (used by the reset-password flow).
+ * Returns the fresh row.
+ */
+export async function updateUserPassword(
+  userId: string,
+  passwordHash: string,
+): Promise<User> {
+  const sql = getSql();
+  const rows = await sql<User[]>`
+    UPDATE users
+    SET password_hash = ${passwordHash},
+        updated_at = NOW()
+    WHERE id = ${userId}
     RETURNING *
   `;
   return rows[0]!;

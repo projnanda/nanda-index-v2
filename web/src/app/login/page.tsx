@@ -157,6 +157,14 @@ function LoginPageInner() {
               {loading ? "…" : mode === "register" ? "Create account" : "Sign in"}
             </button>
           </form>
+
+          {mode === "login" && (
+            <p className="mt-3 text-center text-xs text-ink-weak">
+              <Link href="/forgot-password" className="underline hover:text-brand-600">
+                Forgot your password?
+              </Link>
+            </p>
+          )}
         </div>
 
         {/* OAuth buttons - only shown when provider is configured on the server */}
