@@ -31,7 +31,7 @@ Four registration types:
 
 | Type | Who | How resolved |
 |------|-----|-------------|
-| Enterprise Registry | Orgs running their own nanda-registry | Hop 2: `GET registry_url/agents/<slug>` |
+| Enterprise AI Catalog | Orgs running their own nanda-registry-server | Hop 2: `GET registry_url/agents/<slug>` |
 | DNS-AID | Domain-controlled discovery via DNS | Hop 2: DNS-AID lookup using `data` field |
 | SMB Agent Card | Small businesses using host39.org | Hop 2: fetch card directly from `registry_url` |
 | Personal Agent | Individuals, email identity | Hop 2: fetch card directly from `registry_url` |
