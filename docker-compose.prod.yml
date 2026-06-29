@@ -46,6 +46,7 @@ services:
       EMAIL_FROM: ${EMAIL_FROM:-noreply@nandaindex.org}
       FRONTEND_URL: ${FRONTEND_URL}
       DB_MAX_CONNECTIONS: ${DB_MAX_CONNECTIONS:-10}
+      COOKIE_SECRET: ${COOKIE_SECRET}
     depends_on:
       db:
         condition: service_healthy
