@@ -26,7 +26,7 @@ const FLOWS: {
 }[] = [
     {
       id: "registry",
-      title: "Enterprise Registry",
+      title: "Enterprise AI Catalog",
       subtitle: "Teams / Orgs",
       identity: "urn:ai:domain:example.com",
       mediaType: "application/ai-catalog+json",
