@@ -189,10 +189,6 @@ export default function HomePage() {
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-6">
         <h2 className="font-display text-2xl font-bold text-ink-strong leading-tight">Explore</h2>
-        <p className="mt-1 text-sm text-ink-medium max-w-3xl">
-          Browse the secure directory of verified agent registries indexed by NANDA. Filter by
-          category and select any entry to inspect its full record.
-        </p>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-6">
@@ -435,9 +431,8 @@ function DetailDrawer({ record, onClose }: { record: IndexRecord | null; onClose
       {/* Backdrop */}
       <div
         onClick={onClose}
-        className={`absolute inset-0 bg-ink-strong/30 transition-opacity duration-200 ${
-          open ? "opacity-100" : "opacity-0"
-        }`}
+        className={`absolute inset-0 bg-ink-strong/30 transition-opacity duration-200 ${open ? "opacity-100" : "opacity-0"
+          }`}
       />
 
       {/* Panel */}
@@ -445,9 +440,8 @@ function DetailDrawer({ record, onClose }: { record: IndexRecord | null; onClose
         role="dialog"
         aria-modal="true"
         aria-label={record ? `${record.display_name} details` : "Details"}
-        className={`absolute right-0 top-0 h-full w-full max-w-lg bg-surface shadow-modal border-l border-line flex flex-col transition-transform duration-200 ease-out ${
-          open ? "translate-x-0" : "translate-x-full"
-        }`}
+        className={`absolute right-0 top-0 h-full w-full max-w-lg bg-surface shadow-modal border-l border-line flex flex-col transition-transform duration-200 ease-out ${open ? "translate-x-0" : "translate-x-full"
+          }`}
       >
         {record && (
           <>
@@ -595,9 +589,8 @@ function Pagination(props: {
             <button
               key={p}
               onClick={() => props.onGoto(p)}
-              className={`min-w-9 h-9 px-2 text-sm font-medium rounded-full transition ${
-                p === page ? "bg-brand-500 text-white" : "text-ink hover:bg-surface-strong"
-              }`}
+              className={`min-w-9 h-9 px-2 text-sm font-medium rounded-full transition ${p === page ? "bg-brand-500 text-white" : "text-ink hover:bg-surface-strong"
+                }`}
             >
               {p}
             </button>

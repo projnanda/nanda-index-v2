@@ -30,9 +30,9 @@ const FLOWS: {
       subtitle: "Teams / Orgs",
       identity: "urn:ai:domain:example.com",
       mediaType: "application/ai-catalog+json",
-      who: "Enterprises that run their own nanda-registry server. Full control over the AI catalog. Each agent is indexed by your registry, not by NANDA Index directly.",
+      who: "Enterprises that own their DNS domain. They list agents at .well_known/ai-catalog.json.",
       steps: [
-        { label: "Deploy registry", detail: "Clone nanda-registry, deploy to your infrastructure, and point a domain at it." },
+        { label: "Deploy ai-catalog", detail: "Deploy at .well-known, (optionally clone https://github.com/projnanda/nanda-registry-server-repo which provides basic ai-catalog hosting code)" },
         { label: "Register org", detail: "Create an org in NANDA Index with your registry base URL and domain." },
         { label: "Add agents", detail: "Register each agent on your registry via Registry Manager or the /agents API." },
         { label: "Verify & go live", detail: "Confirm your contact email. Resolvers can now discover your agents." },
