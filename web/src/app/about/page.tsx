@@ -8,7 +8,7 @@ const cards = [
   { href: "/dashboard", title: "Dashboard", desc: "Register and update your AI Catalog, DNS-AID, gateway, or agent card entry" },
   { href: "/", title: "Overview", desc: "View all active organizations and their discovery paths in the index" },
   { href: "/resolve", title: "Resolve", desc: "Resolve any domain, email, or URN identity to its next discovery object" },
-  { href: "/registry", title: "Registry Manager", desc: "Manage agents on your Registry Server" },
+  { href: "/registry", title: "AI Catalog Manager", desc: "Manage agents on your AI Catalog Server" },
 ];
 
 export default function AboutPage() {
