@@ -170,7 +170,7 @@ function Field({
       )}
       {error ? <p className="mt-1 text-[11px] text-rose-500">{error}</p>
         : hint ? <p className="mt-1 text-[11px] text-slate-400">{hint}</p>
-        : null}
+          : null}
     </label>
   );
 }
@@ -228,7 +228,7 @@ function StepIndicator({ current }: { current: Step }) {
               <div className={cn("flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition",
                 active ? "bg-slate-950 text-white shadow-md"
                   : done ? "bg-emerald-500 text-white"
-                  : "border-2 border-black/10 bg-white text-slate-400")}>
+                    : "border-2 border-black/10 bg-white text-slate-400")}>
                 {done ? "✓" : step}
               </div>
               <span className={cn("hidden text-[10px] font-medium uppercase tracking-[0.14em] sm:block",
@@ -410,45 +410,45 @@ export default function NewOrgPage() {
         ? { "org.projectnanda.preferredDiscovery": "dns-aid", "org.projectnanda.resolutionRole": "dns-aid-pointer" }
         : isSmbOrPersonal
           ? {
-              "org.projectnanda.preferredDiscovery": "nandaindex",
-              "org.projectnanda.resolutionRole": isPersonal ? "personal-agent-card" : "smb-agent-card",
-              "org.projectnanda.nandaIndexRole": "optional-fallback-entry",
-              ...(form.registry_url
-                ? { "org.projectnanda.agentCardHost": new URL(form.registry_url).hostname }
-                : {}),
-              ...(form.runtime_provider ? { "org.projectnanda.runtime.provider": form.runtime_provider } : {}),
-              ...(form.runtime_url ? { "org.projectnanda.runtime.url": form.runtime_url } : {}),
-              ...(form.auth_metadata ? { "org.projectnanda.auth.metadata": form.auth_metadata } : {}),
-              ...(form.auth_execution ? { "org.projectnanda.auth.execution": form.auth_execution } : {}),
-            }
+            "org.projectnanda.preferredDiscovery": "nandaindex",
+            "org.projectnanda.resolutionRole": isPersonal ? "personal-agent-card" : "smb-agent-card",
+            "org.projectnanda.nandaIndexRole": "optional-fallback-entry",
+            ...(form.registry_url
+              ? { "org.projectnanda.agentCardHost": new URL(form.registry_url).hostname }
+              : {}),
+            ...(form.runtime_provider ? { "org.projectnanda.runtime.provider": form.runtime_provider } : {}),
+            ...(form.runtime_url ? { "org.projectnanda.runtime.url": form.runtime_url } : {}),
+            ...(form.auth_metadata ? { "org.projectnanda.auth.metadata": form.auth_metadata } : {}),
+            ...(form.auth_execution ? { "org.projectnanda.auth.execution": form.auth_execution } : {}),
+          }
           : { "org.projectnanda.preferredDiscovery": "ai-catalog", "org.projectnanda.resolutionRole": "nested-ai-catalog" };
 
       // entry_data for DNS-AID
       const entryData = isDnsAid
         ? {
-            method: "dns-aid",
-            domain: form.domain,
-            organizationDiscoveryName: form.org_discovery_name,
-            ...(form.agent_discovery_name ? { agentDiscoveryName: form.agent_discovery_name } : {}),
-            ...(form.service_hint ? { serviceHint: form.service_hint } : {}),
-          }
+          method: "dns-aid",
+          domain: form.domain,
+          organizationDiscoveryName: form.org_discovery_name,
+          ...(form.agent_discovery_name ? { agentDiscoveryName: form.agent_discovery_name } : {}),
+          ...(form.service_hint ? { serviceHint: form.service_hint } : {}),
+        }
         : undefined;
 
       const record = await createOrg({
-        org_id:           form.org_id,
-        display_name:     form.display_name,
-        hosting_path:     form.hosting_path,
-        domain:           isPersonal ? undefined : (form.domain || undefined),
-        contact_email:    form.contact_email,
-        registry_url:     isDnsAid ? null : (form.registry_url || null),
-        ttl_seconds:      parseInt(form.ttl_seconds, 10) || 86400,
+        org_id: form.org_id,
+        display_name: form.display_name,
+        hosting_path: form.hosting_path,
+        domain: isPersonal ? undefined : (form.domain || undefined),
+        contact_email: form.contact_email,
+        registry_url: isDnsAid ? null : (form.registry_url || null),
+        ttl_seconds: parseInt(form.ttl_seconds, 10) || 86400,
         identifier,
-        media_type:       mediaType,
-        description:      form.description || undefined,
-        tags:             tagList.length ? tagList : undefined,
+        media_type: mediaType,
+        description: form.description || undefined,
+        tags: tagList.length ? tagList : undefined,
         publisher,
         catalog_metadata: catalogMetadata,
-        entry_data:       entryData,
+        entry_data: entryData,
       });
       setCreated(record);
     } catch (err) {
@@ -485,8 +485,8 @@ export default function NewOrgPage() {
                 What best describes you?
               </span>
               <PathCard value="registry" selected={form.hosting_path} onSelect={patchPath}
-                title="Enterprise Registry" subtitle="Teams / Orgs"
-                description="Run your own nanda-registry. Full control over your AI catalog." />
+                title="Enterprise AI Catalog" subtitle="Teams / Orgs"
+                description="Run your own nanda-ai-catalog. Full control over your AI catalog." />
               <PathCard value="dns-aid" selected={form.hosting_path} onSelect={patchPath}
                 title="DNS-AID" subtitle="Enterprise / DNS"
                 description="Publish agent discovery via DNS records. NandaIndex acts as a federated pointer." />
@@ -526,24 +526,24 @@ export default function NewOrgPage() {
             {/* Locator preview */}
             {((isPersonal && form.identity_email && !s1Errors.identity_email) ||
               (!isPersonal && form.domain && !s1Errors.domain)) && (
-              <div className="rounded-2xl border border-black/5 bg-slate-50 px-4 py-3">
-                <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400">Identifier preview</p>
-                <p className="mt-1 font-mono text-sm text-slate-700 break-all">
-                  {isPersonal ? (
-                    <>
-                      <span className="text-slate-400">urn:ai:email:</span>
-                      <span className="text-slate-950">{form.identity_email}</span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-slate-400">urn:ai:domain:</span>
-                      <span className="text-slate-950">{form.domain}</span>
-                      {form.hosting_path === "smb" && <span className="text-slate-400">:agent:&lt;id&gt;</span>}
-                    </>
-                  )}
-                </p>
-              </div>
-            )}
+                <div className="rounded-2xl border border-black/5 bg-slate-50 px-4 py-3">
+                  <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400">Identifier preview</p>
+                  <p className="mt-1 font-mono text-sm text-slate-700 break-all">
+                    {isPersonal ? (
+                      <>
+                        <span className="text-slate-400">urn:ai:email:</span>
+                        <span className="text-slate-950">{form.identity_email}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-slate-400">urn:ai:domain:</span>
+                        <span className="text-slate-950">{form.domain}</span>
+                        {form.hosting_path === "smb" && <span className="text-slate-400">:agent:&lt;id&gt;</span>}
+                      </>
+                    )}
+                  </p>
+                </div>
+              )}
           </div>
 
           <div className="flex gap-3">
@@ -579,7 +579,7 @@ export default function NewOrgPage() {
 
             {/* Registry path */}
             {form.hosting_path === "registry" && (
-              <Field label="Registry URL" value={form.registry_url}
+              <Field label="AI Catalog Hosted URL" value={form.registry_url}
                 onChange={(v) => patch("registry_url", v)} onBlur={() => touch("registry_url")}
                 placeholder="https://registry.acme.com"
                 hint="The base URL of your nanda-registry server. Clone the repo, deploy to a VPS, point your domain."
