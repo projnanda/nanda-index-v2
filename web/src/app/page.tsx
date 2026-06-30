@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { listIndexRecords } from "@/lib/nanda-api";
 import { JsonPanel } from "@/components/JsonPanel";
+import { RecordDetails } from "@/components/RecordDetails";
 import type { IndexRecord } from "@/lib/nanda-types";
 
 const PAGE_SIZE = 9;
@@ -483,72 +484,13 @@ function DetailDrawer({ record, onClose }: { record: IndexRecord | null; onClose
             </div>
 
             <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
-              <div className="bg-surface-light rounded-card border border-line p-5 shadow-card">
-                {record.domain && (
-                  <p className="text-sm text-ink-medium break-all">{record.domain}</p>
-                )}
-                {record.description && (
-                  <p className="mt-2 text-sm leading-relaxed text-ink-medium">
-                    {record.description}
-                  </p>
-                )}
-                {record.tags && record.tags.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {record.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-surface-tag text-ink"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <dl className="mt-4 grid gap-2 text-sm text-ink">
-                  <DetailRow label="Media type">
-                    <span className="font-mono text-xs">{record.media_type ?? "-"}</span>
-                  </DetailRow>
-                  <DetailRow label="Catalog URL">
-                    {record.registry_url ? (
-                      <a
-                        href={record.registry_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="break-all font-mono text-xs text-brand-600 hover:underline"
-                      >
-                        {record.registry_url}
-                      </a>
-                    ) : (
-                      <span className="text-ink-weak">-</span>
-                    )}
-                  </DetailRow>
-                  <DetailRow label="TTL">{record.ttl_seconds}s</DetailRow>
-                  <DetailRow label="Email verified">
-                    {record.email_verified ? "Yes" : "No"}
-                  </DetailRow>
-                  <DetailRow label="Status">
-                    <span className="capitalize">{record.status}</span>
-                  </DetailRow>
-                  <DetailRow label="Created">
-                    {new Date(record.created_at).toLocaleDateString()}
-                  </DetailRow>
-                </dl>
-              </div>
+              <RecordDetails record={record} />
 
               <JsonPanel data={record} />
             </div>
           </>
         )}
       </div>
-    </div>
-  );
-}
-
-function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex gap-2">
-      <dt className="font-semibold text-ink-strong flex-shrink-0">{label}:</dt>
-      <dd className="min-w-0 break-words">{children}</dd>
     </div>
   );
 }
