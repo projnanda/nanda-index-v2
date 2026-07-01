@@ -6,6 +6,44 @@ export interface PublisherBlock {
   identityType?: string;
 }
 
+// ── AI Catalog Trust Manifest (dir catalog/v1/models.proto) ──────────────────
+export interface TrustSchema {
+  identifier: string;
+  version: string;
+  governanceUri?: string;
+  verificationMethods?: string[];
+}
+
+export interface Attestation {
+  type: string;
+  uri: string;
+  mediaType: string;
+  digest?: string;
+  size?: string | number;
+  description?: string;
+}
+
+export interface ProvenanceLink {
+  relation: string;
+  sourceId: string;
+  sourceDigest?: string;
+  registryUri?: string;
+  statementUri?: string;
+  signatureRef?: string;
+}
+
+export interface TrustManifest {
+  identity: string;
+  identityType?: string;
+  trustSchema?: TrustSchema;
+  attestations?: Attestation[];
+  provenance?: ProvenanceLink[];
+  privacyPolicyUrl?: string;
+  termsOfServiceUrl?: string;
+  signature?: string;
+  metadata?: Record<string, unknown>;
+}
+
 export interface IndexRecord {
   org_id: string;
   display_name: string;
@@ -26,6 +64,8 @@ export interface IndexRecord {
   publisher?: PublisherBlock;
   metadata?: Record<string, unknown>;
   data?: Record<string, unknown>;
+  version?: string;
+  trust_manifest?: TrustManifest;
 }
 
 /** DNS TXT challenge issued to prove ownership of an org's domain. */
@@ -37,15 +77,18 @@ export interface DomainChallenge {
   expires_at: string;
 }
 
-/** AI Catalog CatalogEntry (application/ai-catalog+json). */
+/** AI Catalog CatalogEntry (agent-card.github.io/ai-catalog). `url` XOR `data`. */
 export interface CatalogEntry {
   identifier: string;
   displayName: string;
   mediaType: string;
-  url: string;
+  url?: string;
+  data?: Record<string, unknown>;
+  version?: string | null;
   description?: string | null;
   tags?: string[];
-  version?: string | null;
+  publisher?: PublisherBlock;
+  trustManifest?: TrustManifest;
   updatedAt?: string;
   metadata?: Record<string, unknown>;
 }

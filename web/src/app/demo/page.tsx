@@ -214,6 +214,11 @@ export default function DemoPage() {
 
     // Hop 3 — Agent facts URL
     const h3url = catalogEntry.url;
+    if (!h3url) {
+      setHop3({ status: "error", message: "Catalog entry embeds the artifact inline (no url to fetch)." });
+      setResolving(false);
+      return;
+    }
     setHop3Url(h3url);
     setHop3({ status: "loading" });
 
