@@ -44,6 +44,7 @@ interface CreateOrgBody {
   publisher?: PublisherBlock;
   catalog_metadata?: Record<string, unknown>;
   entry_data?: Record<string, unknown>;
+  version?: string;
 }
 
 interface UpdateOrgBody {
@@ -56,6 +57,7 @@ interface UpdateOrgBody {
   publisher?: PublisherBlock;
   catalog_metadata?: Record<string, unknown>;
   entry_data?: Record<string, unknown>;
+  version?: string;
 }
 
 /**
@@ -121,6 +123,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
                            enum: ['application/ai-catalog+json', 'application/vnd.dns-aid+json', 'application/a2a-agent-card+json', 'application/mcp-server-card+json', 'application/agentskill+zip'] },
           description:   { type: 'string', maxLength: 1000 },
           tags:          { type: 'array', items: { type: 'string', maxLength: 64 }, maxItems: 20 },
+          version:       { type: 'string', maxLength: 64 },
           publisher: {
             type: 'object',
             required: ['identifier', 'displayName'],
@@ -191,6 +194,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       publisher:            body.publisher,
       catalogMetadata:      body.catalog_metadata,
       entryData:            body.entry_data,
+      version:              body.version,
     });
 
     await insertMembership(user.userId, org.orgId, 'admin');
@@ -341,6 +345,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
           ttl_seconds:      { type: 'integer', minimum: 3600, maximum: 604800 },
           description:      { type: 'string', maxLength: 1000 },
           tags:             { type: 'array', items: { type: 'string', maxLength: 64 }, maxItems: 20 },
+          version:          { type: 'string', maxLength: 64 },
           publisher: {
             type: 'object',
             required: ['identifier', 'displayName'],
@@ -372,6 +377,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       publisher:       body.publisher,
       catalogMetadata: body.catalog_metadata,
       entryData:       body.entry_data,
+      version:         body.version,
     });
     if (!updated) {
       return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });

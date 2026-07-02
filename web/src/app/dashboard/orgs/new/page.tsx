@@ -34,6 +34,7 @@ interface FormState {
   auth_execution: string;       // smb / personal optional
   description: string;
   tags: string;
+  version: string;              // optional SemVer of the artifact
   // Step 3 — contact
   contact_email: string;
   ttl_seconds: string;
@@ -57,6 +58,7 @@ const EMPTY: FormState = {
   auth_execution: "",
   description: "",
   tags: "",
+  version: "",
   contact_email: "",
   ttl_seconds: "86400",
 };
@@ -446,6 +448,7 @@ export default function NewOrgPage() {
         media_type: mediaType,
         description: form.description || undefined,
         tags: tagList.length ? tagList : undefined,
+        version: form.version || undefined,
         publisher,
         catalog_metadata: catalogMetadata,
         entry_data: entryData,
@@ -680,6 +683,10 @@ export default function NewOrgPage() {
             <Field label="Tags" value={form.tags} onChange={(v) => patch("tags", v)}
               placeholder="smb, bakery, orders, a2a-agent-card"
               hint="Comma-separated labels." optional />
+
+            <Field label="Version" value={form.version} onChange={(v) => patch("version", v)}
+              placeholder="v1.0.0"
+              hint="SemVer of this artifact (shown on the card)." optional />
 
             {/* Advanced: identifier override */}
             <div className="border-t border-black/5 pt-3">

@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { listIndexRecords } from "@/lib/nanda-api";
 import { JsonPanel } from "@/components/JsonPanel";
-import type { IndexRecord } from "@/lib/nanda-types";
+import { toCatalogEntry } from "@/lib/catalog-entry";
+import type { IndexRecord, TrustManifest } from "@/lib/nanda-types";
 
 const PAGE_SIZE = 9;
 
@@ -73,6 +74,7 @@ type Row = {
   description: string;
   tags: string[];
   verified: boolean;
+  version: string | null;
 };
 
 function mapRow(record: IndexRecord): Row {
@@ -101,6 +103,7 @@ function mapRow(record: IndexRecord): Row {
     description,
     tags,
     verified: !!record.email_verified,
+    version: record.version ?? null,
   };
 }
 
@@ -373,6 +376,10 @@ function RegistryCard({ item, onSelect }: { item: Row; onSelect: () => void }) {
             )}
           </div>
           <div className="mt-0.5 text-xs text-ink-weak truncate">
+            {item.version ? (
+              <span className="font-mono text-ink-medium">{item.version}</span>
+            ) : null}
+            {item.version ? " • " : ""}
             {item.identifier}
             {item.date ? ` • ${item.date}` : ""}
           </div>
@@ -502,6 +509,11 @@ function DetailDrawer({ record, onClose }: { record: IndexRecord | null; onClose
                   <DetailRow label="Media type">
                     <span className="font-mono text-xs">{record.media_type ?? "-"}</span>
                   </DetailRow>
+                  {record.version && (
+                    <DetailRow label="Version">
+                      <span className="font-mono text-xs">{record.version}</span>
+                    </DetailRow>
+                  )}
                   <DetailRow label="Catalog URL">
                     {record.registry_url ? (
                       <a
@@ -529,7 +541,9 @@ function DetailDrawer({ record, onClose }: { record: IndexRecord | null; onClose
                 </dl>
               </div>
 
-              <JsonPanel data={record} />
+              {record.trust_manifest && <TrustManifestPanel tm={record.trust_manifest} />}
+
+              <JsonPanel data={toCatalogEntry(record)} />
             </div>
           </>
         )}
@@ -543,6 +557,37 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
     <div className="flex gap-2">
       <dt className="font-semibold text-ink-strong flex-shrink-0">{label}:</dt>
       <dd className="min-w-0 break-words">{children}</dd>
+    </div>
+  );
+}
+
+// Surfaces the AI Catalog trust manifest (identity, attestations, provenance,
+// signature) as its own panel in the detail drawer.
+function TrustManifestPanel({ tm }: { tm: TrustManifest }) {
+  const attestations = tm.attestations ?? [];
+  const provenance = tm.provenance ?? [];
+  return (
+    <div className="bg-surface-light rounded-card border border-line p-5 shadow-card">
+      <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-ink-weak">Trust Manifest</h3>
+      <dl className="grid gap-2 text-sm text-ink">
+        <DetailRow label="Identity">
+          <span className="font-mono text-xs break-all">{tm.identity}</span>
+        </DetailRow>
+        {tm.identityType && <DetailRow label="Type">{tm.identityType}</DetailRow>}
+        <DetailRow label="Attestations">
+          {attestations.length}
+          {attestations.length > 0 ? ` (${attestations[0].type})` : ""}
+        </DetailRow>
+        <DetailRow label="Provenance">
+          {provenance.length}
+          {provenance.length > 0 ? ` (${provenance[0].relation})` : ""}
+        </DetailRow>
+        {tm.signature && (
+          <DetailRow label="Signature">
+            <span className="font-mono text-xs break-all">{tm.signature.slice(0, 24)}…</span>
+          </DetailRow>
+        )}
+      </dl>
     </div>
   );
 }

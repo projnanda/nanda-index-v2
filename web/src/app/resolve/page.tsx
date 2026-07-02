@@ -156,6 +156,12 @@ export default function ResolvePage() {
 
     // ── Hop 3: Agent facts URL ─────────────────────────────────────────────
     const h3url = catalogEntry.url;
+    if (!h3url) {
+      setHop3({ status: "error", url: "—", error: "Catalog entry embeds the artifact inline (no url to fetch)." });
+      setResolving(false);
+      setLatency(Math.round(performance.now() - t0));
+      return;
+    }
     setHop3({ status: "loading", url: `GET ${h3url}` });
 
     let facts: unknown;
