@@ -74,6 +74,7 @@ type Row = {
   description: string;
   tags: string[];
   verified: boolean;
+  version: string | null;
 };
 
 function mapRow(record: IndexRecord): Row {
@@ -102,6 +103,7 @@ function mapRow(record: IndexRecord): Row {
     description,
     tags,
     verified: !!record.email_verified,
+    version: record.version ?? null,
   };
 }
 
@@ -374,6 +376,10 @@ function RegistryCard({ item, onSelect }: { item: Row; onSelect: () => void }) {
             )}
           </div>
           <div className="mt-0.5 text-xs text-ink-weak truncate">
+            {item.version ? (
+              <span className="font-mono text-ink-medium">{item.version}</span>
+            ) : null}
+            {item.version ? " • " : ""}
             {item.identifier}
             {item.date ? ` • ${item.date}` : ""}
           </div>

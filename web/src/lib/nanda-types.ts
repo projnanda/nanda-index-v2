@@ -145,6 +145,7 @@ export interface CreateOrgPayload {
   publisher?: PublisherBlock;
   catalog_metadata?: Record<string, unknown>;
   entry_data?: Record<string, unknown>;
+  version?: string;
 }
 
 export interface UpdateOrgPayload {
@@ -157,4 +158,5 @@ export interface UpdateOrgPayload {
   publisher?: PublisherBlock;
   catalog_metadata?: Record<string, unknown>;
   entry_data?: Record<string, unknown>;
+  version?: string;
 }
