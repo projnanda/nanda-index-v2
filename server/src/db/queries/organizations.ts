@@ -188,6 +188,10 @@ export async function insertOrganization(params: InsertOrgParams): Promise<Organ
  * Applies a partial update to an organization.
  * Only provided fields are changed; updated_at is always refreshed.
  *
+ * `trustManifest` is tri-state: undefined leaves the stored manifest
+ * untouched, null clears it (revocation), and an object replaces it. The
+ * other fields use COALESCE and therefore cannot be cleared to NULL here.
+ *
  * Changing the `domain` invalidates the ownership proof: the prior verification
  * was for the old domain, so domain_verified and any pending challenge are
  * cleared, and an active org reverts to 'pending' until the new domain is
@@ -202,6 +206,10 @@ export async function updateOrganization(
 ): Promise<Organization | null> {
   const sql = getSql();
   const newDomain = patch.domain ?? null;
+  const trustProvided = patch.trustManifest !== undefined;
+  const trustValue = patch.trustManifest
+    ? sql.json(JSON.parse(JSON.stringify(patch.trustManifest)))
+    : null;
   const rows = await sql<Organization[]>`
     UPDATE organizations SET
       display_name     = COALESCE(${patch.displayName ?? null}, display_name),
@@ -214,7 +222,7 @@ export async function updateOrganization(
       catalog_metadata = COALESCE(${patch.catalogMetadata ? sql.json(JSON.parse(JSON.stringify(patch.catalogMetadata))) : null}, catalog_metadata),
       entry_data       = COALESCE(${patch.entryData ? sql.json(JSON.parse(JSON.stringify(patch.entryData))) : null}, entry_data),
       version          = COALESCE(${patch.version ?? null}, version),
-      trust_manifest   = COALESCE(${patch.trustManifest ? sql.json(JSON.parse(JSON.stringify(patch.trustManifest))) : null}, trust_manifest),
+      trust_manifest   = CASE WHEN ${trustProvided} THEN ${trustValue} ELSE trust_manifest END,
       domain_verified = CASE
         WHEN ${newDomain}::text IS NOT NULL AND ${newDomain}::text <> domain THEN FALSE
         ELSE domain_verified END,

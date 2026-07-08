@@ -146,6 +146,7 @@ export interface CreateOrgPayload {
   catalog_metadata?: Record<string, unknown>;
   entry_data?: Record<string, unknown>;
   version?: string;
+  trust_manifest?: TrustManifest;
 }
 
 export interface UpdateOrgPayload {
@@ -159,4 +160,6 @@ export interface UpdateOrgPayload {
   catalog_metadata?: Record<string, unknown>;
   entry_data?: Record<string, unknown>;
   version?: string;
+  /** undefined = leave unchanged; null = clear the stored manifest. */
+  trust_manifest?: TrustManifest | null;
 }

@@ -30,6 +30,7 @@ export default function OrgDetailPage() {
   const [domain, setDomain] = useState("");
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState("");
+  const [version, setVersion] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -43,6 +44,7 @@ export default function OrgDetailPage() {
         setDomain(data.domain ?? "");
         setDescription(data.description ?? "");
         setTags((data.tags ?? []).join(", "));
+        setVersion(data.version ?? "");
       })
       .catch((err) => {
         if (cancelled) return;
@@ -63,6 +65,7 @@ export default function OrgDetailPage() {
         domain,
         description: description || undefined,
         tags: tagList.length ? tagList : [],
+        version: version || undefined,
       });
       setOrg(updated);
       setEditing(false);
@@ -187,6 +190,11 @@ export default function OrgDetailPage() {
               <span className={labelCls}>Tags (optional, comma-separated)</span>
               <input value={tags} onChange={(e) => setTags(e.target.value)} className={inputCls} placeholder="enterprise, payments, ai-catalog" />
               <p className="mt-1 text-[11px] text-slate-400">Separate tags with commas.</p>
+            </label>
+            <label className="block">
+              <span className={labelCls}>Version (optional)</span>
+              <input value={version} onChange={(e) => setVersion(e.target.value)} className={inputCls} placeholder="v1.0.0" />
+              <p className="mt-1 text-[11px] text-slate-400">SemVer of this artifact (shown on the card).</p>
             </label>
             <div className="flex gap-3">
               <button onClick={onSave} disabled={saving} className="rounded-2xl bg-slate-950 px-6 py-2.5 text-sm font-medium text-white disabled:opacity-60">

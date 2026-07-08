@@ -69,6 +69,26 @@ export interface IndexRecord {
   trust_manifest?: TrustManifest;
 }
 
+/**
+ * JSON schema for a TrustManifest. Shared by the IndexRecord response schema
+ * and the org create/update body schemas so the wire shapes cannot drift.
+ */
+export const TRUST_MANIFEST_SCHEMA = {
+  type: 'object',
+  additionalProperties: true,
+  properties: {
+    identity:         { type: 'string' },
+    identityType:     { type: 'string' },
+    trustSchema:      { type: 'object', additionalProperties: true },
+    attestations:     { type: 'array', items: { type: 'object', additionalProperties: true } },
+    provenance:       { type: 'array', items: { type: 'object', additionalProperties: true } },
+    privacyPolicyUrl: { type: 'string' },
+    termsOfServiceUrl:{ type: 'string' },
+    signature:        { type: 'string' },
+    metadata:         { type: 'object', additionalProperties: true },
+  },
+} as const;
+
 export const INDEX_RECORD_SCHEMA = {
   type: 'object',
   required: ['org_id', 'display_name', 'ttl_seconds', 'status', 'email_verified', 'domain_verified', 'created_at', 'updated_at'],
@@ -98,20 +118,6 @@ export const INDEX_RECORD_SCHEMA = {
     metadata: { type: 'object', additionalProperties: true },
     data:     { type: 'object', additionalProperties: true },
     version:  { type: 'string' },
-    trust_manifest: {
-      type: 'object',
-      additionalProperties: true,
-      properties: {
-        identity:         { type: 'string' },
-        identityType:     { type: 'string' },
-        trustSchema:      { type: 'object', additionalProperties: true },
-        attestations:     { type: 'array', items: { type: 'object', additionalProperties: true } },
-        provenance:       { type: 'array', items: { type: 'object', additionalProperties: true } },
-        privacyPolicyUrl: { type: 'string' },
-        termsOfServiceUrl:{ type: 'string' },
-        signature:        { type: 'string' },
-        metadata:         { type: 'object', additionalProperties: true },
-      },
-    },
+    trust_manifest: TRUST_MANIFEST_SCHEMA,
   },
 } as const;
