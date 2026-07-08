@@ -204,6 +204,96 @@ describe('Org management routes — protected CRUD', () => {
     expect(res.json().registry_url).toBe('https://updated.example.com/registry');
   });
 
+  // ── version + trust_manifest (AI Catalog parity fields) ─────────────────────
+
+  const TRUST_MANIFEST = {
+    identity:     'urn:ai:domain:trusted.example.com',
+    identityType: 'domain',
+    attestations: [
+      { type: 'soc2', uri: 'https://trusted.example.com/soc2.pdf', mediaType: 'application/pdf' },
+    ],
+    signature: 'MEUCIQDexample',
+  };
+
+  it('creates an org with version and trust_manifest and returns both', async () => {
+    const res = await fastify.inject({
+      method: 'POST', url: '/api/v1/orgs',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        org_id: 'org-trust-create', display_name: 'Trust Create', domain: 'trustcreate.example.com',
+        contact_email: 'a@trustcreate.com', registry_url: 'https://trustcreate.example.com/r',
+        version: 'v1.2.3',
+        trust_manifest: TRUST_MANIFEST,
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json();
+    expect(body.version).toBe('v1.2.3');
+    expect(body.trust_manifest).toEqual(TRUST_MANIFEST);
+  });
+
+  it('sets trust_manifest and version via PUT', async () => {
+    await createOrg(fastify, token, 'org-trust-set');
+
+    const res = await fastify.inject({
+      method: 'PUT', url: '/api/v1/orgs/org-trust-set',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { version: 'v2.0.0', trust_manifest: TRUST_MANIFEST },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().version).toBe('v2.0.0');
+    expect(res.json().trust_manifest).toEqual(TRUST_MANIFEST);
+
+    // Persisted, not just echoed
+    const fetched = await fastify.inject({
+      method: 'GET', url: '/api/v1/orgs/org-trust-set',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(fetched.json().version).toBe('v2.0.0');
+    expect(fetched.json().trust_manifest).toEqual(TRUST_MANIFEST);
+  });
+
+  it('preserves trust_manifest when a PUT omits it', async () => {
+    await createOrg(fastify, token, 'org-trust-keep');
+    await fastify.inject({
+      method: 'PUT', url: '/api/v1/orgs/org-trust-keep',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { trust_manifest: TRUST_MANIFEST },
+    });
+
+    const res = await fastify.inject({
+      method: 'PUT', url: '/api/v1/orgs/org-trust-keep',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { description: 'unrelated change' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().trust_manifest).toEqual(TRUST_MANIFEST);
+  });
+
+  it('clears trust_manifest when a PUT sends null', async () => {
+    await createOrg(fastify, token, 'org-trust-clear');
+    await fastify.inject({
+      method: 'PUT', url: '/api/v1/orgs/org-trust-clear',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { trust_manifest: TRUST_MANIFEST },
+    });
+
+    const res = await fastify.inject({
+      method: 'PUT', url: '/api/v1/orgs/org-trust-clear',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { trust_manifest: null },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().trust_manifest).toBeUndefined();
+
+    const fetched = await fastify.inject({
+      method: 'GET', url: '/api/v1/orgs/org-trust-clear',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(fetched.json().trust_manifest).toBeUndefined();
+  });
+
   // ── DELETE /api/v1/orgs/:org_id ──────────────────────────────────────────────
 
   it('suspends org and returns status=suspended', async () => {

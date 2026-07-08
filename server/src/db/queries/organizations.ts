@@ -1,5 +1,5 @@
 import { getSql } from '../client.js';
-import type { IndexRecord, PublisherBlock } from '../../types/api/index-record.js';
+import type { IndexRecord, PublisherBlock, TrustManifest } from '../../types/api/index-record.js';
 
 /** Domain type — camelCase (postgres.camel maps snake_case columns). */
 export interface Organization {
@@ -29,6 +29,8 @@ export interface Organization {
   publisher: PublisherBlock | null;
   catalogMetadata: Record<string, unknown> | null;
   entryData: Record<string, unknown> | null;
+  version: string | null;
+  trustManifest: TrustManifest | null;
 }
 
 export interface InsertOrgParams {
@@ -47,6 +49,8 @@ export interface InsertOrgParams {
   publisher?: PublisherBlock | null;
   catalogMetadata?: Record<string, unknown> | null;
   entryData?: Record<string, unknown> | null;
+  version?: string | null;
+  trustManifest?: TrustManifest | null;
 }
 
 export interface UpdateOrgParams {
@@ -59,6 +63,8 @@ export interface UpdateOrgParams {
   publisher?: PublisherBlock | null;
   catalogMetadata?: Record<string, unknown> | null;
   entryData?: Record<string, unknown> | null;
+  version?: string | null;
+  trustManifest?: TrustManifest | null;
 }
 
 /** Maps a domain Organization to the wire IndexRecord shape. */
@@ -81,6 +87,8 @@ export function toIndexRecord(org: Organization): IndexRecord {
     publisher:      org.publisher ?? undefined,
     metadata:       org.catalogMetadata ?? undefined,
     data:           org.entryData ?? undefined,
+    version:        org.version ?? undefined,
+    trust_manifest: org.trustManifest ?? undefined,
   };
 }
 
@@ -156,7 +164,8 @@ export async function insertOrganization(params: InsertOrgParams): Promise<Organ
     INSERT INTO organizations
       (org_id, display_name, domain, contact_email, registry_url,
        verify_token, verify_token_expires_at, ttl_seconds,
-       identifier, media_type, description, tags, publisher, catalog_metadata, entry_data)
+       identifier, media_type, description, tags, publisher, catalog_metadata, entry_data,
+       version, trust_manifest)
     VALUES
       (${params.orgId}, ${params.displayName}, ${params.domain ?? null}, ${params.contactEmail},
        ${params.registryUrl ?? null}, ${params.verifyToken}, ${params.verifyTokenExpiresAt},
@@ -167,7 +176,9 @@ export async function insertOrganization(params: InsertOrgParams): Promise<Organ
        ${sql.array(params.tags ?? [])},
        ${params.publisher ? sql.json(JSON.parse(JSON.stringify(params.publisher))) : null},
        ${params.catalogMetadata ? sql.json(JSON.parse(JSON.stringify(params.catalogMetadata))) : null},
-       ${params.entryData ? sql.json(JSON.parse(JSON.stringify(params.entryData))) : null})
+       ${params.entryData ? sql.json(JSON.parse(JSON.stringify(params.entryData))) : null},
+       ${params.version ?? null},
+       ${params.trustManifest ? sql.json(JSON.parse(JSON.stringify(params.trustManifest))) : null})
     RETURNING *
   `;
   return rows[0]!;
@@ -176,6 +187,10 @@ export async function insertOrganization(params: InsertOrgParams): Promise<Organ
 /**
  * Applies a partial update to an organization.
  * Only provided fields are changed; updated_at is always refreshed.
+ *
+ * `trustManifest` is tri-state: undefined leaves the stored manifest
+ * untouched, null clears it (revocation), and an object replaces it. The
+ * other fields use COALESCE and therefore cannot be cleared to NULL here.
  *
  * Changing the `domain` invalidates the ownership proof: the prior verification
  * was for the old domain, so domain_verified and any pending challenge are
@@ -191,6 +206,10 @@ export async function updateOrganization(
 ): Promise<Organization | null> {
   const sql = getSql();
   const newDomain = patch.domain ?? null;
+  const trustProvided = patch.trustManifest !== undefined;
+  const trustValue = patch.trustManifest
+    ? sql.json(JSON.parse(JSON.stringify(patch.trustManifest)))
+    : null;
   const rows = await sql<Organization[]>`
     UPDATE organizations SET
       display_name     = COALESCE(${patch.displayName ?? null}, display_name),
@@ -202,6 +221,8 @@ export async function updateOrganization(
       publisher        = COALESCE(${patch.publisher ? sql.json(JSON.parse(JSON.stringify(patch.publisher))) : null}, publisher),
       catalog_metadata = COALESCE(${patch.catalogMetadata ? sql.json(JSON.parse(JSON.stringify(patch.catalogMetadata))) : null}, catalog_metadata),
       entry_data       = COALESCE(${patch.entryData ? sql.json(JSON.parse(JSON.stringify(patch.entryData))) : null}, entry_data),
+      version          = COALESCE(${patch.version ?? null}, version),
+      trust_manifest   = CASE WHEN ${trustProvided} THEN ${trustValue} ELSE trust_manifest END,
       domain_verified = CASE
         WHEN ${newDomain}::text IS NOT NULL AND ${newDomain}::text <> domain THEN FALSE
         ELSE domain_verified END,
