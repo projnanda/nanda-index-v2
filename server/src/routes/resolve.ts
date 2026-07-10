@@ -14,8 +14,12 @@ interface ResolveQuerystring {
  *   GET /api/v1/resolve?locator=urn:ai:nasiko.com:ankit
  *
  * Looks up the org in the NANDA Index DB → returns IndexRecord (with registry_url)
- * plus the parsed identifier. The caller then fetches the AgentRecord directly:
- *   GET <index_record.registry_url>/agents/<identifier>
+ * plus the parsed identifier. What the caller does next depends on the org's
+ * media_type: for catalog/registry orgs, fetch the AgentRecord directly
+ * (GET <index_record.registry_url>/agents/<identifier>); for ans orgs
+ * (application/vnd.ans-agent+json), registry_url is the ANS Transparency Log
+ * base and discovery continues via DNS at the agent FQDN
+ * (docs/ans-integration.md §4.2).
  */
 export async function registerResolveRoute(fastify: FastifyInstance): Promise<void> {
   fastify.get<{ Querystring: ResolveQuerystring }>('/api/v1/resolve', {

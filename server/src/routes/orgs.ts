@@ -14,7 +14,10 @@ import { apiErrorSchema } from '../types/api/common.js';
 import type { JwtPayload } from '../plugins/jwt.js';
 import type { PublisherBlock, TrustManifest } from '../types/api/index-record.js';
 
-type HostingPath = 'registry' | 'dns-aid' | 'smb' | 'personal';
+type HostingPath = 'registry' | 'dns-aid' | 'smb' | 'personal' | 'ans';
+
+/** The only media type an `ans` registration may carry. */
+const ANS_MEDIA_TYPE = 'application/vnd.ans-agent+json';
 
 /** Wire shape returned when an org admin requests a DNS challenge. */
 const DOMAIN_CHALLENGE_SCHEMA = {
@@ -116,14 +119,14 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
         properties: {
           org_id:        { type: 'string', pattern: '^[a-z0-9][a-z0-9-]*[a-z0-9]$', minLength: 2, maxLength: 64 },
           display_name:  { type: 'string', minLength: 1, maxLength: 255 },
-          hosting_path:  { type: 'string', enum: ['registry', 'dns-aid', 'smb', 'personal'] },
+          hosting_path:  { type: 'string', enum: ['registry', 'dns-aid', 'smb', 'personal', 'ans'] },
           domain:        { type: 'string', maxLength: 255 },
           contact_email: { type: 'string', format: 'email' },
           registry_url:  { type: 'string', maxLength: 512 },
           ttl_seconds:   { type: 'integer', minimum: 3600, maximum: 604800 },
           identifier:    { type: 'string', maxLength: 512 },
           media_type:    { type: 'string', maxLength: 128,
-                           enum: ['application/ai-catalog+json', 'application/vnd.dns-aid+json', 'application/a2a-agent-card+json', 'application/mcp-server-card+json', 'application/agentskill+zip'] },
+                           enum: ['application/ai-catalog+json', 'application/vnd.dns-aid+json', 'application/a2a-agent-card+json', 'application/mcp-server-card+json', 'application/agentskill+zip', ANS_MEDIA_TYPE] },
           description:   { type: 'string', maxLength: 1000 },
           tags:          { type: 'array', items: { type: 'string', maxLength: 64 }, maxItems: 20 },
           version:       { type: 'string', maxLength: 64 },
@@ -154,13 +157,34 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
     const path = body.hosting_path ?? 'registry';
     const isDnsAid = path === 'dns-aid';
     const isPersonal = path === 'personal';
+    const isAns = path === 'ans';
 
     // Domain: required for all paths except personal
     if (!isPersonal && !body.domain) {
-      return reply.code(400).send({ error: 'VALIDATION', detail: 'domain is required for registry, dns-aid, and smb registrations' });
+      return reply.code(400).send({ error: 'VALIDATION', detail: 'domain is required for registry, dns-aid, smb, and ans registrations' });
     }
     if (body.domain && !/^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/.test(body.domain)) {
       return reply.code(400).send({ error: 'VALIDATION', detail: 'domain must be a valid hostname (e.g. acme.com)' });
+    }
+
+    // ans: registry_url is the ANS Transparency Log base URL — required and
+    // strict https. It is the host-level cross-check anchor: clients compare
+    // the _ans-badge target host against this domain-verified value, so no
+    // trust-anchor state is stored server-side (docs/ans-integration.md §4.2).
+    // The media type is fixed to the ANS profile; a mismatched one supplied
+    // by the client is an error.
+    if (isAns) {
+      if (!body.registry_url || !/^https:\/\//.test(body.registry_url)) {
+        return reply.code(400).send({ error: 'VALIDATION', detail: 'registry_url (the ANS Transparency Log base URL) is required and must be https for ans registrations' });
+      }
+      if (body.media_type && body.media_type !== ANS_MEDIA_TYPE) {
+        return reply.code(400).send({ error: 'VALIDATION', detail: `ans registrations use media_type ${ANS_MEDIA_TYPE}` });
+      }
+    } else if (body.media_type === ANS_MEDIA_TYPE) {
+      // The ans media type is the persisted discriminator clients key on;
+      // it must be unobtainable without passing the ans validation regime
+      // above (hosting_path is request-time only and never stored).
+      return reply.code(400).send({ error: 'VALIDATION', detail: `media_type ${ANS_MEDIA_TYPE} requires hosting_path "ans"` });
     }
 
     // registry_url: required for registry, smb, personal — not for dns-aid
@@ -192,7 +216,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       verifyTokenExpiresAt,
       ttlSeconds:           body.ttl_seconds,
       identifier:           body.identifier,
-      mediaType:            body.media_type,
+      mediaType:            isAns ? ANS_MEDIA_TYPE : body.media_type,
       description:          body.description,
       tags:                 body.tags,
       publisher:            body.publisher,
@@ -374,6 +398,17 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
     },
   }, async (request, reply) => {
     const body = request.body;
+
+    // ans orgs: registry_url is the host-level cross-check anchor — the
+    // strict-https invariant must hold across updates, not just creation
+    // (media_type itself is not updatable, so the stored value is the truth).
+    if (body.registry_url) {
+      const existing = await findByOrgId(request.params.org_id);
+      if (existing?.mediaType === ANS_MEDIA_TYPE && !/^https:\/\//.test(body.registry_url)) {
+        return reply.code(400).send({ error: 'VALIDATION', detail: 'registry_url must be https for ans organizations (it is the host-level cross-check anchor)' });
+      }
+    }
+
     const updated = await updateOrganization(request.params.org_id, {
       displayName:     body.display_name,
       domain:          body.domain,
