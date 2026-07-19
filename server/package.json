@@ -30,6 +30,7 @@
     "bcryptjs": "^3.0.3",
     "fastify": "^5.1.0",
     "nodemailer": "^8.0.10",
+    "openai": "^6.48.0",
     "postgres": "^3.4.4",
     "resend": "^6.12.4"
   },
