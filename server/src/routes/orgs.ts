@@ -3,6 +3,8 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { findByOrgId, insertOrganization, updateOrganization, suspendOrganization, reactivateOrganization, deleteOrganization, setDomainChallenge, markDomainVerified, toIndexRecord } from '../db/queries/organizations.js';
 import { insertMembership, checkMembership } from '../db/queries/orgMemberships.js';
 import { sendVerificationEmail } from '../services/email.js';
+import { generateRepresentativeQueries } from '../services/llmEnrichment.js';
+import { buildConfig } from '../config/index.js';
 import {
   challengeRecordName,
   challengeRecordValue,
@@ -182,6 +184,14 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
     const verifyToken = randomBytes(32).toString('hex');
     const verifyTokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
+    // Best-effort write-time enrichment — never blocks or fails registration.
+    // See llmEnrichment.ts: closes the phrasing gap plain keyword/stemmed
+    // search can't bridge (e.g. "help me bake" vs a "bakery" tag).
+    const representativeQueries = await generateRepresentativeQueries(
+      { displayName: body.display_name, description: body.description ?? null, tags: body.tags ?? [] },
+      buildConfig().llmEnrichment,
+    );
+
     const org = await insertOrganization({
       orgId:                body.org_id,
       displayName:          body.display_name,
@@ -200,6 +210,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       entryData:            body.entry_data,
       version:              body.version,
       trustManifest:        body.trust_manifest,
+      representativeQueries,
     });
 
     await insertMembership(user.userId, org.orgId, 'admin');
@@ -374,6 +385,26 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
     },
   }, async (request, reply) => {
     const body = request.body;
+
+    // Only re-run enrichment when a field it depends on actually changed —
+    // avoids an LLM call on unrelated updates (e.g. just registry_url).
+    // Merge with the current row so the prompt reflects the org's full state,
+    // not just the fields present in this particular PATCH-like request.
+    let representativeQueries: string[] | undefined;
+    if (body.display_name !== undefined || body.description !== undefined || body.tags !== undefined) {
+      const current = await findByOrgId(request.params.org_id);
+      if (current) {
+        representativeQueries = await generateRepresentativeQueries(
+          {
+            displayName: body.display_name ?? current.displayName,
+            description: body.description ?? current.description,
+            tags: body.tags ?? current.tags,
+          },
+          buildConfig().llmEnrichment,
+        );
+      }
+    }
+
     const updated = await updateOrganization(request.params.org_id, {
       displayName:     body.display_name,
       domain:          body.domain,
@@ -387,6 +418,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       version:         body.version,
       // No ?? null here: undefined (omitted) must stay distinct from null (clear).
       trustManifest:   body.trust_manifest,
+      representativeQueries,
     });
     if (!updated) {
       return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });

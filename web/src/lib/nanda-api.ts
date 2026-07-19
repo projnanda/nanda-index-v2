@@ -4,6 +4,7 @@ import type {
   CatalogEntry,
   ResolveResponse,
   SearchResponse,
+  AgenticSearchResponse,
   User,
   CreateOrgPayload,
   UpdateOrgPayload,
@@ -82,6 +83,16 @@ export async function getIndexRecord(orgId: string): Promise<IndexRecord> {
 /** GET /api/v1/search?q= — keyword search or URN lookup. Returns { query, count, results }. */
 export async function searchIndexRecords(q: string): Promise<SearchResponse> {
   return request<SearchResponse>(`/api/v1/search?q=${encodeURIComponent(q)}`);
+}
+
+/**
+ * GET /api/v1/agentic-search?q=&limit= — natural-language task search.
+ * Ranks candidate orgs, fans out live to expand them into agent-level
+ * candidates, and returns a merged, scored list ready to resolve/run.
+ */
+export async function agenticSearch(q: string, limit?: number): Promise<AgenticSearchResponse> {
+  const params = new URLSearchParams({ q, ...(limit ? { limit: String(limit) } : {}) });
+  return request<AgenticSearchResponse>(`/api/v1/agentic-search?${params}`);
 }
 
 /**

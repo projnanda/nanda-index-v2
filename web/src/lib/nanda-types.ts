@@ -128,6 +128,33 @@ export interface SearchResponse {
   results: IndexRecord[];
 }
 
+/** One ranked candidate agent returned by GET /api/v1/agentic-search. */
+export interface AgentCandidate {
+  identifier: string;
+  display_name: string;
+  type: string;
+  url: string;
+  description: string | null;
+  tags: string[];
+  trust_manifest?: TrustManifest;
+  provenance: {
+    org_id: string;
+    registry_url: string;
+    basis: "agent_search" | "single_agent_org" | "federated";
+  };
+  score: number;
+}
+
+export interface AgenticSearchResponse {
+  query: string;
+  count: number;
+  candidates: AgentCandidate[];
+  resolved: AgentCandidate | null;
+  orgs_queried: number;
+  orgs_unreachable: string[];
+  took_ms: number;
+}
+
 export type HostingPath = "registry" | "dns-aid" | "smb" | "personal";
 
 export interface CreateOrgPayload {

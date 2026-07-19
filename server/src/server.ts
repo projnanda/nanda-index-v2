@@ -16,6 +16,8 @@ import { registerIndexRecordRoutes } from './routes/index-records.js';
 import { registerOrgRoutes } from './routes/orgs.js';
 import { registerMeRoute } from './routes/me.js';
 import { registerSearchRoutes } from './routes/search.js';
+import { registerAgenticSearchRoutes } from './routes/agentic-search.js';
+import { registerArdRoutes } from './routes/ard.js';
 import { registerResolveRoute } from './routes/resolve.js';
 
 export interface BuildServerOptions {
@@ -57,6 +59,8 @@ export async function buildServer(options: BuildServerOptions = {}) {
   await registerOrgRoutes(fastify);
   await registerMeRoute(fastify);
   await registerSearchRoutes(fastify);
+  await registerAgenticSearchRoutes(fastify);
+  await registerArdRoutes(fastify);
   await registerResolveRoute(fastify);
 
   return { fastify, config };

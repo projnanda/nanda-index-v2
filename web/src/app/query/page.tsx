@@ -6,14 +6,15 @@ import { PageShell } from "@/components/PageShell";
 import { StatusBadge } from "@/components/StatusBadge";
 import { JsonPanel } from "@/components/JsonPanel";
 import { TableEmptyState } from "@/components/TableEmptyState";
-import { ApiError, getIndexRecord, searchIndexRecords, resolveAgent, fetchAgentRecord } from "@/lib/nanda-api";
-import type { IndexRecord, SearchResponse, ResolveResponse, CatalogEntry } from "@/lib/nanda-types";
+import { AgentCandidateCard } from "@/components/AgentCandidateCard";
+import { ApiError, getIndexRecord, searchIndexRecords, resolveAgent, fetchAgentRecord, agenticSearch } from "@/lib/nanda-api";
+import type { IndexRecord, SearchResponse, ResolveResponse, CatalogEntry, AgenticSearchResponse } from "@/lib/nanda-types";
 
 // Matches urn:<nid>:<domain>:<identifier>
 const URN_RE = /^urn:[a-z0-9][a-z0-9-]{0,30}:[^:]+:[^:]+$/i;
 
-type Mode = "org_id" | "search";
-type ResultKind = "single" | "search" | "resolve";
+type Mode = "org_id" | "search" | "task";
+type ResultKind = "single" | "search" | "resolve" | "task";
 
 interface QueryResult {
   kind: ResultKind;
@@ -22,6 +23,7 @@ interface QueryResult {
   resolve?: ResolveResponse;
   agent?: CatalogEntry | null;   // hop-2 agent record for URN queries
   agentError?: string;
+  task?: AgenticSearchResponse;
 }
 
 function IndexRecordCard({ org }: { org: IndexRecord }) {
@@ -98,6 +100,9 @@ export default function QueryPage() {
       } else if (mode === "org_id") {
         const data = await getIndexRecord(q);
         setResult({ kind: "single", single: data });
+      } else if (mode === "task") {
+        const data = await agenticSearch(q);
+        setResult({ kind: "task", task: data });
       } else {
         const data = await searchIndexRecords(q);
         setResult({ kind: "search", search: data });
@@ -117,6 +122,8 @@ export default function QueryPage() {
       ? "URN detected — will resolve via NANDA Index"
       : mode === "org_id"
       ? "nasiko"
+      : mode === "task"
+      ? "help me send a transactional email"
       : "moonbakery  or  urn:ai:moonbakery.com:order";
 
   return (
@@ -131,7 +138,7 @@ export default function QueryPage() {
         {/* Mode selector — hidden when URN is detected */}
         {!isUrn && (
           <div className="flex flex-wrap gap-2">
-            {(["search", "org_id"] as Mode[]).map((key) => (
+            {(["task", "search", "org_id"] as Mode[]).map((key) => (
               <button
                 key={key}
                 type="button"
@@ -142,7 +149,7 @@ export default function QueryPage() {
                     : "border-black/10 bg-white text-slate-600 hover:bg-slate-50"
                 }`}
               >
-                {key === "org_id" ? "By Org ID" : "Keyword Search"}
+                {key === "org_id" ? "By Org ID" : key === "task" ? "Task (agentic)" : "Keyword Search"}
               </button>
             ))}
           </div>
@@ -215,6 +222,42 @@ export default function QueryPage() {
               </div>
             )}
             <JsonPanel data={result.search} />
+          </>
+        )}
+
+        {/* Task (agentic) search results — ranked agent candidates */}
+        {result?.kind === "task" && result.task && (
+          <>
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
+              {result.task.count === 0
+                ? "No candidates"
+                : `${result.task.count} candidate${result.task.count !== 1 ? "s" : ""} for "${result.task.query}"`}
+              <span className="ml-2 normal-case text-slate-400">
+                ({result.task.orgs_queried} org{result.task.orgs_queried !== 1 ? "s" : ""} queried, {result.task.took_ms}ms)
+              </span>
+            </p>
+            {result.task.orgs_unreachable.length > 0 && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                Unreachable: {result.task.orgs_unreachable.join(", ")}
+              </div>
+            )}
+            {result.task.candidates.length === 0 ? (
+              <TableEmptyState
+                title="No agent candidates found"
+                description={`No active agents match "${result.task.query}".`}
+              />
+            ) : (
+              <div className="space-y-2">
+                {result.task.candidates.map((candidate) => (
+                  <AgentCandidateCard
+                    key={candidate.identifier}
+                    candidate={candidate}
+                    best={candidate.identifier === result.task!.resolved?.identifier}
+                  />
+                ))}
+              </div>
+            )}
+            <JsonPanel data={result.task} />
           </>
         )}
 

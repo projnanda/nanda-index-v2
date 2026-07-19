@@ -82,6 +82,24 @@ export interface SigningConfig {
   readonly keyId: string;
 }
 
+export interface FederationConfig {
+  /** 'none': no outward referral. 'referrals': attach an upstream pointer
+   *  without fetching. 'auto': fetch the upstream when local results are thin. */
+  readonly mode: 'none' | 'referrals' | 'auto';
+  readonly upstreamUrl: string;
+  readonly upstreamName: string;
+  /** Below this many local results, 'auto' mode fetches the upstream. */
+  readonly thinResultThreshold: number;
+  readonly timeoutMs: number;
+}
+
+export interface LlmEnrichmentConfig {
+  /** undefined = enrichment disabled; orgs are registered/updated without it. */
+  readonly apiKey: string | undefined;
+  readonly model: string;
+  readonly timeoutMs: number;
+}
+
 export interface Config {
   readonly port: number;
   readonly nodeEnv: string;
@@ -93,6 +111,11 @@ export interface Config {
   readonly auth: AuthConfig;
   readonly frontendUrl: string;
   readonly signing: SigningConfig;
+  /** Public base URL this API is reachable at — used to build absolute
+   *  endpoint URLs in the /api/ard registry descriptor. */
+  readonly apiBaseUrl: string;
+  readonly federation: FederationConfig;
+  readonly llmEnrichment: LlmEnrichmentConfig;
 }
 
 /**
@@ -175,5 +198,30 @@ export function buildConfig(): Config {
       privateKey: rawSigningKey ? rawSigningKey.replace(/\\n/g, '\n') : undefined,
       keyId:      optionalEnv('SIGNING_KEY_ID', 'garr-dev-unspecified'),
     },
+    apiBaseUrl: optionalEnv('API_BASE_URL', `http://localhost:${parsePositiveInt('PORT', optionalEnv('PORT', '3001'))}`),
+    federation: {
+      mode: parseFederationMode(optionalEnv('FEDERATION_MODE', 'none')),
+      upstreamUrl: optionalEnv('FEDERATION_UPSTREAM_URL', 'https://ora.ai/api/ard/search'),
+      upstreamName: optionalEnv('FEDERATION_UPSTREAM_NAME', 'ora.ai'),
+      thinResultThreshold: parsePositiveInt(
+        'FEDERATION_THIN_RESULT_THRESHOLD', optionalEnv('FEDERATION_THIN_RESULT_THRESHOLD', '3'),
+      ),
+      timeoutMs: parsePositiveInt(
+        'FEDERATION_TIMEOUT_MS', optionalEnv('FEDERATION_TIMEOUT_MS', '3000'),
+      ),
+    },
+    llmEnrichment: {
+      apiKey: process.env['OPENAI_API_KEY'] || undefined,
+      model: optionalEnv('OPENAI_ENRICHMENT_MODEL', 'gpt-4o-mini'),
+      timeoutMs: parsePositiveInt(
+        'OPENAI_ENRICHMENT_TIMEOUT_MS', optionalEnv('OPENAI_ENRICHMENT_TIMEOUT_MS', '8000'),
+      ),
+    },
   };
+}
+
+function parseFederationMode(raw: string): FederationConfig['mode'] {
+  if (raw === 'none' || raw === 'referrals' || raw === 'auto') return raw;
+  console.error(`FATAL: FEDERATION_MODE must be one of none|referrals|auto (got "${raw}")`);
+  process.exit(1);
 }

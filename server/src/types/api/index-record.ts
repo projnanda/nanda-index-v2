@@ -67,6 +67,10 @@ export interface IndexRecord {
   data?: Record<string, unknown>;
   version?: string;
   trust_manifest?: TrustManifest;
+  /** LLM-generated natural-language task phrasings folded into search
+   *  ranking — e.g. "help me send a transactional email" for an email API.
+   *  Omitted when enrichment isn't configured or hasn't run for this org. */
+  representative_queries?: string[];
 }
 
 /**
@@ -119,5 +123,6 @@ export const INDEX_RECORD_SCHEMA = {
     data:     { type: 'object', additionalProperties: true },
     version:  { type: 'string' },
     trust_manifest: TRUST_MANIFEST_SCHEMA,
+    representative_queries: { type: 'array', items: { type: 'string' } },
   },
 } as const;
