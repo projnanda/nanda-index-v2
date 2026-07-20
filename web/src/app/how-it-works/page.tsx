@@ -236,20 +236,6 @@ export default function HowItWorksPage() {
           </Link>
           .
         </p>
-
-        <p className="mt-4 text-xs text-ink-weak">
-          Based on{" "}
-          <a
-            href={externalLinks.paper}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline hover:text-ink-strong transition-colors"
-          >
-            &ldquo;A Global Switchboard for the Agentic Web&rdquo;
-          </a>
-          , Section 5 (Federated Resolution Architecture) and Section 6 (Deployment Contexts and
-          Use Cases).
-        </p>
       </div>
     </div>
   );
