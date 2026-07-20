@@ -3,6 +3,7 @@ export const navigation = [
   { href: "/explore", label: "Explore" },
   { href: "/query", label: "Discover" },
   { href: "/how-it-works", label: "How it works" },
+  { href: "/ongoing-projects", label: "Ongoing Projects" },
   { href: "/resolve", label: "Resolve" },
   { href: "/login", label: "Login" },
   { href: "/dashboard", label: "Dashboard" },
