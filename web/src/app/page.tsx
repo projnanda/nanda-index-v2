@@ -3,9 +3,7 @@ import { externalLinks } from "@/lib/site-data";
 export default function HomePage() {
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-      <h1 className="text-3xl font-bold text-ink-strong">Abstract</h1>
-
-      <div className="mt-6 space-y-5 text-base leading-relaxed text-ink-medium">
+      <div className="space-y-5 text-base leading-relaxed text-ink-medium">
         <p>
           Agent discovery is diverging into multiple useful approaches — a natural
           consequence of innovation across different communities, use cases, and
