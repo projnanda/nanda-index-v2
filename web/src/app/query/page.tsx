@@ -121,10 +121,10 @@ export default function QueryPage() {
     isUrn
       ? "URN detected. Will resolve via NANDA Index"
       : mode === "org_id"
-      ? "nasiko"
-      : mode === "agentic"
-      ? "help me send a transactional email"
-      : "moonbakery  or  urn:ai:moonbakery.com:order";
+        ? "moonbakery39"
+        : mode === "agentic"
+          ? "Help me place an order for a custom cake"
+          : "moonbakery39  or  urn:ai:moonbakery39.com:order";
 
   return (
     <PageShell
@@ -143,11 +143,10 @@ export default function QueryPage() {
                 key={key}
                 type="button"
                 onClick={() => setMode(key)}
-                className={`rounded-full border px-4 py-2 text-sm transition ${
-                  mode === key
-                    ? "border-slate-950 bg-slate-950 text-white"
-                    : "border-black/10 bg-white text-slate-600 hover:bg-slate-50"
-                }`}
+                className={`rounded-full border px-4 py-2 text-sm transition ${mode === key
+                  ? "border-slate-950 bg-slate-950 text-white"
+                  : "border-black/10 bg-white text-slate-600 hover:bg-slate-50"
+                  }`}
               >
                 {key === "org_id" ? "By Org ID" : key === "agentic" ? "Agentic Search" : "Keyword Search"}
               </button>
@@ -321,7 +320,7 @@ export default function QueryPage() {
         {!result && !error && (
           <TableEmptyState
             title="No query yet"
-            description='Try "nasiko", a keyword, or a full URN like "urn:ai:moonbakery.com:order".'
+            description='Try keyword, or a full URN like "urn:ai:moonbakery.com:order".'
           />
         )}
       </div>
