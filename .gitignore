@@ -16,3 +16,8 @@ web/tsconfig.tsbuildinfo
 
 # OS
 .DS_Store
+
+# Static files served directly by Caddy on the droplet (e.g. paper.pdf) —
+# uploaded straight to the server, not tracked in git.
+/static/*
+!/static/.gitkeep

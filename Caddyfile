@@ -1,5 +1,12 @@
 nandaindex.org {
-	reverse_proxy web:3000
+	handle /paper.pdf {
+		root * /srv/static
+		file_server
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
 }
 
 api.nandaindex.org {

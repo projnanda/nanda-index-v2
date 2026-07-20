@@ -73,6 +73,7 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+      - ./static:/srv/static:ro
     depends_on:
       - server
       - web

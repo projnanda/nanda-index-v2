@@ -13,8 +13,8 @@ import type { IndexRecord, SearchResponse, ResolveResponse, CatalogEntry, Agenti
 // Matches urn:<nid>:<domain>:<identifier>
 const URN_RE = /^urn:[a-z0-9][a-z0-9-]{0,30}:[^:]+:[^:]+$/i;
 
-type Mode = "org_id" | "search" | "task";
-type ResultKind = "single" | "search" | "resolve" | "task";
+type Mode = "org_id" | "search" | "agentic";
+type ResultKind = "single" | "search" | "resolve" | "agentic";
 
 interface QueryResult {
   kind: ResultKind;
@@ -23,7 +23,7 @@ interface QueryResult {
   resolve?: ResolveResponse;
   agent?: CatalogEntry | null;   // hop-2 agent record for URN queries
   agentError?: string;
-  task?: AgenticSearchResponse;
+  agentic?: AgenticSearchResponse;
 }
 
 function IndexRecordCard({ org }: { org: IndexRecord }) {
@@ -62,7 +62,7 @@ export default function QueryPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Detect whether input looks like a URN — affects placeholder and routing
+  // Detect whether input looks like a URN, which affects the placeholder and routing
   const isUrn = URN_RE.test(query.trim());
 
   async function runQuery(e: React.FormEvent<HTMLFormElement>) {
@@ -76,7 +76,7 @@ export default function QueryPage() {
     const t0 = performance.now();
 
     try {
-      // URN input — hop 1: NANDA Index resolve, hop 2: fetch agent from registry
+      // URN input: hop 1 resolves via NANDA Index, hop 2 fetches the agent from the registry
       if (URN_RE.test(q)) {
         const indexData = await resolveAgent(q);
         let agent = null;
@@ -100,9 +100,9 @@ export default function QueryPage() {
       } else if (mode === "org_id") {
         const data = await getIndexRecord(q);
         setResult({ kind: "single", single: data });
-      } else if (mode === "task") {
+      } else if (mode === "agentic") {
         const data = await agenticSearch(q);
-        setResult({ kind: "task", task: data });
+        setResult({ kind: "agentic", agentic: data });
       } else {
         const data = await searchIndexRecords(q);
         setResult({ kind: "search", search: data });
@@ -110,7 +110,7 @@ export default function QueryPage() {
       setLatency(Math.round(performance.now() - t0));
     } catch (err) {
       if (err instanceof ApiError) setError(`${err.status}: ${err.message}`);
-      else setError("Query failed — check your input and try again.");
+      else setError("Query failed. Check your input and try again.");
       setLatency(Math.round(performance.now() - t0));
     } finally {
       setLoading(false);
@@ -119,26 +119,26 @@ export default function QueryPage() {
 
   const placeholder =
     isUrn
-      ? "URN detected — will resolve via NANDA Index"
+      ? "URN detected. Will resolve via NANDA Index"
       : mode === "org_id"
       ? "nasiko"
-      : mode === "task"
+      : mode === "agentic"
       ? "help me send a transactional email"
       : "moonbakery  or  urn:ai:moonbakery.com:order";
 
   return (
     <PageShell
-      title="Index Query"
-      description="Look up an organization by org ID, keyword, or URN agent locator."
+      title="Discover"
+      description="Look up an organization by org ID, keyword, URN, or a natural-language prompt."
     >
       <form
         className="space-y-4 rounded-3xl border border-black/10 bg-white p-5 shadow-sm"
         onSubmit={runQuery}
       >
-        {/* Mode selector — hidden when URN is detected */}
+        {/* Mode selector, hidden when URN is detected */}
         {!isUrn && (
           <div className="flex flex-wrap gap-2">
-            {(["task", "search", "org_id"] as Mode[]).map((key) => (
+            {(["agentic", "search", "org_id"] as Mode[]).map((key) => (
               <button
                 key={key}
                 type="button"
@@ -149,7 +149,7 @@ export default function QueryPage() {
                     : "border-black/10 bg-white text-slate-600 hover:bg-slate-50"
                 }`}
               >
-                {key === "org_id" ? "By Org ID" : key === "task" ? "Task (agentic)" : "Keyword Search"}
+                {key === "org_id" ? "By Org ID" : key === "agentic" ? "Agentic Search" : "Keyword Search"}
               </button>
             ))}
           </div>
@@ -158,7 +158,7 @@ export default function QueryPage() {
         {/* URN hint */}
         {isUrn && (
           <p className="text-xs text-indigo-600">
-            URN detected — resolving via NANDA Index
+            URN detected. Resolving via NANDA Index
           </p>
         )}
 
@@ -225,61 +225,61 @@ export default function QueryPage() {
           </>
         )}
 
-        {/* Task (agentic) search results — ranked agent candidates */}
-        {result?.kind === "task" && result.task && (
+        {/* Agentic search results: ranked agent candidates */}
+        {result?.kind === "agentic" && result.agentic && (
           <>
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
-              {result.task.count === 0
+              {result.agentic.count === 0
                 ? "No candidates"
-                : `${result.task.count} candidate${result.task.count !== 1 ? "s" : ""} for "${result.task.query}"`}
+                : `${result.agentic.count} candidate${result.agentic.count !== 1 ? "s" : ""} for "${result.agentic.query}"`}
               <span className="ml-2 normal-case text-slate-400">
-                ({result.task.orgs_queried} org{result.task.orgs_queried !== 1 ? "s" : ""} queried, {result.task.took_ms}ms)
+                ({result.agentic.orgs_queried} org{result.agentic.orgs_queried !== 1 ? "s" : ""} queried, {result.agentic.took_ms}ms)
               </span>
             </p>
-            {result.task.orgs_unreachable.length > 0 && (
+            {result.agentic.orgs_unreachable.length > 0 && (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-                Unreachable: {result.task.orgs_unreachable.join(", ")}
+                Unreachable: {result.agentic.orgs_unreachable.join(", ")}
               </div>
             )}
-            {result.task.candidates.length === 0 ? (
+            {result.agentic.candidates.length === 0 ? (
               <TableEmptyState
                 title="No agent candidates found"
-                description={`No active agents match "${result.task.query}".`}
+                description={`No active agents match "${result.agentic.query}".`}
               />
             ) : (
               <div className="space-y-2">
-                {result.task.candidates.map((candidate) => (
+                {result.agentic.candidates.map((candidate) => (
                   <AgentCandidateCard
                     key={candidate.identifier}
                     candidate={candidate}
-                    best={candidate.identifier === result.task!.resolved?.identifier}
+                    best={candidate.identifier === result.agentic!.resolved?.identifier}
                   />
                 ))}
               </div>
             )}
-            <JsonPanel data={result.task} />
+            <JsonPanel data={result.agentic} />
           </>
         )}
 
-        {/* URN resolve result — hop 1 (index) + hop 2 (agent record) */}
+        {/* URN resolve result: hop 1 (index) plus hop 2 (agent record) */}
         {result?.kind === "resolve" && result.resolve && (
           <>
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
-              Resolved — <span className="font-mono normal-case">{result.resolve.locator}</span>
+              Resolved: <span className="font-mono normal-case">{result.resolve.locator}</span>
             </p>
 
-            {/* Hop 1 — NANDA Index record */}
+            {/* Hop 1: NANDA Index record */}
             <div>
               <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">
-                Hop 1 — NANDA Index
+                Hop 1: NANDA Index
               </p>
               <IndexRecordCard org={result.resolve.index_record} />
             </div>
 
-            {/* Hop 2 — Agent record from the registry server */}
+            {/* Hop 2: Agent record from the registry server */}
             <div>
               <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">
-                Hop 2 — Agent record
+                Hop 2: Agent record
               </p>
               {result.agentError ? (
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">

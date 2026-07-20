@@ -1,10 +1,20 @@
 export const navigation = [
-  { href: "/", label: "Overview" },
+  { href: "/", label: "Home" },
+  { href: "/explore", label: "Explore" },
+  { href: "/query", label: "Discover" },
   { href: "/how-it-works", label: "How it works" },
   { href: "/resolve", label: "Resolve" },
   { href: "/login", label: "Login" },
   { href: "/dashboard", label: "Dashboard" },
 ];
+
+// Links out to project resources, surfaced on the homepage.
+export const externalLinks = {
+  github: "https://github.com/projnanda/nanda-index-v2",
+  // Self-hosted PDF served by Caddy directly (see Caddyfile), not an IETF submission.
+  paper: "https://nandaindex.org/paper.pdf",
+  ardSpec: "https://agenticresourcediscovery.org/",
+};
 
 export const heroStats = [
   { value: "4", label: "registration types" },
@@ -18,7 +28,7 @@ export const architectureLayers = [
     layer: "Enterprise",
     function: "Exposes agents via AI Catalog, DNS-AID, or gateways",
     analogy: "urn:ai:domain:example.com",
-    hosted: "Optional — fallback and federation",
+    hosted: "Optional: fallback and federation",
   },
   {
     layer: "SMB",
