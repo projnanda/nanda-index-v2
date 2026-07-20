@@ -1,4 +1,7 @@
+import { useState } from "react";
 import type { AgentCandidate } from "@/lib/nanda-types";
+import { ApiError, fetchFactsUrl } from "@/lib/nanda-api";
+import { JsonPanel } from "@/components/JsonPanel";
 
 const BASIS_LABEL: Record<AgentCandidate["provenance"]["basis"], string> = {
   agent_search: "enterprise registry",
@@ -13,6 +16,28 @@ export function AgentCandidateCard({
   candidate: AgentCandidate;
   best?: boolean;
 }) {
+  const [resolving, setResolving] = useState(false);
+  const [resolved, setResolved] = useState<unknown>(null);
+  const [resolveError, setResolveError] = useState<string | null>(null);
+
+  async function handleResolve() {
+    setResolving(true);
+    setResolveError(null);
+    setResolved(null);
+    try {
+      const data = await fetchFactsUrl(candidate.url);
+      setResolved(data);
+    } catch (err) {
+      setResolveError(
+        err instanceof ApiError
+          ? `${candidate.url} returned ${err.status}: ${err.message}`
+          : `Could not reach ${candidate.url} (network error or CORS).`,
+      );
+    } finally {
+      setResolving(false);
+    }
+  }
+
   return (
     <div className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm transition hover:shadow-md">
       <div className="flex items-start justify-between gap-3">
@@ -54,8 +79,27 @@ export function AgentCandidateCard({
           <p>score {candidate.score.toFixed(2)}</p>
           <p className="mt-0.5">{BASIS_LABEL[candidate.provenance.basis]}</p>
           <p className="mt-0.5 font-mono">{candidate.provenance.org_id}</p>
+          <button
+            type="button"
+            onClick={handleResolve}
+            disabled={resolving}
+            className="mt-2 rounded-full border border-slate-950 bg-slate-950 px-3 py-1 text-xs font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {resolving ? "Resolving…" : "Resolve"}
+          </button>
         </div>
       </div>
+
+      {resolveError && (
+        <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+          {resolveError}
+        </div>
+      )}
+      {resolved !== null && (
+        <div className="mt-3">
+          <JsonPanel data={resolved} />
+        </div>
+      )}
     </div>
   );
 }
