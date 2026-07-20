@@ -1,18 +1,5 @@
 import Link from "next/link";
-import { PageShell } from "@/components/PageShell";
-import { SectionHeading } from "@/components/SectionHeading";
 import { externalLinks } from "@/lib/site-data";
-
-// ── Static color maps — full class strings so Tailwind v4 can scan them ──────
-
-type PathId = "registry" | "dns-aid" | "smb" | "personal";
-
-const COLORS: Record<PathId, { accent: string; num: string; badge: string }> = {
-  registry: { accent: "bg-indigo-500", num: "bg-indigo-100 text-indigo-700", badge: "bg-indigo-100 text-indigo-700" },
-  "dns-aid": { accent: "bg-sky-500", num: "bg-sky-100 text-sky-700", badge: "bg-sky-100 text-sky-700" },
-  smb: { accent: "bg-emerald-500", num: "bg-emerald-100 text-emerald-700", badge: "bg-emerald-100 text-emerald-700" },
-  personal: { accent: "bg-violet-500", num: "bg-violet-100 text-violet-700", badge: "bg-violet-100 text-violet-700" },
-};
 
 // ── Registration flow data ────────────────────────────────────────────────────
 // "who" and "resolution" follow the paper's Section 6 (Deployment Contexts and
@@ -20,7 +7,7 @@ const COLORS: Record<PathId, { accent: string; num: string; badge: string }> = {
 // third-party card host is "list39.org", here it's host39.org, the real product.
 
 const FLOWS: {
-  id: PathId;
+  id: string;
   title: string;
   subtitle: string;
   identity: string;
@@ -30,7 +17,7 @@ const FLOWS: {
   resolution: string;
 }[] = [
     {
-      id: "registry",
+      id: "enterprise-ai-catalog",
       title: "Enterprise AI Catalog",
       subtitle: "Teams / Orgs",
       identity: "urn:ai:domain:example.com",
@@ -60,7 +47,7 @@ const FLOWS: {
       resolution: "NANDA Index, DNS-AID lookup, SkyBlue gateway or Agent Card, auth, agent.",
     },
     {
-      id: "smb",
+      id: "smb-agent-card",
       title: "SMB Agent Card",
       subtitle: "Small Business",
       identity: "urn:ai:domain:moonbakery39.com:agent:orders",
@@ -75,7 +62,7 @@ const FLOWS: {
       resolution: "NANDA Index, Agent Card at host39.org, AWS runtime, payment or session token required.",
     },
     {
-      id: "personal",
+      id: "personal-agent",
       title: "Personal Agent",
       subtitle: "Individual",
       identity: "urn:ai:email:john@hotmail.com",
@@ -93,20 +80,20 @@ const FLOWS: {
 
 // ── Resolution stages ──────────────────────────────────────────────────────────
 // Names and definitions are the paper's own (Section 5.1, Conceptual Model):
-// "Identity → Resolution → Discovery → Invocation". The dl blocks below each
-// definition are how NANDA Index concretely implements that stage; that
-// implementation detail is the app's, not the paper's.
+// "Identity → Resolution → Discovery → Invocation". The input/output/api lines
+// below each definition are how NANDA Index concretely implements that stage;
+// that implementation detail is the app's, not the paper's.
 
 const STAGES = [
   {
-    n: 1,
+    id: "identity",
     label: "Identity",
     definition:
       "a stable identifier, such as a domain-anchored identifier, platform identity, DID, or provider-verified account identity.",
     input: "urn:ai:domain:example.com, urn:ai:domain:skyblue.com:agent:refunds, urn:ai:domain:moonbakery39.com:agent:orders, or urn:ai:email:john@hotmail.com",
   },
   {
-    n: 2,
+    id: "resolution",
     label: "Resolution",
     definition: "selection of an authoritative discovery entry point.",
     detail:
@@ -116,7 +103,7 @@ const STAGES = [
     api: "GET /api/v1/resolve?locator=…",
   },
   {
-    n: 3,
+    id: "discovery",
     label: "Discovery",
     definition:
       "retrieval or search of capabilities through AI Catalog, ARD, DNS-AID, a gateway, or another native mechanism.",
@@ -127,7 +114,7 @@ const STAGES = [
     api: "GET <registry_url>/agents/<identifier>, then GET <catalog_entry.url>",
   },
   {
-    n: 4,
+    id: "invocation",
     label: "Invocation",
     definition: "interaction with the selected resource through A2A, MCP, REST, or another supported protocol.",
     detail:
@@ -151,186 +138,119 @@ const RESOLUTION_FLOW_STEPS = [
 
 export default function HowItWorksPage() {
   return (
-    <PageShell
-      eyebrow="Reference"
-      title="How it works"
-      description="Federated resolution separates two concerns: Resolution, determining where and how discovery should begin, and Discovery, finding capabilities via mechanisms such as ARD. This yields Identity, Resolution, Discovery, Invocation. NANDA Index is a concrete instantiation of this architecture: a federated index of AI Catalog-formatted resolution records that map an identity to the correct next discovery object."
-    >
-      {/* ── Registration flows ───────────────────────────────────────────── */}
-      <section className="mb-14">
-        <SectionHeading
-          eyebrow="Registration"
-          title="4 registration paths"
-          description="These mirror the paper's four deployment contexts: enterprise on AI Catalog, enterprise on DNS-AID, SMB, and individual. Pick the path that matches how you host agents."
-        />
+    <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div>
+        <h1 className="text-2xl font-bold text-ink-strong">How it works</h1>
+        <p className="mt-4 text-sm leading-relaxed text-ink-medium">
+          Federated resolution separates two concerns: Resolution, determining where and how
+          discovery should begin, and Discovery, finding capabilities via mechanisms such as ARD.
+          This yields Identity, Resolution, Discovery, Invocation. NANDA Index is a concrete
+          instantiation of this architecture: a federated index of AI Catalog-formatted resolution
+          records that map an identity to the correct next discovery object.
+        </p>
 
-        <div className="grid gap-5 sm:grid-cols-2">
-          {FLOWS.map((flow) => {
-            const c = COLORS[flow.id];
-            return (
-              <article
-                key={flow.id}
-                className="rounded-card border border-line bg-surface-light shadow-card overflow-hidden flex flex-col"
-              >
-                {/* Coloured header */}
-                <div className={`${c.accent} px-5 py-4`}>
-                  <div className="flex items-baseline gap-2">
-                    <h3 className="text-base font-semibold text-white leading-tight">
-                      {flow.title}
-                    </h3>
-                    <span className="text-xs text-white/70">{flow.subtitle}</span>
-                  </div>
-                  <p className="mt-1 font-mono text-xs text-white/80 break-all">
-                    {flow.identity}
-                  </p>
-                </div>
-
-                {/* Body */}
-                <div className="p-5 flex-1 flex flex-col gap-4">
-                  <p className="text-sm text-ink-medium leading-relaxed">{flow.who}</p>
-
-                  <ol className="space-y-2.5">
-                    {flow.steps.map((step, i) => (
-                      <li key={i} className="flex items-start gap-3">
-                        <span
-                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold mt-0.5 ${c.num}`}
-                        >
-                          {i + 1}
-                        </span>
-                        <p className="text-xs leading-relaxed text-ink">
-                          <span className="font-semibold text-ink-strong">{step.label}</span>
-                          {": "}
-                          {step.detail}
-                        </p>
-                      </li>
-                    ))}
-                  </ol>
-
-                  {/* Resolution chain, from the paper's Section 6 */}
-                  <p className="text-xs leading-relaxed text-ink-weak">
-                    <span className="font-semibold text-ink-medium">Resolution: </span>
-                    {flow.resolution}
-                  </p>
-
-                  {/* Media type badge */}
-                  <div className="mt-auto pt-3 border-t border-line">
-                    <span
-                      className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-medium ${c.badge}`}
-                    >
-                      {flow.mediaType}
-                    </span>
-                  </div>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* ── Resolution flow ──────────────────────────────────────────────── */}
-      <section className="mb-10">
-        <SectionHeading
-          eyebrow="Resolution"
-          title="Identity, Resolution, Discovery, Invocation"
-          description="The paper's typical flow: a requester starts with an identity, queries a resolution system, gets back AI Catalog-formatted resolution entries, follows the discovery path each entry specifies, then discovery, verification, and invocation proceed."
-        />
-
-        <ol className="mb-8 space-y-1.5 text-sm text-ink-medium">
-          {RESOLUTION_FLOW_STEPS.map((step, i) => (
-            <li key={i} className="flex gap-2">
-              <span className="text-ink-weak">{i + 1}.</span>
-              <span>{step}</span>
-            </li>
-          ))}
-        </ol>
-
-        <div>
-          {STAGES.map((stage, i) => (
-            <div key={stage.n}>
-              <div className="rounded-card border border-line bg-surface-light shadow-card p-5">
-                <div className="flex items-start gap-4">
-                  {/* Step badge */}
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-950 text-white text-sm font-bold">
-                    {stage.n}
-                  </div>
-
-                  {/* Content */}
-                  <div className="min-w-0 flex-1">
-                    <h3 className="font-semibold text-ink-strong">{stage.label}</h3>
-                    <p className="mt-1 text-sm text-ink-medium leading-relaxed">{stage.definition}</p>
-                    {stage.detail && (
-                      <p className="mt-2 text-xs text-ink-weak leading-relaxed">{stage.detail}</p>
-                    )}
-
-                    {stage.output && (
-                      <dl className="mt-4 space-y-1.5 border-t border-line pt-3">
-                        <div className="flex items-start gap-3 font-mono text-xs">
-                          <dt className="w-8 shrink-0 font-semibold text-ink-weak">in</dt>
-                          <dd className="text-ink break-all">{stage.input}</dd>
-                        </div>
-                        <div className="flex items-start gap-3 font-mono text-xs">
-                          <dt className="w-8 shrink-0 font-semibold text-ink-weak">out</dt>
-                          <dd className="text-ink break-all">{stage.output}</dd>
-                        </div>
-                        <div className="flex items-start gap-3 font-mono text-xs">
-                          <dt className="w-8 shrink-0 font-semibold text-ink-weak">api</dt>
-                          <dd className="text-brand-500 break-all">{stage.api}</dd>
-                        </div>
-                      </dl>
-                    )}
-                    {!stage.output && (
-                      <p className="mt-4 border-t border-line pt-3 font-mono text-xs text-ink break-all">
-                        {stage.input}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {i < STAGES.length - 1 && (
-                <div className="mx-auto h-6 w-px bg-line" />
-              )}
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ── CTA ─────────────────────────────────────────────────────────── */}
-      <div className="rounded-card border border-line bg-surface-light shadow-card p-6 flex flex-col sm:flex-row sm:items-center gap-4">
-        <div className="flex-1">
-          <h3 className="font-semibold text-ink-strong">Ready to try it?</h3>
-          <p className="mt-1 text-sm text-ink-medium">
-            Resolve a live identity to trace every stage, or register your organization.
+        {/* ── Registration ───────────────────────────────────────────────── */}
+        <section id="registration" className="scroll-mt-24">
+          <h2 className="mt-10 text-lg font-bold text-ink-strong">Registration</h2>
+          <p className="mt-2 text-sm leading-relaxed text-ink-medium">
+            There are four registration paths. These mirror the paper&apos;s four deployment
+            contexts: enterprise on AI Catalog, enterprise on DNS-AID, SMB, and individual. Pick
+            the path that matches how you host agents.
           </p>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <Link
-            href="/resolve"
-            className="inline-flex items-center justify-center h-9 rounded-control bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600 transition"
-          >
-            Try resolve
-          </Link>
-          <Link
-            href="/login"
-            className="inline-flex items-center justify-center h-9 rounded-control border-2 border-line bg-surface-light px-4 text-sm font-medium text-ink hover:border-line-strong transition"
-          >
-            Register
-          </Link>
-        </div>
-      </div>
+        </section>
 
-      <p className="mt-6 text-xs text-ink-weak">
-        Based on{" "}
-        <a
-          href={externalLinks.paper}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-brand-600 hover:text-brand-700 transition-colors"
-        >
-          &ldquo;A Global Switchboard for the Agentic Web&rdquo;
-        </a>
-        , Section 5 (Federated Resolution Architecture) and Section 6 (Deployment Contexts and Use Cases).
-      </p>
-    </PageShell>
+        {FLOWS.map((flow) => (
+          <section key={flow.id} id={flow.id} className="scroll-mt-24">
+            <h3 className="mt-8 font-semibold text-ink-strong">
+              {flow.title} ({flow.subtitle})
+            </h3>
+            <p className="mt-1 text-sm text-ink-medium">
+              Identity: <span className="font-mono text-xs">{flow.identity}</span>
+              <br />
+              Media type: <span className="font-mono text-xs">{flow.mediaType}</span>
+            </p>
+            <p className="mt-3 text-sm leading-relaxed text-ink-medium">{flow.who}</p>
+            <ol className="mt-3 list-decimal space-y-1.5 pl-6 text-sm leading-relaxed text-ink-medium">
+              {flow.steps.map((step) => (
+                <li key={step.label}>
+                  <span className="font-semibold text-ink-strong">{step.label}</span>
+                  {": "}
+                  {step.detail}
+                </li>
+              ))}
+            </ol>
+            <p className="mt-3 text-sm leading-relaxed text-ink-medium">
+              Resolution: {flow.resolution}
+            </p>
+          </section>
+        ))}
+
+        {/* ── Resolution flow ────────────────────────────────────────────── */}
+        <section id="resolution-flow" className="scroll-mt-24">
+          <h2 className="mt-10 text-lg font-bold text-ink-strong">
+            Identity, Resolution, Discovery, Invocation
+          </h2>
+          <p className="mt-2 text-sm leading-relaxed text-ink-medium">
+            The paper&apos;s typical flow: a requester starts with an identity, queries a
+            resolution system, gets back AI Catalog-formatted resolution entries, follows the
+            discovery path each entry specifies, then discovery, verification, and invocation
+            proceed.
+          </p>
+          <ol className="mt-3 list-decimal space-y-1.5 pl-6 text-sm leading-relaxed text-ink-medium">
+            {RESOLUTION_FLOW_STEPS.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+        </section>
+
+        {STAGES.map((stage) => (
+          <section key={stage.id} id={stage.id} className="scroll-mt-24">
+            <h3 className="mt-8 font-semibold text-ink-strong">{stage.label}</h3>
+            <p className="mt-1 text-sm leading-relaxed text-ink-medium">{stage.definition}</p>
+            {stage.detail && (
+              <p className="mt-2 text-sm leading-relaxed text-ink-medium">{stage.detail}</p>
+            )}
+            <p className="mt-2 font-mono text-xs leading-relaxed text-ink-medium break-all">
+              Input: {stage.input}
+              {stage.output && (
+                <>
+                  <br />
+                  Output: {stage.output}
+                  <br />
+                  API: {stage.api}
+                </>
+              )}
+            </p>
+          </section>
+        ))}
+
+        {/* ── Closing ────────────────────────────────────────────────────── */}
+        <p className="mt-10 text-sm leading-relaxed text-ink-medium">
+          To try it,{" "}
+          <Link href="/resolve" className="underline hover:text-ink-strong transition-colors">
+            resolve a live identity
+          </Link>{" "}
+          to trace every stage, or{" "}
+          <Link href="/login" className="underline hover:text-ink-strong transition-colors">
+            register your organization
+          </Link>
+          .
+        </p>
+
+        <p className="mt-4 text-xs text-ink-weak">
+          Based on{" "}
+          <a
+            href={externalLinks.paper}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-ink-strong transition-colors"
+          >
+            &ldquo;A Global Switchboard for the Agentic Web&rdquo;
+          </a>
+          , Section 5 (Federated Resolution Architecture) and Section 6 (Deployment Contexts and
+          Use Cases).
+        </p>
+      </div>
+    </div>
   );
 }
