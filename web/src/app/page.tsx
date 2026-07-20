@@ -1,178 +1,88 @@
-import Link from "next/link";
-import { Hero } from "@/components/Hero";
-import { ArchitectureSection } from "@/components/ArchitectureSection";
-import { SectionHeading } from "@/components/SectionHeading";
 import { externalLinks } from "@/lib/site-data";
-
-const STEPS = [
-  {
-    n: 1,
-    title: "Register",
-    detail:
-      "Point NANDA Index at your agent: a catalog URL, a DNS record, or a hosted agent card.",
-  },
-  {
-    n: 2,
-    title: "Resolve",
-    detail:
-      "Anyone who has your domain, email, or agent ID can look it up through NANDA Index.",
-  },
-  {
-    n: 3,
-    title: "Connect",
-    detail:
-      "They get your agent's live endpoint and talk to it directly. NANDA Index steps out of the way.",
-  },
-];
-
-// Docs-style on-page nav, similar in spirit to agenticresourcediscovery.org's sidebar.
-const SECTIONS = [
-  { id: "what-is-it", label: "What is it" },
-  { id: "in-brief", label: "In brief" },
-  { id: "interoperability", label: "Interoperability" },
-  { id: "who-its-for", label: "Who it's for" },
-  { id: "open-source", label: "Open source" },
-];
 
 export default function HomePage() {
   return (
-    <>
-      <Hero />
+    <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+      <h1 className="text-3xl font-bold text-ink-strong">Abstract</h1>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex items-start gap-10">
-        <nav aria-label="On this page" className="hidden lg:block w-48 shrink-0">
-          <div className="sticky top-24">
-            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-weak">
-              On this page
-            </p>
-            <ul className="space-y-0.5 border-l border-line">
-              {SECTIONS.map((s) => (
-                <li key={s.id}>
-                  <a
-                    href={`#${s.id}`}
-                    className="-ml-px block border-l-2 border-transparent py-1 pl-3 text-sm text-ink-medium hover:border-line-strong hover:text-brand-600 transition-colors"
-                  >
-                    {s.label}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </nav>
+      <div className="mt-6 space-y-5 text-base leading-relaxed text-ink-medium">
+        <p>
+          Agent discovery is diverging into multiple useful approaches — a natural
+          consequence of innovation across different communities, use cases, and
+          deployment environments. AI Catalog is a useful starting point for public
+          enterprise agent and AI-resource discovery. It provides a typed, nestable,
+          machine-readable container for heterogeneous AI artifacts: A2A Agent Cards,
+          MCP server descriptors, nested catalogs, tools, skills, datasets, gateways,
+          and other AI resources.
+        </p>
 
-        <div className="min-w-0 flex-1 flex flex-col gap-12">
-          {/* ── What is it ──────────────────────────────────────────── */}
-          <section id="what-is-it">
-            <SectionHeading
-              eyebrow="What is it"
-              title="One lookup for every AI agent"
-              description="Give NANDA Index a domain, email, or agent ID and it tells you where that agent's card lives, no matter who built it or how it's hosted. It's a directory, not a runtime: agents stay wherever their owner already hosts them."
-            />
+        <p>
+          However, AI Catalog needs to be strengthened by allowing other discovery
+          mechanisms to connect through it. These include DNS-AID, ANS, .well-known,
+          A2A cards, MCP, gateways, and platform registries. In addition, telecom
+          directories, EdgeAI registries, IoT systems, and country- or sector-specific
+          discovery systems will each continue to solve part of the problem. These
+          non-compatible or emerging approaches are valuable — the product of real
+          innovation — but they can also create discovery islands when left
+          unconnected.
+        </p>
 
-            <div className="flex flex-wrap items-center gap-3 rounded-card border border-line p-5 font-mono text-xs sm:text-sm text-ink-medium">
-              <span className="rounded-control border border-line px-3 py-1.5 text-ink-strong">Requester</span>
-              <span aria-hidden="true">→</span>
-              <span className="rounded-control border border-line px-3 py-1.5 text-ink-strong">NANDA Index</span>
-              <span aria-hidden="true">→</span>
-              <span className="rounded-control border border-line px-3 py-1.5 text-ink-strong">Catalog / DNS / Agent Card</span>
-              <span aria-hidden="true">→</span>
-              <span className="rounded-control border border-line px-3 py-1.5 text-ink-strong">Agent Runtime</span>
-            </div>
-          </section>
+        <p>
+          This paper argues for a NandaIndex Federated Resolution Architecture: a
+          global switchboard that uses the AI Catalog format itself as the common
+          index-record format. NandaIndex strengthens AI Catalog by making it the
+          preferred framework through which other discovery systems can be bridged.
+          The switchboard proposed by NANDA and AGNTCY, built jointly by Outshift
+          (Cisco) and MIT Media Lab, provides the starting point for this
+          architecture. This paper is a next step that considers improvements to AI
+          Catalog and extends the switchboard model to cover enterprises, SMBs, and
+          individuals.
+        </p>
 
-          {/* ── In brief ─────────────────────────────────────────────── */}
-          <section id="in-brief">
-            <SectionHeading
-              eyebrow="In brief"
-              title="Three steps"
-              description="The same three steps apply whether you're an enterprise, a small business, or one person with an email address."
-            />
+        <p>The focus is on three practical needs:</p>
 
-            <div className="grid gap-4 sm:grid-cols-3">
-              {STEPS.map((step) => (
-                <div
-                  key={step.n}
-                  className="rounded-card border border-line p-5"
-                >
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-800 text-xs font-bold text-white">
-                    {step.n}
-                  </div>
-                  <h3 className="mt-3 font-semibold text-ink-strong">{step.title}</h3>
-                  <p className="mt-1.5 text-sm leading-relaxed text-ink-medium">{step.detail}</p>
-                </div>
-              ))}
-            </div>
+        <ul className="list-disc space-y-3 pl-6">
+          <li>
+            Enterprise heterogeneity, where some companies use AI Catalog and others
+            use DNS-AID, gateways, .well-known, or legacy registries.
+          </li>
+          <li>
+            SMBs such as MoonBakery, where agents may be hosted on AWS while agent
+            cards are hosted by a third party such as list39.org.
+          </li>
+          <li>
+            Individuals such as john@hotmail.com, who do not own a domain name, where
+            a personal agent may be hosted on AWS, Azure, GCP, or another provider,
+            while the agent card lives elsewhere.
+          </li>
+        </ul>
 
-            <Link
-              href="/how-it-works"
-              className="mt-4 inline-block text-sm font-medium text-brand-600 hover:text-brand-700 transition-colors"
-            >
-              See the full resolution flow →
-            </Link>
-          </section>
-
-          {/* ── Interoperability ────────────────────────────────────── */}
-          <section id="interoperability">
-            <SectionHeading
-              eyebrow="Interoperability"
-              title="Also speaks ARD"
-              description="Alongside its own API, NANDA Index exposes an ARD (Agentic Resource Discovery)-compliant registry surface, the same open format used by ora.ai, so any ARD-aware client can search and browse it directly. No NANDA-specific integration required."
-            />
-
-            <div className="flex flex-wrap items-center gap-3 rounded-card border border-line p-5 font-mono text-xs sm:text-sm text-ink-medium">
-              <span className="rounded-control border border-line px-3 py-1.5 text-ink-strong">GET /api/ard</span>
-              <span className="rounded-control border border-line px-3 py-1.5 text-ink-strong">POST /api/ard/search</span>
-              <span className="rounded-control border border-line px-3 py-1.5 text-ink-strong">POST /api/ard/explore</span>
-              <span className="rounded-control border border-line px-3 py-1.5 text-ink-strong">GET /api/ard/agents</span>
-            </div>
-
-            <a
-              href={externalLinks.ardSpec}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-4 inline-block text-sm font-medium text-brand-600 hover:text-brand-700 transition-colors"
-            >
-              Learn more about ARD →
-            </a>
-          </section>
-
-          {/* ── Who it's for ────────────────────────────────────────── */}
-          <ArchitectureSection />
-
-          {/* ── Open source & paper ──────────────────────────────────── */}
-          <section id="open-source">
-            <SectionHeading eyebrow="Open source" title="Specified in the open" />
-
-            <div className="rounded-card border border-line p-6 flex flex-col sm:flex-row sm:items-center gap-4">
-              <div className="flex-1">
-                <p className="text-sm text-ink-medium">
-                  The code is on GitHub{externalLinks.paper ? ", and the architecture is written up in a paper." : "."}
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <a
-                  href={externalLinks.github}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center h-9 rounded-control border-2 border-line px-4 text-sm font-medium text-ink hover:border-line-strong transition"
-                >
-                  View on GitHub
-                </a>
-                {externalLinks.paper ? (
-                  <a
-                    href={externalLinks.paper}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center h-9 rounded-control border-2 border-line px-4 text-sm font-medium text-ink hover:border-line-strong transition"
-                  >
-                    Read the paper
-                  </a>
-                ) : null}
-              </div>
-            </div>
-          </section>
-        </div>
+        <p>
+          This paper presents an architecture proposal and initial design. It
+          identifies the missing bootstrap layer between identity and discovery,
+          defines the role of NandaIndex within that layer, and outlines the
+          identity, trust, and federation mechanisms that must be formalized.
+        </p>
       </div>
-    </>
+
+      <div className="mt-10 flex flex-wrap gap-3">
+        <a
+          href={externalLinks.paper}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center h-10 rounded-control bg-brand-800 px-5 text-sm font-medium text-white hover:bg-brand-700 transition"
+        >
+          Read the paper
+        </a>
+        <a
+          href={externalLinks.github}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center h-10 rounded-control border-2 border-line px-5 text-sm font-medium text-ink hover:border-line-strong transition"
+        >
+          GitHub repo
+        </a>
+      </div>
+    </div>
   );
 }
