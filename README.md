@@ -304,3 +304,9 @@ curl "https://api.nandaindex.org/api/v1/resolve?locator=urn:ai:domain:acme.com:a
 curl https://api.nandaindex.org/health
 # { "status": "ok", "db": "ok" }
 ```
+
+---
+
+## License
+
+Apache License 2.0 — see [LICENSE](LICENSE).

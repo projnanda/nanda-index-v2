@@ -2,6 +2,7 @@
   "name": "nanda-index",
   "version": "0.1.0",
   "description": "NANDA Index — authoritative registry of agent registries",
+  "license": "Apache-2.0",
   "private": true,
   "type": "module",
   "engines": {
