@@ -56,6 +56,10 @@ export function DomainVerification({
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  if (!org.domain) {
+    return null;
+  }
+
   if (org.domain_verified) {
     return (
       <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5">

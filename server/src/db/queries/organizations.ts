@@ -258,9 +258,12 @@ export async function updateOrganization(
 /**
  * Marks an organization's contact email as verified and clears the token.
  *
- * This proves contact-email reachability only — it does NOT activate the org.
- * Activation is gated on domain ownership (see markDomainVerified). Returns
- * null if no org matched the token or the token has expired.
+ * For domain-based orgs (registry/dns-aid/smb) this proves contact-email
+ * reachability only — activation still requires domain ownership (see
+ * markDomainVerified). Personal orgs have no domain to prove, so email
+ * verification is their only activation gate: a still-pending org with
+ * domain IS NULL goes straight to 'active' here.
+ * Returns null if no org matched the token or the token has expired.
  */
 export async function markEmailVerifiedByToken(token: string): Promise<Organization | null> {
   const sql = getSql();
@@ -269,6 +272,9 @@ export async function markEmailVerifiedByToken(token: string): Promise<Organizat
       email_verified           = TRUE,
       verify_token             = NULL,
       verify_token_expires_at  = NULL,
+      status = CASE
+        WHEN domain IS NULL AND status = 'pending' THEN 'active'
+        ELSE status END,
       updated_at               = NOW()
     WHERE verify_token = ${token}
       AND verify_token_expires_at > NOW()

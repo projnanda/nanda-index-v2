@@ -6,19 +6,21 @@ import { getSql } from '../../src/db/client.js';
 
 async function seedOrg(
   orgId: string,
-  domain: string,
+  domain: string | null,
   displayName: string,
   opts: { status?: string; emailVerified?: boolean; verifyToken?: string } = {},
 ): Promise<void> {
   const sql = getSql();
   const token = opts.verifyToken ?? randomBytes(16).toString('hex');
+  const contactEmail = domain ? `admin@${domain}` : `${orgId}@example.com`;
+  const registryUrl = domain ? `https://${domain}/registry` : `https://host39.org/personal/${orgId}`;
   await sql`
     INSERT INTO organizations
       (org_id, display_name, domain, contact_email, registry_url,
        verify_token, verify_token_expires_at, email_verified, status)
     VALUES
-      (${orgId}, ${displayName}, ${domain}, ${`admin@${domain}`},
-       ${`https://${domain}/registry`}, ${token}, NOW() + INTERVAL '24 hours',
+      (${orgId}, ${displayName}, ${domain}, ${contactEmail},
+       ${registryUrl}, ${token}, NOW() + INTERVAL '24 hours',
        ${opts.emailVerified ?? true}, ${opts.status ?? 'active'})
     ON CONFLICT (org_id) DO NOTHING
   `;
@@ -116,6 +118,25 @@ describe('NANDA Index — public read routes', () => {
     // Activation is gated on domain ownership — email alone must not activate.
     expect(res.json().status).toBe('pending');
     expect(res.json().domain_verified).toBe(false);
+  });
+
+  it('activates a personal (no-domain) org on email verification alone', async () => {
+    const token = randomBytes(16).toString('hex');
+    await seedOrg('idx-personal-verify', null, 'Personal Org', {
+      status: 'pending',
+      emailVerified: false,
+      verifyToken: token,
+    });
+
+    const res = await fastify.inject({
+      method: 'GET',
+      url: `/api/v1/verify-email?token=${token}`,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().email_verified).toBe(true);
+    // No domain to verify — email verification is the only activation gate.
+    expect(res.json().status).toBe('active');
+    expect(res.json().domain).toBe(null);
   });
 
   it('returns 400 when token query param is missing', async () => {

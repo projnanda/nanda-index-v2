@@ -8,7 +8,9 @@ import { apiErrorSchema } from '../types/api/common.js';
  *
  * GET /api/v1/index           — list all active organizations as IndexRecord[]
  * GET /api/v1/index/:org_id   — get a single IndexRecord, 404 on miss
- * GET /api/v1/verify-email    — mark org contact email verified (does not activate)
+ * GET /api/v1/verify-email    — mark org contact email verified (also activates
+ *                                personal/no-domain orgs; domain-based orgs
+ *                                still need domain verification separately)
  */
 export async function registerIndexRecordRoutes(fastify: FastifyInstance): Promise<void> {
   // List all active index records
@@ -48,11 +50,12 @@ export async function registerIndexRecordRoutes(fastify: FastifyInstance): Promi
     return reply.send(toIndexRecord(org));
   });
 
-  // Email verification — marks contact email verified (activation is gated on domain ownership)
+  // Email verification — marks contact email verified. Activates personal
+  // (no-domain) orgs outright; domain-based orgs still need domain verification.
   fastify.get<{ Querystring: { token?: string } }>('/api/v1/verify-email', {
     schema: {
       tags: ['auth'],
-      summary: 'Verify org contact email (activation requires domain verification)',
+      summary: 'Verify org contact email (activates personal orgs; others still need domain verification)',
       querystring: {
         type: 'object',
         required: ['token'],

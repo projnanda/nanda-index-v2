@@ -134,7 +134,7 @@ DB_MAX_CONNECTIONS=10
 
 Go to `https://nandaindex.org` → Sign in → Dashboard → New Organization.
 
-Choose your registration type, fill in the form, and verify your email. Your record goes live once verified.
+Choose your registration type, fill in the form, and verify your email. Personal (no-domain) agents go live as soon as email is verified. Registry/DNS-AID/SMB registrations also require verifying ownership of the domain (via a DNS TXT record) before going live.
 
 ### Via the API
 
@@ -174,7 +174,11 @@ curl -X POST https://api.nandaindex.org/api/v1/orgs \
   }'
 
 # Step 3: Verify your email
-# Check inbox for a verification link. For testing, activate directly:
+# Check inbox for a verification link. This example uses hosting_path "registry"
+# (has a domain), so email verification alone won't activate it — domain
+# ownership must also be verified via POST /orgs/:org_id/domain-challenge and
+# /verify-domain. (Personal, no-domain orgs activate on email verification alone.)
+# For testing, activate directly:
 # docker compose exec db psql -U nanda -d nanda_index -c \
 #   "UPDATE organizations SET status='active', email_verified=true WHERE org_id='acme';"
 ```

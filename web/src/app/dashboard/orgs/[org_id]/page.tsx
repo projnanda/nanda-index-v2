@@ -146,14 +146,16 @@ export default function OrgDetailPage() {
       <div className="space-y-6">
         <div className="flex flex-wrap items-center gap-3">
           <StatusBadge status={org.status} />
-          {org.domain_verified ? (
-            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-0.5 text-xs font-medium text-emerald-700">
-              Domain verified
-            </span>
-          ) : (
-            <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-0.5 text-xs font-medium text-amber-700">
-              Domain not verified
-            </span>
+          {org.domain && (
+            org.domain_verified ? (
+              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-0.5 text-xs font-medium text-emerald-700">
+                Domain verified
+              </span>
+            ) : (
+              <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-0.5 text-xs font-medium text-amber-700">
+                Domain not verified
+              </span>
+            )
           )}
           {org.email_verified ? (
             <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-0.5 text-xs font-medium text-emerald-700">
@@ -166,7 +168,7 @@ export default function OrgDetailPage() {
           )}
         </div>
 
-        <DomainVerification org={org} onVerified={setOrg} />
+        {org.domain && <DomainVerification org={org} onVerified={setOrg} />}
 
         {editing ? (
           <div className="rounded-3xl border border-black/10 bg-white p-5 shadow-sm space-y-4">
@@ -214,7 +216,7 @@ export default function OrgDetailPage() {
               </button>
             </div>
             <div className="grid gap-2 text-sm text-slate-700">
-              <div><span className="font-medium">Domain:</span> {org.domain}</div>
+              {org.domain && <div><span className="font-medium">Domain:</span> {org.domain}</div>}
               <div>
                 <span className="font-medium">Catalog URL:</span>{" "}
                 {org.registry_url ? (
