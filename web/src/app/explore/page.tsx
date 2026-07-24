@@ -634,7 +634,7 @@ function Pagination(props: {
             <button
               key={p}
               onClick={() => props.onGoto(p)}
-              className={`min-w-9 h-9 px-2 text-sm font-medium rounded-full transition ${p === page ? "bg-brand-500 text-white" : "text-ink hover:bg-surface-strong"
+              className={`min-w-9 h-9 px-2 text-sm font-medium rounded-full transition ${p === page ? "bg-brand-500 text-on-brand" : "text-ink hover:bg-surface-strong"
                 }`}
             >
               {p}

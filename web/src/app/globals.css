@@ -1,49 +1,71 @@
 @import "tailwindcss";
 
 :root {
-  /* ===== OUTSHIFT TOKENS (canonical names - match ai-catalog.outshift.io) ===== */
+  /* ===== NANDA BRAND SYSTEM v2.0 =====
+     Palette (brand guidelines p.04):
+       #F5C518 NANDA Yellow  - Primary - innovation signal
+       #0D0D0D Ink           - Primary text - dominant tone
+       #1A1F2E Slate         - Dark backgrounds - depth
+       #F7F5F0 Bone          - Background - warm white
+       #4A4A5A Graphite      - Secondary text - captions
+       #FFF8DC Signal        - Highlight tint - yellow wash
+     Usage rule 01: yellow is SIGNAL ONLY - accents, active states, mark.
+     Never a large background fill. See rules p.05. */
 
-  /* Surfaces - all four matter */
-  --color-surface:        #f5f8fd; /* page bg */
-  --color-surface-light:  #fbfcfe; /* cards, header bg, secondary buttons */
-  --color-surface-strong: #eff3fc; /* filter sidebar, subtle hover bg */
-  --color-surface-tag:    #e3eafa; /* tag/chip pill bg */
+  /* Surfaces - warm bone family, not cool blue */
+  --color-surface:        #f7f5f0; /* page bg - Bone */
+  --color-surface-light:  #fffefb; /* cards, header bg, secondary buttons */
+  --color-surface-strong: #f0ede5; /* sidebar, subtle hover bg */
+  --color-surface-tag:    #eae6db; /* tag/chip pill bg */
 
-  /* Ink (text) - 4 levels */
-  --color-ink:        #3c4551; /* body / default */
-  --color-ink-strong: #00142b; /* headings */
-  --color-ink-medium: #59616b; /* nav links default */
-  --color-ink-weak:   #777d85; /* placeholders, eyebrow labels */
+  /* Ink (text) - 4 levels, anchored on Ink + Graphite */
+  --color-ink:        #2a2a33; /* body / default */
+  --color-ink-strong: #0d0d0d; /* headings - Ink */
+  --color-ink-medium: #4a4a5a; /* nav links default - Graphite */
+  --color-ink-weak:   #6b6b75; /* placeholders, eyebrow labels - AA on Bone at 12px */
 
-  /* Lines (borders) - 2 levels */
-  --color-line:        #d5dff7; /* default border */
-  --color-line-strong: #c8d5f5; /* hover border */
+  /* Lines (borders) - warm neutrals */
+  --color-line:        #e2ddd1; /* default border */
+  --color-line-strong: #cfc8b8; /* hover border */
 
-  /* Brand scale */
-  --color-brand-200: #e8f1ff; /* very soft brand bg */
-  --color-brand-300: #d5dff7; /* soft (same as line) */
-  --color-brand-500: #187adc; /* primary */
-  --color-brand-600: #0051af; /* primary hover / link color */
-  --color-brand-700: #004ba8; /* pressed */
-  --color-brand-800: #0d274d; /* brand-deep (logo tile) */
+  /* Brand scale - NANDA Yellow signal + Ink/Slate depth.
+     500 is the pure brand yellow; 600/700 darken for hover/pressed so
+     text on yellow keeps contrast. 800 is Slate for deep surfaces. */
+  --color-brand-200: #fff8dc; /* Signal - yellow wash */
+  --color-brand-300: #fbeaa8; /* soft yellow */
+  --color-brand-500: #f5c518; /* NANDA Yellow - primary */
+  --color-brand-600: #d9ad0c; /* hover */
+  --color-brand-700: #b38f06; /* pressed */
+  --color-brand-800: #1a1f2e; /* Slate - brand-deep (logo tile, dark surfaces) */
 
-  /* Accent teal */
-  --color-accent-teal:     #dff1f5;
-  --color-accent-teal-ink: #0f6e85;
+  /* On-yellow foreground: yellow is luminous, so ink rides on top of it */
+  --color-on-brand: #0d0d0d;
 
-  /* Star gold (rating) */
-  --color-star-gold: #fbbf24;
+  /* Accent - Slate-leaning cool neutral (secondary to yellow) */
+  --color-accent-teal:     #e8eaef;
+  --color-accent-teal-ink: #1a1f2e;
 
-  /* Danger (not in outshift root but used by destructive buttons) */
-  --color-danger:      #b42318;
-  --color-danger-soft: #fef3f2;
-  --color-warning:      #8a5a06;
-  --color-warning-soft: #fdeccc;
+  /* Star gold (rating) - aligns to brand yellow */
+  --color-star-gold: #f5c518;
 
-  /* Fonts */
-  --font-sans:    var(--font-sans-inter), "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-display: var(--font-sans-inter), "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-mono:    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  /* Status colors - muted to sit inside a warm, restrained palette */
+  --color-danger:      #9b2c1e;
+  --color-danger-soft: #f9ece9;
+  --color-warning:      #8a6a06;
+  --color-warning-soft: #fff8dc;
+  --color-success:      #2f6b4f;
+  --color-success-soft: #e8f0ea;
+
+  /* Fonts - brand type system (p.03)
+     Cormorant Garamond - display / headlines / logo   ("what NANDA believes")
+     Garet              - body / paragraph / interface ("what NANDA does")
+     IBM Plex Mono      - labels / page numbers / tags ("what NANDA measures")
+     Garet is a commercial font and is not bundled here; it is listed first so
+     that adding the licensed file activates it with no further code changes.
+     The fallback stack is geometric-sans to match Garet's proportions. */
+  --font-sans:    "Garet", var(--font-sans-body), "Futura", "Century Gothic", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-display: var(--font-display-serif), "Cormorant Garamond", "Cormorant", Garamond, "Times New Roman", serif;
+  --font-mono:    var(--font-mono-plex), "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
   --font-weight-light:    300;
   --font-weight-medium:   500;
@@ -59,13 +81,14 @@
   --radius-xl:      12px;
   --radius-full:    9999px;
 
-  /* Shadows (inlined values; outshift uses these in utilities, not at :root) */
-  --shadow-sm: 0 1px 2px 0 rgba(13, 39, 77, 0.04);
-  --shadow-md: 0 4px 4px 0 rgba(200, 213, 245, 0.33);
-  --shadow-lg: 0 6px 16px 0 rgba(200, 213, 245, 0.55);
-  --shadow-modal: 0 25px 50px -12px rgba(0, 20, 43, 0.25);
-  --shadow-card:       0 4px 4px 0 rgba(200, 213, 245, 0.33);
-  --shadow-card-hover: 0 6px 16px 0 rgba(200, 213, 245, 0.55);
+  /* Shadows - warm-neutral, low-contrast. Brand favours space and line over
+     heavy elevation, so these stay subtle. */
+  --shadow-sm: 0 1px 2px 0 rgba(13, 13, 13, 0.04);
+  --shadow-md: 0 4px 4px 0 rgba(26, 31, 46, 0.06);
+  --shadow-lg: 0 6px 16px 0 rgba(26, 31, 46, 0.09);
+  --shadow-modal: 0 25px 50px -12px rgba(13, 13, 13, 0.25);
+  --shadow-card:       0 4px 4px 0 rgba(26, 31, 46, 0.06);
+  --shadow-card-hover: 0 6px 16px 0 rgba(26, 31, 46, 0.09);
 
   /* Type scale */
   --leading-tight:   1.25;
@@ -95,8 +118,8 @@
 
   --color-accent:             var(--color-accent-teal-ink);
   --color-accent-soft:        var(--color-accent-teal);
-  --color-success:            var(--color-accent-teal-ink);
-  --color-success-soft:       var(--color-accent-teal);
+
+  /* --color-success / --color-success-soft are defined in the status block above */
 
   --color-code-bg:            var(--color-brand-800);
   --color-code-fg:            var(--color-surface-light);
@@ -139,6 +162,9 @@
   --color-accent-teal:     var(--color-accent-teal);
   --color-accent-teal-ink: var(--color-accent-teal-ink);
   --color-star-gold:       var(--color-star-gold);
+
+  /* Foreground for use on top of brand yellow */
+  --color-on-brand:        var(--color-on-brand);
 
   /* Old-name aliases also exposed so any lingering `bg-bg` etc keep working */
   --color-bg:                 var(--color-bg);
@@ -221,6 +247,110 @@ body {
 }
 
 ::selection {
-  background: var(--color-brand-200);
-  color: var(--color-brand-800);
+  background: var(--color-brand-500);
+  color: var(--color-on-brand);
+}
+
+/* ===== BRAND TYPE RULES (guidelines p.03) =====
+   "Cormorant Garamond for what NANDA believes.
+    Garet for what NANDA does.
+    IBM Plex Mono for what NANDA measures."
+
+   Usage rule 02 - Serif is MEANING ONLY: headlines and key claims. Never for
+   UI labels or body copy. Headings therefore take the display serif, while
+   body, buttons, inputs and nav keep the sans (Garet role). */
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: -0.01em;
+  color: var(--color-ink-strong);
+}
+
+/* h4-h6 act as UI-level labels rather than editorial headlines, so they stay
+   in the sans stack per rule 02. */
+h4, h5, h6 {
+  font-family: var(--font-sans);
+  color: var(--color-ink-strong);
+}
+
+/* Cormorant is a small-appearing face; nudge display sizes up so headlines
+   hold the same optical weight the brand deck shows. */
+h1 { font-size: clamp(2.25rem, 1.6rem + 2.2vw, 3.5rem); line-height: 1.1; }
+h2 { font-size: clamp(1.75rem, 1.4rem + 1.2vw, 2.5rem); line-height: 1.15; }
+h3 { font-size: clamp(1.35rem, 1.2rem + 0.6vw, 1.75rem); line-height: 1.2; }
+
+/* Mono for what NANDA measures: eyebrows, tags, labels, stats, code.
+   `.brand-label` is the canonical eyebrow/label treatment. */
+.brand-label {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-ink-weak);
+}
+
+.brand-tag {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+}
+
+.brand-stat {
+  font-family: var(--font-mono);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+code, pre, kbd, samp {
+  font-family: var(--font-mono);
+}
+
+/* Usage rule 01 - Yellow is SIGNAL ONLY. A single accent strip is the
+   approved way to carry yellow into a layout without a background fill. */
+.brand-accent-strip {
+  position: relative;
+}
+.brand-accent-strip::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--color-brand-500);
+}
+
+/* Usage rule 05 - Ghost typography: large background letterform at 3-5%
+   opacity, always off-center and bottom-right. */
+.brand-ghost {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.brand-ghost::after {
+  content: "N";
+  position: absolute;
+  right: -0.08em;
+  bottom: -0.34em;
+  font-family: var(--font-display);
+  font-size: clamp(14rem, 34vw, 26rem);
+  line-height: 1;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-ink-strong);
+  opacity: 0.04;
+  pointer-events: none;
+  user-select: none;
+  z-index: -1;
+}
+/* On Slate surfaces the ghost mark reads as luminous yellow instead. */
+.brand-ghost-on-dark::after {
+  color: var(--color-brand-500);
+  opacity: 0.05;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
 }

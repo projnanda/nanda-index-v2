@@ -10,7 +10,7 @@ const inputClass =
   "w-full h-10 rounded-control border-2 border-line bg-surface-light px-3 text-sm text-ink placeholder:text-ink-weak focus:outline-none focus:border-brand-500 transition-colors";
 
 const primaryBtnClass =
-  "inline-flex items-center justify-center h-9 w-full rounded-control bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600 transition disabled:opacity-60";
+  "inline-flex items-center justify-center h-9 w-full rounded-control bg-brand-500 px-4 text-sm font-medium text-on-brand hover:bg-brand-600 transition disabled:opacity-60";
 
 function ResetPasswordInner() {
   const token = useSearchParams().get("token") ?? "";

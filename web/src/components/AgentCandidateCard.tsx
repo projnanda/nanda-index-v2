@@ -39,26 +39,26 @@ export function AgentCandidateCard({
   }
 
   return (
-    <div className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm transition hover:shadow-md">
+    <div className="rounded-2xl border border-line bg-surface-light p-4 shadow-sm transition hover:shadow-md">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="font-semibold text-slate-950">{candidate.display_name}</p>
+            <p className="font-semibold text-ink-strong">{candidate.display_name}</p>
             {best && (
-              <span className="rounded-full bg-accent-teal px-2.5 py-0.5 text-xs font-semibold text-accent-teal-ink">
+              <span className="brand-tag rounded-full bg-brand-500 px-2.5 py-0.5 uppercase text-on-brand">
                 Best match
               </span>
             )}
           </div>
-          <p className="mt-0.5 font-mono text-xs text-slate-500">{candidate.identifier}</p>
+          <p className="mt-0.5 font-mono text-xs text-ink-medium">{candidate.identifier}</p>
           {candidate.description && (
-            <p className="mt-1 text-sm text-slate-600">{candidate.description}</p>
+            <p className="mt-1 text-sm text-ink-medium">{candidate.description}</p>
           )}
           <a
             href={candidate.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-1 block truncate font-mono text-xs text-indigo-600 hover:underline"
+            className="mt-1 block truncate font-mono text-xs text-ink-strong hover:underline"
           >
             {candidate.url}
           </a>
@@ -67,7 +67,7 @@ export function AgentCandidateCard({
               {candidate.tags.map((tag) => (
                 <span
                   key={tag}
-                  className="rounded-full border border-black/10 bg-slate-50 px-2.5 py-1 font-mono text-xs text-slate-600"
+                  className="rounded-full border border-line bg-surface-strong px-2.5 py-1 font-mono text-xs text-ink-medium"
                 >
                   {tag}
                 </span>
@@ -75,7 +75,7 @@ export function AgentCandidateCard({
             </div>
           )}
         </div>
-        <div className="shrink-0 text-right text-xs text-slate-400">
+        <div className="shrink-0 text-right text-xs text-ink-weak">
           <p>score {candidate.score.toFixed(2)}</p>
           <p className="mt-0.5">{BASIS_LABEL[candidate.provenance.basis]}</p>
           <p className="mt-0.5 font-mono">{candidate.provenance.org_id}</p>
@@ -83,7 +83,7 @@ export function AgentCandidateCard({
             type="button"
             onClick={handleResolve}
             disabled={resolving}
-            className="mt-2 rounded-full border border-slate-950 bg-slate-950 px-3 py-1 text-xs font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-2 rounded-full border border-brand-800 bg-brand-800 px-3 py-1 text-xs font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-60"
           >
             {resolving ? "Resolving…" : "Resolve"}
           </button>
@@ -91,7 +91,7 @@ export function AgentCandidateCard({
       </div>
 
       {resolveError && (
-        <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+        <div className="mt-3 rounded-2xl border border-brand-300 bg-warning-soft px-4 py-3 text-sm text-warning">
           {resolveError}
         </div>
       )}

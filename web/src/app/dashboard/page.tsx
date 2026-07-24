@@ -93,7 +93,7 @@ export default function DashboardPage() {
             </h2>
             <Link
               href="/dashboard/orgs/new"
-              className="inline-flex items-center justify-center h-9 rounded-control bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600 transition"
+              className="inline-flex items-center justify-center h-9 rounded-control bg-brand-500 px-4 text-sm font-medium text-on-brand hover:bg-brand-600 transition"
             >
               + Register new
             </Link>
@@ -123,7 +123,7 @@ export default function DashboardPage() {
                     <span className="text-xs capitalize text-ink-weak">{org.role}</span>
                     <StatusBadge status={org.status} />
                     {!org.domain_verified && (
-                      <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-amber-600">
+                      <span className="rounded-full border border-brand-300 bg-warning-soft px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-warning">
                         verify domain
                       </span>
                     )}
