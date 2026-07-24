@@ -47,13 +47,14 @@ export function Header() {
           href="/"
           className="flex items-center gap-3 min-w-0 rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
         >
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-card bg-brand-800 text-white text-xs font-semibold tracking-wide">
+          {/* Golden/Dark variant of the logo tile (guidelines p.06) */}
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-card bg-brand-800 font-display text-base font-medium tracking-wide text-brand-500">
             NI
           </span>
           <span aria-hidden="true" className="hidden sm:block h-6 border-l border-line" />
           <span className="hidden sm:flex flex-col leading-tight min-w-0">
-            <span className="font-semibold text-ink-strong truncate">Nanda Index</span>
-            <span className="text-xs text-ink-weak truncate">Agent identity &amp; discovery</span>
+            <span className="font-display text-lg font-medium text-ink-strong truncate">Nanda Index</span>
+            <span className="brand-label truncate">Agent identity &amp; discovery</span>
           </span>
         </Link>
 
@@ -64,7 +65,7 @@ export function Header() {
               <Link
                 key={item.href}
                 href={item.href}
-                className="text-sm font-medium text-ink-medium hover:text-brand-600 transition-colors"
+                className="text-sm font-medium text-ink-medium hover:text-ink-strong transition-colors"
               >
                 {item.label}
               </Link>
@@ -76,9 +77,9 @@ export function Header() {
               <div className="flex items-center gap-3">
                 <Link
                   href="/dashboard"
-                  className="flex items-center gap-2 text-sm text-ink hover:text-brand-600 transition-colors"
+                  className="flex items-center gap-2 text-sm text-ink hover:text-ink-strong transition-colors"
                 >
-                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-brand-200 text-xs font-semibold text-brand-800">
+                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-brand-200 text-xs font-medium text-brand-800">
                     {userInitial}
                   </span>
                   <span className="truncate max-w-[12rem]">{displayName}</span>
@@ -93,7 +94,7 @@ export function Header() {
             ) : (
               <Link
                 href="/login"
-                className="inline-flex h-9 items-center rounded-control bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600 transition"
+                className="inline-flex h-9 items-center rounded-control bg-brand-500 px-4 text-sm font-medium text-on-brand hover:bg-brand-600 transition"
               >
                 Sign in
               </Link>
@@ -101,7 +102,7 @@ export function Header() {
           </div>
 
           <details ref={detailsRef} className="relative lg:hidden">
-            <summary className="cursor-pointer list-none rounded-control border-2 border-line bg-surface-light px-3 py-1.5 text-sm font-medium text-ink hover:border-line-strong transition">
+            <summary className="cursor-pointer list-none rounded-control border border-line bg-surface-light px-3 py-1.5 text-sm font-medium text-ink hover:border-line-strong transition">
               Menu
             </summary>
 
@@ -111,7 +112,7 @@ export function Header() {
                   key={item.href}
                   href={item.href}
                   onClick={closeMobileMenu}
-                  className="block rounded-control px-3 py-2 text-sm text-ink hover:bg-surface-strong hover:text-brand-600 transition-colors"
+                  className="block rounded-control px-3 py-2 text-sm text-ink hover:bg-surface-strong hover:text-ink-strong transition-colors"
                 >
                   {item.label}
                 </Link>

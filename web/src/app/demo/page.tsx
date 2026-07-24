@@ -14,7 +14,7 @@ import type { ResolveResponse, CatalogEntry } from "@/lib/nanda-types";
 
 function Label({ children }: { children: React.ReactNode }) {
   return (
-    <label className="block text-xs font-medium text-slate-500 mb-1">
+    <label className="block text-xs font-medium text-ink-medium mb-1">
       {children}
     </label>
   );
@@ -25,8 +25,8 @@ function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
     <input
       {...props}
       className={
-        "w-full rounded-xl border border-black/10 bg-white px-3 py-2 font-mono text-sm outline-none " +
-        "focus:ring-2 focus:ring-slate-300 disabled:bg-slate-50 disabled:text-slate-400 " +
+        "w-full rounded-xl border border-line bg-surface-light px-3 py-2 font-mono text-sm outline-none " +
+        "focus:ring-2 focus:ring-line-strong disabled:bg-surface-strong disabled:text-ink-weak " +
         (props.className ?? "")
       }
     />
@@ -39,8 +39,8 @@ function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
       {...props}
       rows={4}
       className={
-        "w-full rounded-xl border border-black/10 bg-white px-3 py-2 font-mono text-xs outline-none " +
-        "focus:ring-2 focus:ring-slate-300 resize-none " +
+        "w-full rounded-xl border border-line bg-surface-light px-3 py-2 font-mono text-xs outline-none " +
+        "focus:ring-2 focus:ring-line-strong resize-none " +
         (props.className ?? "")
       }
     />
@@ -50,12 +50,12 @@ function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
 function HopBadge({ n, label, url }: { n: number; label: string; url: string }) {
   return (
     <div className="flex items-start gap-3">
-      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-slate-950 text-white text-xs font-bold flex items-center justify-center mt-0.5">
+      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-brand-800 text-white text-xs font-bold flex items-center justify-center mt-0.5">
         {n}
       </div>
       <div className="min-w-0">
-        <p className="text-xs font-semibold text-slate-700">{label}</p>
-        <p className="font-mono text-xs text-slate-400 break-all">{url}</p>
+        <p className="text-xs font-semibold text-ink">{label}</p>
+        <p className="font-mono text-xs text-ink-weak break-all">{url}</p>
       </div>
     </div>
   );
@@ -70,16 +70,16 @@ type HopState =
 function HopResult({ hop }: { hop: HopState }) {
   if (hop.status === "idle") return null;
   if (hop.status === "loading")
-    return <p className="text-xs text-slate-400 animate-pulse">Fetching…</p>;
+    return <p className="text-xs text-ink-weak animate-pulse">Fetching…</p>;
   if (hop.status === "error")
     return (
-      <p className="text-xs text-rose-600 break-all">{hop.message}</p>
+      <p className="text-xs text-danger break-all">{hop.message}</p>
     );
   return (
     <Textarea
       readOnly
       value={JSON.stringify(hop.data, null, 2)}
-      className="bg-slate-50 text-slate-700"
+      className="bg-surface-strong text-ink"
     />
   );
 }
@@ -272,15 +272,15 @@ export default function DemoPage() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-slate-50 px-4 py-10">
+    <div className="min-h-screen bg-surface-strong px-4 py-10">
       <div className="mx-auto max-w-5xl space-y-3">
 
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-950">
+          <h1 className="text-2xl font-semibold tracking-tight text-ink-strong">
             NANDA Demo
           </h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-ink-medium">
             Register an agent into a catalog server, then resolve it end-to-end across all 4 hops.
           </p>
         </div>
@@ -288,15 +288,15 @@ export default function DemoPage() {
         <div className="grid lg:grid-cols-2 gap-6 items-start">
 
           {/* ── Panel A: Register Agent ─────────────────────────────────────── */}
-          <section className="rounded-3xl border border-black/10 bg-white p-6 shadow-sm space-y-5">
+          <section className="rounded-3xl border border-line bg-surface-light p-6 shadow-sm space-y-5">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink-weak">
                 Step 1
               </p>
-              <h2 className="text-base font-semibold text-slate-950 mt-0.5">
+              <h2 className="text-base font-semibold text-ink-strong mt-0.5">
                 Register Agent into Catalog
               </h2>
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-ink-medium mt-1">
                 The org runs their own catalog server. This form calls{" "}
                 <span className="font-mono">POST /agents</span> on it.
               </p>
@@ -304,8 +304,8 @@ export default function DemoPage() {
 
             <form onSubmit={onRegister} className="space-y-4">
               {/* Connection */}
-              <div className="rounded-2xl bg-slate-50 p-4 space-y-3">
-                <p className="text-xs font-medium text-slate-500">Catalog connection</p>
+              <div className="rounded-2xl bg-surface-strong p-4 space-y-3">
+                <p className="text-xs font-medium text-ink-medium">Catalog connection</p>
                 <div>
                   <Label>Catalog URL</Label>
                   <Input
@@ -388,7 +388,7 @@ export default function DemoPage() {
               </div>
 
               {registerError && (
-                <p className="text-xs text-rose-600 rounded-xl bg-rose-50 border border-rose-200 px-3 py-2">
+                <p className="text-xs text-danger rounded-xl bg-danger-soft border border-danger px-3 py-2">
                   {registerError}
                 </p>
               )}
@@ -396,7 +396,7 @@ export default function DemoPage() {
               <button
                 type="submit"
                 disabled={registering}
-                className="w-full rounded-2xl bg-slate-950 py-2.5 text-sm font-medium text-white disabled:opacity-60"
+                className="w-full rounded-2xl bg-brand-500 py-2.5 text-sm font-medium text-on-brand hover:bg-brand-600 transition disabled:opacity-40"
               >
                 {registering ? "Registering…" : "Register Agent"}
               </button>
@@ -404,32 +404,32 @@ export default function DemoPage() {
 
             {/* Success */}
             {registered && (
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 space-y-2">
-                <p className="text-xs font-semibold text-emerald-700">
+              <div className="rounded-2xl border border-line bg-success-soft p-4 space-y-2">
+                <p className="text-xs font-semibold text-success">
                   Registered — URN for resolution:
                 </p>
-                <p className="font-mono text-sm text-slate-950 break-all">
+                <p className="font-mono text-sm text-ink-strong break-all">
                   urn:ai:&lt;your-domain&gt;:{registered.identifier}
                 </p>
                 <Textarea
                   readOnly
                   value={JSON.stringify(registered, null, 2)}
-                  className="bg-white text-slate-700 mt-2"
+                  className="bg-surface-light text-ink mt-2"
                 />
               </div>
             )}
           </section>
 
           {/* ── Panel B: 3-Hop Resolver ─────────────────────────────────────── */}
-          <section className="rounded-3xl border border-black/10 bg-white p-6 shadow-sm space-y-5">
+          <section className="rounded-3xl border border-line bg-surface-light p-6 shadow-sm space-y-5">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink-weak">
                 Step 2
               </p>
-              <h2 className="text-base font-semibold text-slate-950 mt-0.5">
+              <h2 className="text-base font-semibold text-ink-strong mt-0.5">
                 Resolve Agent (3 hops)
               </h2>
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-ink-medium mt-1">
                 Enter a URN locator. Each hop runs sequentially and shows the live response.
               </p>
             </div>
@@ -444,7 +444,7 @@ export default function DemoPage() {
               <button
                 type="submit"
                 disabled={resolving || !locator.trim()}
-                className="shrink-0 rounded-2xl bg-slate-950 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                className="shrink-0 rounded-2xl bg-brand-500 px-4 py-2 text-sm font-medium text-on-brand hover:bg-brand-600 transition disabled:opacity-40"
               >
                 {resolving ? "…" : "Resolve"}
               </button>
@@ -466,7 +466,7 @@ export default function DemoPage() {
               </div>
 
               {hop1.status !== "idle" && (
-                <div className="ml-3 border-l-2 border-dashed border-slate-200 pl-6 space-y-5">
+                <div className="ml-3 border-l-2 border-dashed border-line pl-6 space-y-5">
 
                   {/* Hop 2 */}
                   <div className="space-y-2">
@@ -492,7 +492,7 @@ export default function DemoPage() {
                         <div className="ml-9">
                           <HopResult hop={hop3} />
                           {hop3.status === "error" && (
-                            <p className="mt-1 text-xs text-slate-400">
+                            <p className="mt-1 text-xs text-ink-weak">
                               In production the agent caches this URL after the first successful fetch.
                             </p>
                           )}
@@ -519,13 +519,13 @@ export default function DemoPage() {
                               <button
                                 type="submit"
                                 disabled={talking || !agentEndpoint}
-                                className="shrink-0 rounded-2xl bg-emerald-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                                className="shrink-0 rounded-2xl bg-success px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
                               >
                                 {talking ? "…" : "Send"}
                               </button>
                             </form>
                             {!agentEndpoint && hop3.status === "ok" && (
-                              <p className="text-xs text-slate-400">Agent endpoint not found in facts doc.</p>
+                              <p className="text-xs text-ink-weak">Agent endpoint not found in facts doc.</p>
                             )}
                             <HopResult hop={talkResult} />
                           </div>

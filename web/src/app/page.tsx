@@ -2,8 +2,14 @@ import { externalLinks } from "@/lib/site-data";
 
 export default function HomePage() {
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-      <div className="space-y-5 text-base leading-relaxed text-ink-medium">
+    <div className="brand-ghost max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
+      {/* Title takes the display serif per brand rule 02 (serif = meaning).
+          Body copy below is a single uniform size throughout. */}
+      <p className="brand-label">Nanda Index</p>
+      <h1 className="mt-6 mb-12 font-display text-ink-strong">
+        Federated resolution for the agentic web.
+      </h1>
+      <div className="space-y-6 text-base leading-relaxed text-ink-medium">
         <p>
           Agent discovery is diverging into multiple useful approaches — a natural
           consequence of innovation across different communities, use cases, and
@@ -63,12 +69,12 @@ export default function HomePage() {
         </p>
       </div>
 
-      <div className="mt-10 flex flex-wrap gap-3">
+      <div className="mt-14 flex flex-wrap gap-3">
         <a
           href={externalLinks.paper}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center justify-center h-10 rounded-control bg-brand-800 px-5 text-sm font-medium text-white hover:bg-brand-700 transition"
+          className="inline-flex items-center justify-center h-10 rounded-control bg-brand-500 px-5 text-sm font-medium text-on-brand hover:bg-brand-600 transition"
         >
           Read the paper
         </a>
@@ -76,7 +82,7 @@ export default function HomePage() {
           href={externalLinks.github}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center justify-center h-10 rounded-control border-2 border-line px-5 text-sm font-medium text-ink hover:border-line-strong transition"
+          className="inline-flex items-center justify-center h-10 rounded-control border border-ink-strong px-5 text-sm font-medium text-ink-strong hover:bg-ink-strong hover:text-surface-light transition"
         >
           GitHub repo
         </a>

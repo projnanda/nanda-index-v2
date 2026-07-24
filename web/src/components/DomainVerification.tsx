@@ -20,14 +20,14 @@ function CopyRow({ label, value }: { label: string; value: string }) {
   }
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-black/5 bg-white px-3 py-2">
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface-light px-3 py-2">
       <div className="min-w-0">
-        <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400">{label}</p>
-        <p className="truncate font-mono text-xs text-slate-900">{value}</p>
+        <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-ink-weak">{label}</p>
+        <p className="truncate font-mono text-xs text-ink-strong">{value}</p>
       </div>
       <button
         onClick={copy}
-        className="shrink-0 rounded-lg border border-black/10 px-2.5 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
+        className="shrink-0 rounded-lg border border-line px-2.5 py-1 text-[11px] font-medium text-ink-medium hover:bg-surface-strong"
       >
         {copied ? "Copied" : "Copy"}
       </button>
@@ -62,14 +62,14 @@ export function DomainVerification({
 
   if (org.domain_verified) {
     return (
-      <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5">
+      <div className="rounded-3xl border border-line bg-success-soft p-5">
         <div className="flex items-center gap-2">
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500 text-xs font-bold text-white">
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-success text-xs font-bold text-white">
             ✓
           </span>
-          <h3 className="text-sm font-semibold text-emerald-900">Domain ownership verified</h3>
+          <h3 className="text-sm font-semibold text-success">Domain ownership verified</h3>
         </div>
-        <p className="mt-1.5 text-xs text-emerald-700">
+        <p className="mt-1.5 text-xs text-success">
           <span className="font-mono">{org.domain}</span> has been verified via DNS. Agents under
           this domain resolve through your registry.
         </p>
@@ -102,10 +102,10 @@ export function DomainVerification({
   }
 
   return (
-    <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5 space-y-4">
+    <div className="rounded-3xl border border-brand-300 bg-warning-soft p-5 space-y-4">
       <div>
-        <h3 className="text-sm font-semibold text-amber-900">Verify domain ownership</h3>
-        <p className="mt-1 text-xs text-amber-700">
+        <h3 className="text-sm font-semibold text-warning">Verify domain ownership</h3>
+        <p className="mt-1 text-xs text-warning">
           Your org stays <span className="font-semibold">pending</span> and hidden from the public
           index until you prove control of <span className="font-mono">{org.domain}</span> by adding
           a DNS TXT record.
@@ -114,7 +114,7 @@ export function DomainVerification({
 
       {challenge ? (
         <div className="space-y-3">
-          <p className="text-xs text-amber-800">
+          <p className="text-xs text-warning">
             Add this TXT record at your DNS provider, then check below. DNS changes can take a few
             minutes (sometimes longer) to propagate.
           </p>
@@ -123,21 +123,21 @@ export function DomainVerification({
             <CopyRow label="Name / Host" value={challenge.record_name} />
             <CopyRow label="Value" value={challenge.record_value} />
           </div>
-          <p className="text-[11px] text-amber-600">
+          <p className="text-[11px] text-warning">
             Challenge expires {new Date(challenge.expires_at).toLocaleString()}.
           </p>
           <div className="flex flex-wrap gap-3">
             <button
               onClick={check}
               disabled={checking}
-              className="rounded-2xl bg-slate-950 px-5 py-2 text-sm font-medium text-white disabled:opacity-60"
+              className="rounded-2xl bg-brand-500 px-5 py-2 text-sm font-medium text-on-brand hover:bg-brand-600 transition disabled:opacity-60"
             >
               {checking ? "Checking DNS…" : "Check DNS now"}
             </button>
             <button
               onClick={generate}
               disabled={generating}
-              className="rounded-2xl border border-amber-300 bg-white px-5 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-60"
+              className="rounded-2xl border border-brand-300 bg-surface-light px-5 py-2 text-sm font-medium text-warning hover:bg-warning-soft disabled:opacity-60"
             >
               {generating ? "Regenerating…" : "Regenerate"}
             </button>
@@ -147,14 +147,14 @@ export function DomainVerification({
         <button
           onClick={generate}
           disabled={generating}
-          className="rounded-2xl bg-slate-950 px-5 py-2 text-sm font-medium text-white disabled:opacity-60"
+          className="rounded-2xl bg-brand-500 px-5 py-2 text-sm font-medium text-on-brand hover:bg-brand-600 transition disabled:opacity-60"
         >
           {generating ? "Generating…" : "Generate DNS record"}
         </button>
       )}
 
       {error && (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
+        <div className="rounded-2xl border border-danger bg-danger-soft px-4 py-3 text-xs text-danger">
           {error}
         </div>
       )}

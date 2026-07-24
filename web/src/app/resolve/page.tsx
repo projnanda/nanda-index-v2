@@ -27,18 +27,18 @@ function HopCard({
   n: number; label: string; subtitle: string; hop: HopState; children?: React.ReactNode;
 }) {
   const colors: Record<HopStatus, string> = {
-    idle:    "border-black/10 bg-white",
-    loading: "border-indigo-200 bg-indigo-50",
-    ok:      "border-emerald-200 bg-white",
-    error:   "border-rose-200 bg-rose-50",
-    skipped: "border-black/10 bg-slate-50",
+    idle:    "border-line bg-surface-light",
+    loading: "border-brand-300 bg-brand-200",
+    ok:      "border-line bg-surface-light",
+    error:   "border-danger bg-danger-soft",
+    skipped: "border-line bg-surface-strong",
   };
   const badgeColors: Record<HopStatus, string> = {
-    idle:    "bg-slate-100 text-slate-400",
-    loading: "bg-indigo-500 text-white animate-pulse",
-    ok:      "bg-emerald-500 text-white",
-    error:   "bg-rose-500 text-white",
-    skipped: "bg-slate-200 text-slate-400",
+    idle:    "bg-surface-strong text-ink-weak",
+    loading: "bg-brand-500 text-on-brand animate-pulse",
+    ok:      "bg-success text-white",
+    error:   "bg-danger text-white",
+    skipped: "bg-surface-tag text-ink-weak",
   };
 
   return (
@@ -51,28 +51,28 @@ function HopCard({
           {hop.status === "ok" ? "✓" : hop.status === "error" ? "✕" : n}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="font-semibold text-slate-950">{label}</p>
-          <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>
+          <p className="font-semibold text-ink-strong">{label}</p>
+          <p className="mt-0.5 text-xs text-ink-medium">{subtitle}</p>
           {hop.url && (
-            <p className="mt-1 break-all font-mono text-[11px] text-slate-400">{hop.url}</p>
+            <p className="mt-1 break-all font-mono text-[11px] text-ink-weak">{hop.url}</p>
           )}
         </div>
       </div>
 
       {hop.status === "loading" && (
-        <p className="ml-12 mt-3 text-xs text-indigo-500 animate-pulse">Fetching…</p>
+        <p className="ml-12 mt-3 text-xs text-ink-strong animate-pulse">Fetching…</p>
       )}
 
       {hop.status === "error" && (
-        <p className="ml-12 mt-3 text-sm text-rose-700">{hop.error}</p>
+        <p className="ml-12 mt-3 text-sm text-danger">{hop.error}</p>
       )}
 
       {hop.status === "ok" && hop.data !== undefined && (
         <details className="ml-12 mt-3">
-          <summary className="cursor-pointer text-xs text-slate-400 hover:text-slate-700">
+          <summary className="cursor-pointer text-xs text-ink-weak hover:text-ink">
             View response
           </summary>
-          <pre className="mt-2 overflow-x-auto rounded-2xl border border-black/5 bg-slate-950 p-4 text-xs text-slate-200">
+          <pre className="mt-2 overflow-x-auto rounded-2xl border border-line bg-brand-800 p-4 text-xs text-ink-weak">
             {JSON.stringify(hop.data, null, 2)}
           </pre>
         </details>
@@ -233,19 +233,19 @@ export default function ResolvePage() {
           value={locator}
           onChange={(e) => setLocator(e.target.value)}
           placeholder="urn:ai:domain:acme.com:agent:time"
-          className="flex-1 rounded-2xl border border-black/10 bg-white px-5 py-3 font-mono text-sm outline-none focus:ring-2 focus:ring-slate-300"
+          className="flex-1 rounded-2xl border border-line bg-surface-light px-5 py-3 font-mono text-sm outline-none focus:ring-2 focus:ring-line-strong"
         />
         <button
           type="submit"
           disabled={resolving || !locator.trim()}
-          className="rounded-2xl bg-slate-950 px-6 py-3 text-sm font-medium text-white disabled:opacity-60"
+          className="rounded-2xl bg-brand-500 px-6 py-3 text-sm font-medium text-on-brand hover:bg-brand-600 transition disabled:opacity-40"
         >
           {resolving ? "Resolving…" : "Resolve"}
         </button>
       </form>
 
       {latency !== null && (
-        <p className="mb-4 text-xs text-slate-400">Hops 1–3 completed in {latency} ms</p>
+        <p className="mb-4 text-xs text-ink-weak">Hops 1–3 completed in {latency} ms</p>
       )}
 
       {/* Hops */}
@@ -263,7 +263,7 @@ export default function ResolvePage() {
 
             {hop1.status !== "idle" && (
               <>
-                <div className="mx-auto h-5 w-px bg-slate-200" />
+                <div className="mx-auto h-5 w-px bg-surface-tag" />
 
                 <HopCard
                   n={2}
@@ -274,7 +274,7 @@ export default function ResolvePage() {
 
                 {hop2.status !== "idle" && (
                   <>
-                    <div className="mx-auto h-5 w-px bg-slate-200" />
+                    <div className="mx-auto h-5 w-px bg-surface-tag" />
 
                     <HopCard
                       n={3}
@@ -285,7 +285,7 @@ export default function ResolvePage() {
 
                     {hop3.status !== "idle" && (
                       <>
-                        <div className="mx-auto h-5 w-px bg-slate-200" />
+                        <div className="mx-auto h-5 w-px bg-surface-tag" />
 
                         <HopCard
                           n={4}
@@ -299,12 +299,12 @@ export default function ResolvePage() {
                                 value={taskInput}
                                 onChange={(e) => setTaskInput(e.target.value)}
                                 placeholder="what time is it?"
-                                className="flex-1 rounded-2xl border border-black/10 bg-white px-4 py-2 font-mono text-sm outline-none focus:ring-2 focus:ring-slate-300"
+                                className="flex-1 rounded-2xl border border-line bg-surface-light px-4 py-2 font-mono text-sm outline-none focus:ring-2 focus:ring-line-strong"
                               />
                               <button
                                 type="submit"
                                 disabled={talking}
-                                className="rounded-2xl bg-emerald-700 px-5 py-2 text-sm font-medium text-white disabled:opacity-60"
+                                className="rounded-2xl bg-success px-5 py-2 text-sm font-medium text-white disabled:opacity-60"
                               >
                                 {talking ? "…" : "Send"}
                               </button>
@@ -322,11 +322,11 @@ export default function ResolvePage() {
       )}
 
       {!anyActive && (
-        <div className="rounded-3xl border border-black/10 bg-white p-8 text-center">
-          <p className="text-sm text-slate-400">
+        <div className="rounded-3xl border border-line bg-surface-light p-8 text-center">
+          <p className="text-sm text-ink-weak">
             Enter a URN above to trace the resolution hops.
           </p>
-          <p className="mt-2 font-mono text-xs text-slate-300">
+          <p className="mt-2 font-mono text-xs text-ink-weak">
             e.g. urn:ai:domain:acme.com:agent:time
           </p>
         </div>

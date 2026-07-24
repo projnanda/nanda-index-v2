@@ -30,24 +30,24 @@ function IndexRecordCard({ org }: { org: IndexRecord }) {
   const router = useRouter();
   return (
     <div
-      className="flex cursor-pointer items-start justify-between rounded-2xl border border-black/10 bg-white p-4 shadow-sm transition hover:shadow-md"
+      className="flex cursor-pointer items-start justify-between rounded-2xl border border-line bg-surface-light p-4 shadow-sm transition hover:shadow-md"
       onClick={() => router.push(`/`)}
     >
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <p className="font-semibold text-slate-950">{org.display_name}</p>
+          <p className="font-semibold text-ink-strong">{org.display_name}</p>
           <StatusBadge status={org.status} />
         </div>
-        <p className="mt-0.5 font-mono text-xs text-slate-500">{org.org_id}</p>
-        <p className="mt-1 text-sm text-slate-600">{org.domain}</p>
+        <p className="mt-0.5 font-mono text-xs text-ink-medium">{org.org_id}</p>
+        <p className="mt-1 text-sm text-ink-medium">{org.domain}</p>
         {org.registry_url && (
-          <p className="mt-0.5 truncate font-mono text-xs text-slate-400">{org.registry_url}</p>
+          <p className="mt-0.5 truncate font-mono text-xs text-ink-weak">{org.registry_url}</p>
         )}
       </div>
-      <div className="ml-4 shrink-0 text-right text-xs text-slate-400">
+      <div className="ml-4 shrink-0 text-right text-xs text-ink-weak">
         TTL {org.ttl_seconds}s
         {org.domain_verified && (
-          <span className="ml-2 text-emerald-600">✓ verified</span>
+          <span className="ml-2 text-success">✓ verified</span>
         )}
       </div>
     </div>
@@ -132,7 +132,7 @@ export default function QueryPage() {
       description="Look up an organization by org ID, keyword, URN, or a natural-language prompt."
     >
       <form
-        className="space-y-4 rounded-3xl border border-black/10 bg-white p-5 shadow-sm"
+        className="space-y-4 rounded-3xl border border-line bg-surface-light p-5 shadow-sm"
         onSubmit={runQuery}
       >
         {/* Mode selector, hidden when URN is detected */}
@@ -144,8 +144,8 @@ export default function QueryPage() {
                 type="button"
                 onClick={() => setMode(key)}
                 className={`rounded-full border px-4 py-2 text-sm transition ${mode === key
-                  ? "border-slate-950 bg-slate-950 text-white"
-                  : "border-black/10 bg-white text-slate-600 hover:bg-slate-50"
+                  ? "border-brand-800 bg-brand-800 text-white"
+                  : "border-line bg-surface-light text-ink-medium hover:bg-surface-strong"
                   }`}
               >
                 {key === "org_id" ? "By Org ID" : key === "agentic" ? "Agentic Search" : "Keyword Search"}
@@ -156,7 +156,7 @@ export default function QueryPage() {
 
         {/* URN hint */}
         {isUrn && (
-          <p className="text-xs text-indigo-600">
+          <p className="text-xs text-ink-strong">
             URN detected. Resolving via NANDA Index
           </p>
         )}
@@ -166,25 +166,25 @@ export default function QueryPage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={placeholder}
-            className="rounded-2xl border border-black/10 px-4 py-3 font-mono text-sm outline-none focus:ring-2 focus:ring-slate-300"
+            className="rounded-2xl border border-line px-4 py-3 font-mono text-sm outline-none focus:ring-2 focus:ring-line-strong"
           />
           <button
             type="submit"
             disabled={loading || !query.trim()}
-            className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-2xl bg-brand-500 px-5 py-3 text-sm font-medium text-on-brand hover:bg-brand-600 transition disabled:cursor-not-allowed disabled:opacity-60"
           >
             {loading ? "Running…" : "Run"}
           </button>
         </div>
 
         {latency !== null && (
-          <p className="text-xs text-slate-400">Latency: {latency} ms</p>
+          <p className="text-xs text-ink-weak">Latency: {latency} ms</p>
         )}
       </form>
 
       <div className="mt-6 space-y-4">
         {error && (
-          <div className="rounded-3xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+          <div className="rounded-3xl border border-danger bg-danger-soft p-4 text-sm text-danger">
             {error}
           </div>
         )}
@@ -192,7 +192,7 @@ export default function QueryPage() {
         {/* Single org result */}
         {result?.kind === "single" && result.single && (
           <>
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-ink-medium">
               Index record
             </p>
             <IndexRecordCard org={result.single} />
@@ -203,7 +203,7 @@ export default function QueryPage() {
         {/* Search results */}
         {result?.kind === "search" && result.search && (
           <>
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-ink-medium">
               {result.search.count === 0
                 ? "No results"
                 : `${result.search.count} result${result.search.count !== 1 ? "s" : ""} for "${result.search.query}"`}
@@ -227,16 +227,16 @@ export default function QueryPage() {
         {/* Agentic search results: ranked agent candidates */}
         {result?.kind === "agentic" && result.agentic && (
           <>
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-ink-medium">
               {result.agentic.count === 0
                 ? "No candidates"
                 : `${result.agentic.count} candidate${result.agentic.count !== 1 ? "s" : ""} for "${result.agentic.query}"`}
-              <span className="ml-2 normal-case text-slate-400">
+              <span className="ml-2 normal-case text-ink-weak">
                 ({result.agentic.orgs_queried} org{result.agentic.orgs_queried !== 1 ? "s" : ""} queried, {result.agentic.took_ms}ms)
               </span>
             </p>
             {result.agentic.orgs_unreachable.length > 0 && (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+              <div className="rounded-2xl border border-brand-300 bg-warning-soft px-4 py-3 text-sm text-warning">
                 Unreachable: {result.agentic.orgs_unreachable.join(", ")}
               </div>
             )}
@@ -263,13 +263,13 @@ export default function QueryPage() {
         {/* URN resolve result: hop 1 (index) plus hop 2 (agent record) */}
         {result?.kind === "resolve" && result.resolve && (
           <>
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-ink-medium">
               Resolved: <span className="font-mono normal-case">{result.resolve.locator}</span>
             </p>
 
             {/* Hop 1: NANDA Index record */}
             <div>
-              <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">
+              <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.16em] text-ink-weak">
                 Hop 1: NANDA Index
               </p>
               <IndexRecordCard org={result.resolve.index_record} />
@@ -277,32 +277,32 @@ export default function QueryPage() {
 
             {/* Hop 2: Agent record from the registry server */}
             <div>
-              <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">
+              <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.16em] text-ink-weak">
                 Hop 2: Agent record
               </p>
               {result.agentError ? (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                <div className="rounded-2xl border border-brand-300 bg-warning-soft px-4 py-3 text-sm text-warning">
                   {result.agentError}
                 </div>
               ) : result.agent ? (
-                <div className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm space-y-2">
+                <div className="rounded-2xl border border-line bg-surface-light p-4 shadow-sm space-y-2">
                   <div className="flex items-center gap-2">
-                    <p className="font-semibold text-slate-950">{result.agent.displayName}</p>
-                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 font-mono text-[11px] text-emerald-700">
+                    <p className="font-semibold text-ink-strong">{result.agent.displayName}</p>
+                    <span className="rounded-full border border-line bg-success-soft px-2.5 py-0.5 font-mono text-[11px] text-success">
                       {result.agent.identifier}
                     </span>
                   </div>
                   {result.agent.description && (
-                    <p className="text-sm text-slate-600">{result.agent.description}</p>
+                    <p className="text-sm text-ink-medium">{result.agent.description}</p>
                   )}
                   <a href={result.agent.url} target="_blank" rel="noopener noreferrer"
-                    className="block truncate font-mono text-xs text-indigo-600 hover:underline">
+                    className="block truncate font-mono text-xs text-ink-strong hover:underline">
                     {result.agent.url}
                   </a>
                   {(result.agent.tags ?? []).length > 0 && (
                     <div className="flex flex-wrap gap-1.5 pt-1">
                       {(result.agent.tags ?? []).map((tag) => (
-                        <span key={tag} className="rounded-full border border-black/10 bg-slate-50 px-2.5 py-1 font-mono text-xs text-slate-600">
+                        <span key={tag} className="rounded-full border border-line bg-surface-strong px-2.5 py-1 font-mono text-xs text-ink-medium">
                           {tag}
                         </span>
                       ))}

@@ -20,7 +20,7 @@ export function TableEmptyState({
       {actionLabel && actionHref ? (
         <Link
           href={actionHref}
-          className="inline-flex items-center justify-center mt-5 h-9 rounded-control bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600 transition"
+          className="inline-flex items-center justify-center mt-5 h-9 rounded-control bg-brand-500 px-4 text-sm font-medium text-on-brand hover:bg-brand-600 transition"
         >
           {actionLabel}
         </Link>
