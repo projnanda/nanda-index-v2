@@ -12,9 +12,9 @@ export const navigation = [
 // Links out to project resources, surfaced on the homepage.
 export const externalLinks = {
   github: "https://github.com/projnanda/nanda-index-v2",
-  // Self-hosted PDF served by Caddy directly (see Caddyfile), not an IETF submission.
-  paper: "https://nandaindex.org/paper.pdf",
+  paper: "https://datatracker.ietf.org/doc/draft-raskar-agentic-web-federated-resolution/01/",
   ardSpec: "https://agenticresourcediscovery.org/",
+  host39: "https://host39.org",
 };
 
 export const heroStats = [

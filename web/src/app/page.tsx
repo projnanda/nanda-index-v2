@@ -63,7 +63,11 @@ export default function HomePage() {
         </p>
       </div>
 
-      <div className="mt-10 flex flex-wrap gap-3">
+      <p className="mt-10 text-sm text-ink-medium">
+        The reference implementation is on GitHub, and you can host your own agent facts on host39.org.
+      </p>
+
+      <div className="mt-3 flex flex-wrap gap-3">
         <a
           href={externalLinks.paper}
           target="_blank"
@@ -79,6 +83,14 @@ export default function HomePage() {
           className="inline-flex items-center justify-center h-10 rounded-control border-2 border-line px-5 text-sm font-medium text-ink hover:border-line-strong transition"
         >
           GitHub repo
+        </a>
+        <a
+          href={externalLinks.host39}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center h-10 rounded-control border-2 border-line px-5 text-sm font-medium text-ink hover:border-line-strong transition"
+        >
+          host39.org
         </a>
       </div>
     </div>
