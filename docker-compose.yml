@@ -33,10 +33,11 @@ services:
       context: ./server
       dockerfile: Dockerfile
     environment:
-      NODE_ENV: production
+      NODE_ENV: development
       PORT: 3001
       DATABASE_URL: postgresql://nanda:${POSTGRES_PASSWORD:-nanda-local}@db:5432/nanda_index
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
+      COOKIE_SECRET: ${COOKIE_SECRET:-dev-cookie-secret-change-in-production}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
@@ -60,6 +61,7 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_NANDA_INDEX_API_URL: ${NEXT_PUBLIC_NANDA_INDEX_API_URL:-http://localhost:3001}
+        NEXT_PUBLIC_GA_MEASUREMENT_ID: ${NEXT_PUBLIC_GA_MEASUREMENT_ID:-}
     environment:
       PORT: 3000
     ports:

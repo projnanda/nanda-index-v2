@@ -58,6 +58,7 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_NANDA_INDEX_API_URL: ${NEXT_PUBLIC_NANDA_INDEX_API_URL}
+        NEXT_PUBLIC_GA_MEASUREMENT_ID: ${NEXT_PUBLIC_GA_MEASUREMENT_ID:-}
     environment:
       PORT: 3000
     depends_on:

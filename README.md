@@ -123,6 +123,9 @@ EMAIL_FROM=noreply@nandaindex.org
 FRONTEND_URL=https://nandaindex.org
 NEXT_PUBLIC_NANDA_INDEX_API_URL=https://api.nandaindex.org
 
+# Google Analytics (GA4) — optional, omit to disable tracking
+NEXT_PUBLIC_GA_MEASUREMENT_ID=G-XXXXXXXXXX
+
 DB_MAX_CONNECTIONS=10
 ```
 
