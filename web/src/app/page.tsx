@@ -84,6 +84,14 @@ export default function HomePage() {
           GitHub repo
         </a>
         <a
+          href={externalLinks.ietfDraft}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center h-10 rounded-control border-2 border-line px-5 text-sm font-medium text-ink hover:border-line-strong transition"
+        >
+          IETF Draft
+        </a>
+        <a
           href={externalLinks.host39}
           target="_blank"
           rel="noopener noreferrer"
