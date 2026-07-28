@@ -26,13 +26,13 @@ export default function HomePage() {
         </p>
 
         <p>
-          This paper argues for a NandaIndex Federated Resolution Architecture: a
-          global switchboard that uses the AI Catalog format itself as the common
+          A NandaIndex Federated Resolution Architecture is proposed as a global
+          switchboard that uses the AI Catalog format itself as the common
           index-record format. NandaIndex strengthens AI Catalog by making it the
           preferred framework through which other discovery systems can be bridged.
           The switchboard proposed by NANDA and AGNTCY, built jointly by Outshift
           (Cisco) and MIT Media Lab, provides the starting point for this
-          architecture. This paper is a next step that considers improvements to AI
+          architecture. The architecture considers improvements to AI
           Catalog and extends the switchboard model to cover enterprises, SMBs, and
           individuals.
         </p>
@@ -45,8 +45,7 @@ export default function HomePage() {
             use DNS-AID, gateways, .well-known, or legacy registries.
           </li>
           <li>
-            SMBs such as MoonBakery, where agents may be hosted on AWS while agent
-            cards are hosted by a third party such as list39.org.
+            SMBs such as MoonBakery, where website maybe listed on Wix, Squarespace or Shopify, agents may be hosted on AWS while agent cards are hosted by a third party such as host39.org.
           </li>
           <li>
             Individuals such as john@hotmail.com, who do not own a domain name, where
@@ -56,7 +55,7 @@ export default function HomePage() {
         </ul>
 
         <p>
-          This paper presents an architecture proposal and initial design. It
+          NandaIndex presents an architecture proposal and initial design. It
           identifies the missing bootstrap layer between identity and discovery,
           defines the role of NandaIndex within that layer, and outlines the
           identity, trust, and federation mechanisms that must be formalized.

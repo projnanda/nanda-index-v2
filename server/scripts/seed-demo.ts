@@ -103,7 +103,7 @@ const records: DemoRecord[] = [
     displayName: 'Moon Bakery Orders Agent',
     domain: 'moonbakery.com',
     contactEmail: 'orders@moonbakery.com',
-    registryUrl: 'https://agentcards.list39.org/moonbakery.com/orders.json',
+    registryUrl: 'https://agentcards.host39.org/moonbakery.com/orders.json',
     identifier: 'urn:ai:domain:moonbakery.com:agent:orders',
     mediaType: 'application/a2a-agent-card+json',
     description:
@@ -113,7 +113,7 @@ const records: DemoRecord[] = [
     catalogMetadata: pn({
       resolutionRole: 'smb-agent-card',
       preferredDiscovery: 'nandaindex',
-      agentCardHost: 'list39.org',
+      agentCardHost: 'host39.org',
       'runtime.provider': 'AWS',
       'runtime.url': 'https://moonbakery-orders.aws.example.com',
       'auth.metadata': 'public',
@@ -126,7 +126,7 @@ const records: DemoRecord[] = [
     displayName: "John's Personal Agent",
     domain: null,
     contactEmail: 'john@hotmail.com',
-    registryUrl: 'https://agentcards.list39.org/personal/john%40hotmail.com/card.json',
+    registryUrl: 'https://agentcards.host39.org/personal/john%40hotmail.com/card.json',
     identifier: 'urn:ai:email:john@hotmail.com',
     mediaType: 'application/a2a-agent-card+json',
     description:
@@ -136,7 +136,7 @@ const records: DemoRecord[] = [
     catalogMetadata: pn({
       resolutionRole: 'personal-agent-card',
       preferredDiscovery: 'nandaindex',
-      agentCardHost: 'list39.org',
+      agentCardHost: 'host39.org',
       'runtime.provider': 'Azure',
       'runtime.url': 'https://john-agent.azure.com',
       'auth.metadata': 'public_minimal',

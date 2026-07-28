@@ -1,10 +1,9 @@
 import Link from "next/link";
-import { externalLinks } from "@/lib/site-data";
 
 // ── Registration flow data ────────────────────────────────────────────────────
 // "who" and "resolution" follow the paper's Section 6 (Deployment Contexts and
 // Use Cases) as closely as the app's own naming allows: the paper's example
-// third-party card host is "list39.org", here it's host39.org, the real product.
+// third-party card host is "host39.org", here it's host39.org, the real product.
 
 const FLOWS: {
   id: string;
