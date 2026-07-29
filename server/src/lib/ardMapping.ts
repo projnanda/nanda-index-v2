@@ -7,6 +7,7 @@
  */
 export const NANDA_TO_ARD_TYPE: Record<string, string> = {
   'application/ai-catalog+json':      'application/ai-registry+json',
+  'application/vnd.ans-registry+json': 'application/ai-registry+json',
   'application/vnd.dns-aid+json':     'application/a2a-agent-card+json',
   'application/a2a-agent-card+json':  'application/a2a-agent-card+json',
   'application/mcp-server-card+json': 'application/mcp-server-card+json',

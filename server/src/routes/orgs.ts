@@ -125,7 +125,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
           ttl_seconds:   { type: 'integer', minimum: 3600, maximum: 604800 },
           identifier:    { type: 'string', maxLength: 512 },
           media_type:    { type: 'string', maxLength: 128,
-                           enum: ['application/ai-catalog+json', 'application/vnd.dns-aid+json', 'application/a2a-agent-card+json', 'application/mcp-server-card+json', 'application/agentskill+zip'] },
+                           enum: ['application/ai-catalog+json', 'application/vnd.ans-registry+json', 'application/vnd.dns-aid+json', 'application/a2a-agent-card+json', 'application/mcp-server-card+json', 'application/agentskill+zip'] },
           description:   { type: 'string', maxLength: 1000 },
           tags:          { type: 'array', items: { type: 'string', maxLength: 64 }, maxItems: 20 },
           version:       { type: 'string', maxLength: 64 },
@@ -156,6 +156,10 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
     const path = body.hosting_path ?? 'registry';
     const isDnsAid = path === 'dns-aid';
     const isPersonal = path === 'personal';
+    // A pointer-only registry (e.g. ANS) exists only to point at another
+    // registry, so it MUST carry a registry_url regardless of hosting_path —
+    // otherwise it would be a pointer to nowhere.
+    const isPointerOnly = body.media_type === 'application/vnd.ans-registry+json';
 
     // Domain: required for all paths except personal
     if (!isPersonal && !body.domain) {
@@ -165,10 +169,11 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       return reply.code(400).send({ error: 'VALIDATION', detail: 'domain must be a valid hostname (e.g. acme.com)' });
     }
 
-    // registry_url: required for registry, smb, personal — not for dns-aid
-    if (!isDnsAid) {
+    // registry_url: required for registry, smb, personal, and any pointer-only
+    // registry (e.g. ANS) — not for dns-aid, unless it is pointer-only.
+    if (!isDnsAid || isPointerOnly) {
       if (!body.registry_url) {
-        return reply.code(400).send({ error: 'VALIDATION', detail: 'registry_url is required for registry, smb, and personal registrations' });
+        return reply.code(400).send({ error: 'VALIDATION', detail: 'registry_url is required for registry, smb, personal, and pointer-only (e.g. ANS) registrations' });
       }
       if (!/^https?:\/\//.test(body.registry_url)) {
         return reply.code(400).send({ error: 'VALIDATION', detail: 'registry_url must start with https://' });

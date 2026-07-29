@@ -39,6 +39,16 @@ export interface FanoutOptions {
 
 const ENTERPRISE_MEDIA_TYPE = 'application/ai-catalog+json';
 
+/**
+ * A pointer-only registry (e.g. an Agent Name Service instance): the NANDA
+ * Index points at it but MUST NOT resolve into it — its agents are resolved at
+ * that registry's own hop, never here. Unlike ENTERPRISE_MEDIA_TYPE it is not
+ * fanned out, and unlike the single-agent types it is not synthesized as an
+ * agent either (it is a registry, not one agent), so it contributes no
+ * candidate to agentic search.
+ */
+const POINTER_ONLY_MEDIA_TYPE = 'application/vnd.ans-registry+json';
+
 function isRemoteCatalogDocument(body: unknown): body is RemoteCatalogDocument {
   return (
     typeof body === 'object' &&
@@ -120,7 +130,9 @@ async function runWithConcurrency<T>(
 /**
  * Expands ranked candidate orgs into agent-level candidates, branching by
  * media_type: enterprise orgs (backed by a nanda-registry instance) are
- * fanned out to live via GET <registry_url>/agents/search; every other type
+ * fanned out to live via GET <registry_url>/agents/search; pointer-only
+ * registries (POINTER_ONLY_MEDIA_TYPE, e.g. ANS) are skipped entirely — the
+ * index points at them but never resolves into them; every other type
  * (SMB/personal A2A cards, DNS-AID) has no registry to search underneath —
  * the org's own record already represents exactly one agent, so it's
  * emitted as-is with no HTTP call.
@@ -138,6 +150,11 @@ export async function fanOutAgentSearch(
   const unreachable: string[] = [];
 
   const tasks = orgs.map((org) => async () => {
+    if (org.mediaType === POINTER_ONLY_MEDIA_TYPE) {
+      // Pointer-only registry (e.g. ANS): the index never resolves into it.
+      // No fan-out, no single-agent synthesis — it contributes nothing here.
+      return;
+    }
     if (org.mediaType !== ENTERPRISE_MEDIA_TYPE) {
       candidates.push(synthesizeSingleAgentCandidate(org));
       return;
