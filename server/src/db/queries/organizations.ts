@@ -1,4 +1,5 @@
 import { getSql } from '../client.js';
+import { DEFAULT_MEDIA_TYPE } from '../../lib/mediaTypes.js';
 import type { IndexRecord, PublisherBlock, TrustManifest } from '../../types/api/index-record.js';
 
 /** Domain type — camelCase (postgres.camel maps snake_case columns). */
@@ -179,7 +180,7 @@ export async function insertOrganization(params: InsertOrgParams): Promise<Organ
        ${params.registryUrl ?? null}, ${params.verifyToken}, ${params.verifyTokenExpiresAt},
        ${params.ttlSeconds ?? 86400},
        ${identifier},
-       ${params.mediaType ?? 'application/ai-catalog+json'},
+       ${params.mediaType ?? DEFAULT_MEDIA_TYPE},
        ${params.description ?? null},
        ${sql.array(params.tags ?? [])},
        ${params.publisher ? sql.json(JSON.parse(JSON.stringify(params.publisher))) : null},

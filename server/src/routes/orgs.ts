@@ -12,6 +12,7 @@ import {
   CHALLENGE_TTL_MS,
 } from '../services/domainVerification.js';
 import { INDEX_RECORD_SCHEMA, TRUST_MANIFEST_SCHEMA } from '../types/api/index-record.js';
+import { NANDA_MEDIA_TYPES } from '../lib/mediaTypes.js';
 import { apiErrorSchema } from '../types/api/common.js';
 import type { JwtPayload } from '../plugins/jwt.js';
 import type { PublisherBlock, TrustManifest } from '../types/api/index-record.js';
@@ -124,8 +125,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
           registry_url:  { type: 'string', maxLength: 512 },
           ttl_seconds:   { type: 'integer', minimum: 3600, maximum: 604800 },
           identifier:    { type: 'string', maxLength: 512 },
-          media_type:    { type: 'string', maxLength: 128,
-                           enum: ['application/ai-catalog+json', 'application/vnd.dns-aid+json', 'application/a2a-agent-card+json', 'application/mcp-server-card+json', 'application/agentskill+zip'] },
+          media_type:    { type: 'string', maxLength: 128, enum: [...NANDA_MEDIA_TYPES] },
           description:   { type: 'string', maxLength: 1000 },
           tags:          { type: 'array', items: { type: 'string', maxLength: 64 }, maxItems: 20 },
           version:       { type: 'string', maxLength: 64 },
