@@ -47,7 +47,7 @@ const ENTERPRISE_MEDIA_TYPE = 'application/ai-catalog+json';
  * agent either (it is a registry, not one agent), so it contributes no
  * candidate to agentic search.
  */
-const POINTER_ONLY_MEDIA_TYPE = 'application/vnd.ans-registry+json';
+export const POINTER_ONLY_MEDIA_TYPE = 'application/vnd.ans-registry+json';
 
 function isRemoteCatalogDocument(body: unknown): body is RemoteCatalogDocument {
   return (
