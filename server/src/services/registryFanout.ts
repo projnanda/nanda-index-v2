@@ -1,4 +1,5 @@
 import type { RankedOrganization } from '../db/queries/organizations.js';
+import { ENTERPRISE_MEDIA_TYPE } from '../lib/mediaTypes.js';
 
 /** Wire shape returned by a nanda-registry instance's CatalogEntry (camelCase). */
 export interface RemoteCatalogEntry {
@@ -36,8 +37,6 @@ export interface FanoutOptions {
   timeoutMs?: number;
   perOrgLimit?: number;
 }
-
-const ENTERPRISE_MEDIA_TYPE = 'application/ai-catalog+json';
 
 function isRemoteCatalogDocument(body: unknown): body is RemoteCatalogDocument {
   return (
