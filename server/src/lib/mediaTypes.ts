@@ -11,6 +11,7 @@
 /** NANDA Index `media_type` vocabulary — the type an IndexRecord carries. */
 export const NANDA_MEDIA_TYPE = {
   AI_CATALOG:  'application/ai-catalog+json',
+  ANS_REGISTRY: 'application/vnd.ans-registry+json',
   DNS_AID:     'application/vnd.dns-aid+json',
   A2A_CARD:    'application/a2a-agent-card+json',
   MCP_CARD:    'application/mcp-server-card+json',
@@ -31,6 +32,16 @@ export const DEFAULT_MEDIA_TYPE: NandaMediaType = NANDA_MEDIA_TYPE.AI_CATALOG;
  * single-agent card types, whose record already represents exactly one agent.
  */
 export const ENTERPRISE_MEDIA_TYPE: NandaMediaType = NANDA_MEDIA_TYPE.AI_CATALOG;
+
+/**
+ * A pointer-only registry (e.g. an Agent Name Service instance): the NANDA
+ * Index points at it but MUST NOT resolve into it — its agents are resolved at
+ * that registry's own hop, never here. Unlike ENTERPRISE_MEDIA_TYPE it is not
+ * fanned out, and unlike the single-agent types it is not synthesized as an
+ * agent either (it is a registry, not one agent), so it contributes no
+ * candidate to agentic search.
+ */
+export const POINTER_ONLY_MEDIA_TYPE: NandaMediaType = NANDA_MEDIA_TYPE.ANS_REGISTRY;
 
 /** ARD `type` vocabulary — the target of NANDA→ARD media-type mapping. */
 export const ARD_MEDIA_TYPE = {

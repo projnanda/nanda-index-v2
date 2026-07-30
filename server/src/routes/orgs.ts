@@ -12,7 +12,7 @@ import {
   CHALLENGE_TTL_MS,
 } from '../services/domainVerification.js';
 import { INDEX_RECORD_SCHEMA, TRUST_MANIFEST_SCHEMA } from '../types/api/index-record.js';
-import { NANDA_MEDIA_TYPES } from '../lib/mediaTypes.js';
+import { NANDA_MEDIA_TYPES, POINTER_ONLY_MEDIA_TYPE } from '../lib/mediaTypes.js';
 import { apiErrorSchema } from '../types/api/common.js';
 import type { JwtPayload } from '../plugins/jwt.js';
 import type { PublisherBlock, TrustManifest } from '../types/api/index-record.js';
@@ -156,6 +156,10 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
     const path = body.hosting_path ?? 'registry';
     const isDnsAid = path === 'dns-aid';
     const isPersonal = path === 'personal';
+    // A pointer-only registry (e.g. ANS) exists only to point at another
+    // registry, so it MUST carry a registry_url regardless of hosting_path —
+    // otherwise it would be a pointer to nowhere.
+    const isPointerOnly = body.media_type === POINTER_ONLY_MEDIA_TYPE;
 
     // Domain: required for all paths except personal
     if (!isPersonal && !body.domain) {
@@ -165,10 +169,11 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       return reply.code(400).send({ error: 'VALIDATION', detail: 'domain must be a valid hostname (e.g. acme.com)' });
     }
 
-    // registry_url: required for registry, smb, personal — not for dns-aid
-    if (!isDnsAid) {
+    // registry_url: required for registry, smb, personal, and any pointer-only
+    // registry (e.g. ANS) — not for dns-aid, unless it is pointer-only.
+    if (!isDnsAid || isPointerOnly) {
       if (!body.registry_url) {
-        return reply.code(400).send({ error: 'VALIDATION', detail: 'registry_url is required for registry, smb, and personal registrations' });
+        return reply.code(400).send({ error: 'VALIDATION', detail: 'registry_url is required for registry, smb, personal, and pointer-only (e.g. ANS) registrations' });
       }
       if (!/^https?:\/\//.test(body.registry_url)) {
         return reply.code(400).send({ error: 'VALIDATION', detail: 'registry_url must start with https://' });

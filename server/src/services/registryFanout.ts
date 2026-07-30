@@ -1,5 +1,5 @@
 import type { RankedOrganization } from '../db/queries/organizations.js';
-import { ENTERPRISE_MEDIA_TYPE } from '../lib/mediaTypes.js';
+import { ENTERPRISE_MEDIA_TYPE, POINTER_ONLY_MEDIA_TYPE } from '../lib/mediaTypes.js';
 
 /** Wire shape returned by a nanda-registry instance's CatalogEntry (camelCase). */
 export interface RemoteCatalogEntry {
@@ -119,7 +119,9 @@ async function runWithConcurrency<T>(
 /**
  * Expands ranked candidate orgs into agent-level candidates, branching by
  * media_type: enterprise orgs (backed by a nanda-registry instance) are
- * fanned out to live via GET <registry_url>/agents/search; every other type
+ * fanned out to live via GET <registry_url>/agents/search; pointer-only
+ * registries (POINTER_ONLY_MEDIA_TYPE, e.g. ANS) are skipped entirely — the
+ * index points at them but never resolves into them; every other type
  * (SMB/personal A2A cards, DNS-AID) has no registry to search underneath —
  * the org's own record already represents exactly one agent, so it's
  * emitted as-is with no HTTP call.
@@ -137,6 +139,11 @@ export async function fanOutAgentSearch(
   const unreachable: string[] = [];
 
   const tasks = orgs.map((org) => async () => {
+    if (org.mediaType === POINTER_ONLY_MEDIA_TYPE) {
+      // Pointer-only registry (e.g. ANS): the index never resolves into it.
+      // No fan-out, no single-agent synthesis — it contributes nothing here.
+      return;
+    }
     if (org.mediaType !== ENTERPRISE_MEDIA_TYPE) {
       candidates.push(synthesizeSingleAgentCandidate(org));
       return;
