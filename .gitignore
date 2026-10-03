@@ -21,3 +21,5 @@ web/tsconfig.tsbuildinfo
 # uploaded straight to the server, not tracked in git.
 /static/*
 !/static/.gitkeep
+
+docs/
