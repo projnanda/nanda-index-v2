@@ -2,12 +2,17 @@ import { PageShell } from "@/components/PageShell";
 
 type Contributor = {
   name: string;
-  organization: "Project Nanda" | "Nasiko";
+  organization: string;
 };
 
 const CONTRIBUTORS: Contributor[] = [
-  { name: "Ramesh Raskar", organization: "Project Nanda" },
-  { name: "Karan Bharadwaj", organization: "Nasiko" },
+  { name: "Ramesh Raskar", organization: "MIT Media Lab and ProjectNANDA.org" },
+  { name: "Pradyumna Chari", organization: "MIT Media Lab" },
+  { name: "Luca Muscariello", organization: "Cisco" },
+  { name: "Samuel Sharaf", organization: "Google" },
+  { name: "Junjie Bu", organization: "Google" },
+  { name: "Karan Bharadwaj", organization: "Nasiko and ProjectNANDA.org" },
+  { name: "Vijoy Pandey", organization: "Cisco" },
   { name: "Ankit Kumar Nath", organization: "Nasiko" },
   { name: "Sharath Chandra", organization: "Project Nanda" },
   { name: "Umamaheswar Edara", organization: "Project Nanda" },
