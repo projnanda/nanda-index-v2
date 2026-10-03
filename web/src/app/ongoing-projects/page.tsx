@@ -23,6 +23,17 @@ const PROJECTS: ProjectLink[] = [
     detail: "The NANDA project at MIT.",
   },
   {
+    title: "Agentic Resource Discovery (ARD)",
+    href: "https://agenticresourcediscovery.org/",
+    detail: "The ARD specification for discovering agentic resources.",
+  },
+  {
+    title: "AI Catalog",
+    href: "https://ai-catalog.io/",
+    detail:
+      "A typed, nestable, machine-readable container for heterogeneous AI resources.",
+  },
+  {
     title: "MIT Media Lab publication",
     href: "https://www.media.mit.edu/publications/a-global-switchboard-for-the-agentic-web-connecting-discovery-islands-across-enterprises-smbs-and-individuals/",
     detail:
