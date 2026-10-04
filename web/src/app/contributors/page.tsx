@@ -23,6 +23,20 @@ const CONTRIBUTORS: Contributor[] = [
 const PAPERS: Paper[] = [
   {
     title:
+      "A Global Switchboard for the Agentic Web: Connecting Discovery Islands Across Enterprises, SMBs, and Individuals",
+    href: "https://nandaindex.org/paper.pdf",
+    authors: [
+      "Ramesh Raskar (MIT Media Lab and ProjectNANDA.org)",
+      "Pradyumna Chari (MIT Media Lab)",
+      "Luca Muscariello (Cisco)",
+      "Samuel Sharaf (Google)",
+      "Junjie Bu (Google)",
+      "Karan Bharadwaj (Nasiko and ProjectNANDA.org)",
+      "Vijoy Pandey (Cisco)",
+    ],
+  },
+  {
+    title:
       "Beyond DNS: Unlocking the Internet of AI Agents via the NANDA Index and Verified AgentFacts",
     href: "https://arxiv.org/abs/2507.14263",
     authors: [
