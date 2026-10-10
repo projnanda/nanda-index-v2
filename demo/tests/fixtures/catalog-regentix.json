@@ -1,0 +1,86 @@
+{
+    "specVersion": "1.0",
+    "entries": [
+        {
+            "identifier": "regentix",
+            "displayName": "Regentix AI",
+            "mediaType": "application/a2a-agent-card+json",
+            "url": "https://server-production-c4d4.up.railway.app/.well-known/agent.json",
+            "description": "Regentix AI \u2014 an enterprise organization of accountable AI agents.",
+            "tags": [
+                "enterprise",
+                "operations",
+                "sales",
+                "customer-success",
+                "engineering",
+                "executive",
+                "scheduling",
+                "meeting-coordination"
+            ],
+            "version": "0.2.0"
+        },
+        {
+            "identifier": "regentix-cto",
+            "displayName": "Regentix AI CTO",
+            "mediaType": "application/a2a-agent-card+json",
+            "url": "https://server-production-5a9d.up.railway.app/regentix.ai/cto.json",
+            "tags": [
+                "engineering",
+                "architecture",
+                "security"
+            ],
+            "description": ""
+        },
+        {
+            "identifier": "regentix-ceo",
+            "displayName": "Regentix AI CEO",
+            "mediaType": "application/a2a-agent-card+json",
+            "url": "https://ceo-production-b906.up.railway.app/.well-known/agent.json",
+            "tags": [
+                "leadership",
+                "strategy",
+                "governance",
+                "architecture"
+            ],
+            "description": ""
+        },
+        {
+            "identifier": "regentix-customer-success",
+            "displayName": "Regentix AI Customer Success Lead",
+            "mediaType": "application/a2a-agent-card+json",
+            "url": "https://server-production-5a9d.up.railway.app/regentix.ai/customer-success.json",
+            "tags": [
+                "support",
+                "onboarding",
+                "retention"
+            ],
+            "description": ""
+        },
+        {
+            "identifier": "regentix-head-of-sales",
+            "displayName": "Regentix AI Head of Sales",
+            "mediaType": "application/a2a-agent-card+json",
+            "url": "https://head-of-sales-production.up.railway.app/.well-known/agent.json",
+            "tags": [
+                "sales",
+                "partnerships",
+                "revenue"
+            ],
+            "description": ""
+        },
+        {
+            "identifier": "regentix-head-of-ops",
+            "displayName": "Regentix AI Head of Operations",
+            "mediaType": "application/a2a-agent-card+json",
+            "url": "https://server-production-5a9d.up.railway.app/regentix.ai/head-of-ops.json",
+            "tags": [
+                "operations",
+                "finance",
+                "logistics"
+            ],
+            "description": ""
+        }
+    ],
+    "omittedMembers": 0,
+    "withheldMembers": 0
+}

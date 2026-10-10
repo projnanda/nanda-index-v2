@@ -1,0 +1,41 @@
+{
+  "version": "dat/0.1",
+  "grant_id": "dat:did:key:z6MkuwsBtrVYSUpUFKWmUVsPqD4J9GD4WUbLACjwNFDHjCNW:3c691df8e7ddf9d4",
+  "grantor_did": "did:key:z6MkuwsBtrVYSUpUFKWmUVsPqD4J9GD4WUbLACjwNFDHjCNW",
+  "grantee_did": "did:key:z6Mkkv2jqdC5u61gF2Dfhp5morHuKa6c8uC4Btr23cFjfYuB",
+  "issued_at": "2026-09-30T21:18:25Z",
+  "not_before": "2026-09-30T21:18:25Z",
+  "not_after": "2026-12-29T21:18:25Z",
+  "human_summary": "Arrange one lunch: find the guests, ask them, and book a table at the named restaurant. No payments. Expires in 90 days.",
+  "scope": {
+    "action_categories": [
+      "appointment_booked",
+      "commitment_entered",
+      "message_sent",
+      "record_filed",
+      "attestation_received",
+      "other"
+    ],
+    "stateless": {
+      "counterparty_allowlist": [
+        "index:public",
+        "index:second",
+        "org:regentix",
+        "org:astrocity",
+        "org:rocketbrain",
+        "agent:regentix-ceo",
+        "agent:astrocity-chief-scientist",
+        "venue:nanda-demo"
+      ]
+    },
+    "stateful": {},
+    "predicate": null
+  },
+  "delegation": {
+    "parent_grant_id": null,
+    "max_depth": 4
+  },
+  "revocation": null,
+  "authorization_ceremony": null,
+  "signature": "bGhrcC3PjXeABRtNm6cTMssqm9gKESNHf555J1TpBIPbKdPCvoDJtEcu6DT08CMVn/fnt4QOJRXh46dj21paAg=="
+}

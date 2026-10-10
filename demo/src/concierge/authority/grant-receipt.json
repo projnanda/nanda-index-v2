@@ -1,0 +1,28 @@
+{
+  "version": "arp/0.1",
+  "receipt_id": "950aeea4-3233-40b7-a91c-939db28d46aa",
+  "issuer_did": "did:key:z6MkuwsBtrVYSUpUFKWmUVsPqD4J9GD4WUbLACjwNFDHjCNW",
+  "principal_did": "did:key:z6MkuwsBtrVYSUpUFKWmUVsPqD4J9GD4WUbLACjwNFDHjCNW",
+  "issued_at": "2026-09-30T21:18:25Z",
+  "action": {
+    "category": "authority_granted",
+    "human_summary": "Arrange one lunch: find the guests, ask them, and book a table at the named restaurant. No payments. Expires in 90 days.",
+    "outcome": "completed",
+    "counterparty_label": "agent:concierge",
+    "machine_payload": {
+      "dat_grant_id": "dat:did:key:z6MkuwsBtrVYSUpUFKWmUVsPqD4J9GD4WUbLACjwNFDHjCNW:3c691df8e7ddf9d4",
+      "dat_digest": "sha256:a1c59f7e4582368ea115ab69828d28dd84a248f5dbf940c5d3521e230ef923cd",
+      "granted_to_did": "did:key:z6Mkkv2jqdC5u61gF2Dfhp5morHuKa6c8uC4Btr23cFjfYuB",
+      "granted_scope": [
+        "appointment_booked",
+        "commitment_entered",
+        "message_sent",
+        "record_filed",
+        "attestation_received",
+        "other"
+      ],
+      "grant_expires_at": "2026-12-29T21:18:25Z"
+    }
+  },
+  "signature": "V8twnJT9DFb2BIGY4YLENcDzw1hiCQM8eYypZH2KCO9WGTTN1g/c7kvAM2n8oPUqvzKqbBAUGOCv6h/buc6SAg=="
+}
