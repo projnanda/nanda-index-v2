@@ -44,6 +44,9 @@ export interface TrustManifest {
   metadata?: Record<string, unknown>;
 }
 
+/** AI Catalog `extensions`: reverse-DNS namespace → that namespace's fields. */
+export type CatalogExtensions = Record<string, Record<string, unknown>>;
+
 export interface IndexRecord {
   org_id: string;
   display_name: string;
@@ -57,12 +60,14 @@ export interface IndexRecord {
   updated_at: string;
 
   // AI Catalog fields
-  identifier?: string;
+  /** Domain-anchored ARD identifier: urn:air:<publisher-FQDN>:<namespace...>:<short-name>. */
+  identifier: string;
   media_type?: string;
   description?: string | null;
   tags?: string[];
   publisher?: PublisherBlock;
-  metadata?: Record<string, unknown>;
+  /** AI Catalog extension fields, keyed by reverse-DNS namespace (e.g. "org.projectnanda"). */
+  extensions: CatalogExtensions;
   data?: Record<string, unknown>;
   version?: string;
   trust_manifest?: TrustManifest;
@@ -93,15 +98,43 @@ export interface CatalogEntry {
   metadata?: Record<string, unknown>;
 }
 
+/**
+ * An index record projected to the switchboard paper's AI Catalog entry shape
+ * (§6): `type` + `url` XOR `data`, with routing hints under `extensions`.
+ */
+export interface IndexCatalogEntry {
+  identifier: string;
+  displayName: string;
+  type: string;
+  url?: string;
+  data?: Record<string, unknown>;
+  version?: string;
+  description?: string;
+  tags?: string[];
+  publisher?: PublisherBlock;
+  trustManifest?: TrustManifest;
+  updatedAt?: string;
+  extensions?: CatalogExtensions;
+}
+
 /** AI Catalog top-level document. */
 export interface CatalogDocument {
   specVersion: string;
   entries: CatalogEntry[];
 }
 
+/**
+ * exact     — an entry is registered under exactly this identifier.
+ * publisher — the publisher's catalog/registry entry; look `identifier` up inside it.
+ */
+export type ResolveMatch = "exact" | "publisher";
+
 export interface ResolveResponse {
+  /** The normalised urn:air: identifier that was resolved. */
   locator: string;
+  /** The locator's short-name — the key to look up inside a catalog on a publisher match. */
   identifier: string;
+  match: ResolveMatch;
   index_record: IndexRecord;
 }
 
@@ -155,7 +188,7 @@ export interface AgenticSearchResponse {
   took_ms: number;
 }
 
-export type HostingPath = "registry" | "dns-aid" | "smb" | "personal";
+export type HostingPath = "registry" | "dns-svcb" | "smb" | "personal";
 
 export interface CreateOrgPayload {
   org_id: string;
@@ -163,14 +196,16 @@ export interface CreateOrgPayload {
   hosting_path?: HostingPath;
   domain?: string | null;
   contact_email: string;
-  registry_url?: string | null;
+  registry_url: string;
   ttl_seconds?: number;
+  /** Optional override; must be anchored to `domain`. Personal identifiers are always derived. */
   identifier?: string;
   media_type?: string;
   description?: string;
   tags?: string[];
-  publisher?: PublisherBlock;
-  catalog_metadata?: Record<string, unknown>;
+  /** Only the display name is client-controlled; the server sets the publisher identifier. */
+  publisher?: { displayName: string };
+  extensions?: CatalogExtensions;
   entry_data?: Record<string, unknown>;
   version?: string;
   trust_manifest?: TrustManifest;
@@ -183,8 +218,8 @@ export interface UpdateOrgPayload {
   ttl_seconds?: number;
   description?: string;
   tags?: string[];
-  publisher?: PublisherBlock;
-  catalog_metadata?: Record<string, unknown>;
+  publisher?: { displayName: string };
+  extensions?: CatalogExtensions;
   entry_data?: Record<string, unknown>;
   version?: string;
   /** undefined = leave unchanged; null = clear the stored manifest. */

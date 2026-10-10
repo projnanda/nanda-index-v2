@@ -96,9 +96,10 @@ export async function agenticSearch(q: string, limit?: number): Promise<AgenticS
 }
 
 /**
- * GET /api/v1/resolve?locator=<agent>@<domain>:global
- * Returns identifier + IndexRecord from the NANDA Index.
- * The caller fetches the AgentRecord directly: GET <index_record.registry_url>/agents/<identifier>
+ * GET /api/v1/resolve?locator=urn:air:<publisher-FQDN>:<namespace...>:<short-name>
+ * Returns the matching IndexRecord. On match "exact" registry_url is the next
+ * hop itself; on match "publisher" it is the publisher's catalog, and the
+ * caller looks up <identifier> (the short-name) inside it.
  */
 export async function resolveAgent(locator: string): Promise<ResolveResponse> {
   return request<ResolveResponse>(`/api/v1/resolve?locator=${encodeURIComponent(locator)}`);

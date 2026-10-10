@@ -21,14 +21,15 @@ async function seedOrg(opts: {
   await sql`
     INSERT INTO organizations
       (org_id, display_name, domain, contact_email, registry_url, verify_token, email_verified, status,
-       description, tags, representative_queries)
+       description, tags, representative_queries, identifier)
     VALUES
       (${opts.orgId}, ${opts.displayName}, ${opts.domain}, ${`admin@${opts.domain}`},
        ${opts.registryUrl ?? `https://${opts.domain}/registry`}, ${verifyToken}, true,
        ${opts.status ?? 'active'},
        ${opts.description ?? null},
        ${sql.array(opts.tags ?? [])},
-       ${sql.array(opts.representativeQueries ?? [])})
+       ${sql.array(opts.representativeQueries ?? [])},
+       ${`urn:air:${opts.domain}:catalog:root`})
     ON CONFLICT (org_id) DO NOTHING
   `;
 }
@@ -72,13 +73,14 @@ describe('rankOrganizationsForQuery', () => {
     const verifyToken = randomBytes(16).toString('hex');
     await sql`
       INSERT INTO organizations
-        (org_id, display_name, domain, contact_email, registry_url, verify_token, email_verified, status, description, tags)
+        (org_id, display_name, domain, contact_email, registry_url, verify_token, email_verified, status, description, tags, identifier)
       VALUES
         ('rank-no-registry', 'No Registry Org', 'rank-noreg.example.com', 'admin@rank-noreg.example.com',
-         NULL, ${verifyToken}, true, 'active', 'DNS-AID discovery only, no registry url', ARRAY['dns-aid'])
+         NULL, ${verifyToken}, true, 'active', 'DNS SVCB discovery only, no registry url', ARRAY['dns-svcb'],
+         'urn:air:rank-noreg.example.com:agent:rank-no-registry')
     `;
 
-    const results = await rankOrganizationsForQuery('DNS-AID discovery');
+    const results = await rankOrganizationsForQuery('DNS SVCB discovery');
     expect(results.map((r) => r.orgId)).not.toContain('rank-no-registry');
   });
 

@@ -58,12 +58,14 @@ export interface IndexRecord {
   updated_at: string;
 
   // AI Catalog fields
-  identifier?: string;
+  /** Domain-anchored ARD identifier: urn:air:<publisher-FQDN>:<namespace...>:<short-name>. */
+  identifier: string;
   media_type?: string;
   description?: string | null;
   tags?: string[];
   publisher?: PublisherBlock;
-  metadata?: Record<string, unknown>;
+  /** AI Catalog extension fields, keyed by reverse-DNS namespace (e.g. "org.projectnanda"). */
+  extensions: Record<string, Record<string, unknown>>;
   data?: Record<string, unknown>;
   version?: string;
   trust_manifest?: TrustManifest;
@@ -93,9 +95,15 @@ export const TRUST_MANIFEST_SCHEMA = {
   },
 } as const;
 
+/** AI Catalog `extensions`: each reverse-DNS namespace maps to an object of fields. */
+export const EXTENSIONS_SCHEMA = {
+  type: 'object',
+  additionalProperties: { type: 'object', additionalProperties: true },
+} as const;
+
 export const INDEX_RECORD_SCHEMA = {
   type: 'object',
-  required: ['org_id', 'display_name', 'ttl_seconds', 'status', 'email_verified', 'domain_verified', 'created_at', 'updated_at'],
+  required: ['org_id', 'display_name', 'identifier', 'extensions', 'ttl_seconds', 'status', 'email_verified', 'domain_verified', 'created_at', 'updated_at'],
   properties: {
     org_id:          { type: 'string' },
     display_name:    { type: 'string' },
@@ -119,8 +127,8 @@ export const INDEX_RECORD_SCHEMA = {
         identityType: { type: 'string' },
       },
     },
-    metadata: { type: 'object', additionalProperties: true },
-    data:     { type: 'object', additionalProperties: true },
+    extensions: EXTENSIONS_SCHEMA,
+    data:       { type: 'object', additionalProperties: true },
     version:  { type: 'string' },
     trust_manifest: TRUST_MANIFEST_SCHEMA,
     representative_queries: { type: 'array', items: { type: 'string' } },

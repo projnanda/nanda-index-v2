@@ -5,18 +5,20 @@ import { listIndexRecords } from "@/lib/nanda-api";
 import { JsonPanel } from "@/components/JsonPanel";
 import { toCatalogEntry } from "@/lib/catalog-entry";
 import type { IndexRecord, TrustManifest } from "@/lib/nanda-types";
+import { nandaField } from "@/lib/air";
 
 const PAGE_SIZE = 9;
 
 // ── Categories ──────────────────────────────────────────────────────────────
 // Exactly six categories. MCPs and Skills are driven purely by media_type;
-// Enterprise / DNS-AID / SMBs / Personal are derived from media_type plus tags.
+// Enterprise / DNS SVCB / SMBs / Personal come from the entry's
+// org.projectnanda resolutionRole, falling back to media_type plus tags.
 
-type Category = "enterprise" | "dns-aid" | "smb" | "personal" | "mcp" | "skill";
+type Category = "enterprise" | "dns-svcb" | "smb" | "personal" | "mcp" | "skill";
 
 const CATEGORIES: { key: Category; label: string }[] = [
   { key: "enterprise", label: "Enterprise" },
-  { key: "dns-aid", label: "DNS-AID" },
+  { key: "dns-svcb", label: "DNS SVCB" },
   { key: "smb", label: "SMBs" },
   { key: "personal", label: "Personal" },
   { key: "mcp", label: "MCPs" },
@@ -25,7 +27,7 @@ const CATEGORIES: { key: Category; label: string }[] = [
 
 const CATEGORY_LABEL: Record<Category, string> = {
   enterprise: "Enterprise",
-  "dns-aid": "DNS-AID",
+  "dns-svcb": "DNS SVCB",
   smb: "SMB",
   personal: "Personal",
   mcp: "MCP",
@@ -35,7 +37,7 @@ const CATEGORY_LABEL: Record<Category, string> = {
 // Soft, on-brand chip colors so each category reads at a glance.
 const CATEGORY_BADGE: Record<Category, string> = {
   enterprise: "bg-brand-200 text-brand-700",
-  "dns-aid": "bg-accent-teal text-accent-teal-ink",
+  "dns-svcb": "bg-accent-teal text-accent-teal-ink",
   smb: "bg-warning-soft text-warning",
   personal: "bg-[#dcf5e6] text-[#0f7a45]",
   mcp: "bg-[#e7e3fb] text-[#4b3aa6]",
@@ -43,6 +45,12 @@ const CATEGORY_BADGE: Record<Category, string> = {
 };
 
 const FALLBACK_BADGE = "bg-surface-tag text-ink";
+
+const ROLE_CATEGORY: Record<string, Category> = {
+  "dns-svcb-pointer": "dns-svcb",
+  "smb-agent-card": "smb",
+  "personal-agent-card": "personal",
+};
 
 /** Map a single record to one of the six categories, or null when it fits none. */
 function categoryOf(record: IndexRecord): Category | null {
@@ -52,8 +60,10 @@ function categoryOf(record: IndexRecord): Category | null {
   // Media-type-driven categories take priority.
   if (mt === "application/mcp-server-card+json") return "mcp";
   if (mt === "application/agentskill+zip") return "skill";
-  if (mt === "application/vnd.dns-aid+json") return "dns-aid";
-  if (mt === "application/ai-catalog+json") return "enterprise";
+  if (mt === "application/ai-catalog+json" || mt === "application/ai-registry+json") return "enterprise";
+
+  const role = nandaField(record, "resolutionRole");
+  if (role && ROLE_CATEGORY[role]) return ROLE_CATEGORY[role];
 
   // A2A agent cards split into Personal vs SMB by their tags.
   if (mt === "application/a2a-agent-card+json") {
@@ -98,7 +108,7 @@ function mapRow(record: IndexRecord): Row {
     badgeLabel: category ? CATEGORY_LABEL[category] : "Agent",
     badgeClass: category ? CATEGORY_BADGE[category] : FALLBACK_BADGE,
     name,
-    identifier: record.identifier ?? record.org_id,
+    identifier: record.identifier,
     date,
     description,
     tags,
@@ -465,7 +475,7 @@ function DetailDrawer({ record, onClose }: { record: IndexRecord | null; onClose
                   </span>
                 </div>
                 <p className="mt-0.5 font-mono text-xs text-ink-weak break-all">
-                  {record.identifier ?? record.org_id}
+                  {record.identifier}
                 </p>
               </div>
               <button

@@ -22,7 +22,7 @@ async function seedOrg(opts: {
     VALUES
       (${opts.orgId}, ${opts.displayName}, ${opts.domain}, ${`admin@${opts.domain}`},
        ${opts.registryUrl ?? `https://${opts.domain}/registry`}, ${verifyToken}, true, 'active',
-       ${`urn:ai:domain:${opts.domain}`},
+       ${`urn:air:${opts.domain}:catalog:root`},
        ${opts.mediaType ?? 'application/ai-catalog+json'},
        ${opts.description ?? null},
        ${sql.array(opts.tags ?? [])})

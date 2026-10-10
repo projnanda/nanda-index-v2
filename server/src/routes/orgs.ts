@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { findByOrgId, insertOrganization, updateOrganization, suspendOrganization, reactivateOrganization, deleteOrganization, setDomainChallenge, markDomainVerified, toIndexRecord } from '../db/queries/organizations.js';
+import { findByOrgId, findByDomain, findByIdentifier, insertOrganization, updateOrganization, suspendOrganization, reactivateOrganization, deleteOrganization, setDomainChallenge, markDomainVerified, toIndexRecord, type Organization } from '../db/queries/organizations.js';
 import { insertMembership, checkMembership } from '../db/queries/orgMemberships.js';
 import { sendVerificationEmail } from '../services/email.js';
 import { generateRepresentativeQueries } from '../services/llmEnrichment.js';
@@ -11,12 +11,30 @@ import {
   lookupDomainToken,
   CHALLENGE_TTL_MS,
 } from '../services/domainVerification.js';
-import { INDEX_RECORD_SCHEMA, TRUST_MANIFEST_SCHEMA } from '../types/api/index-record.js';
+import { INDEX_RECORD_SCHEMA, TRUST_MANIFEST_SCHEMA, EXTENSIONS_SCHEMA } from '../types/api/index-record.js';
 import { apiErrorSchema } from '../types/api/common.js';
 import type { JwtPayload } from '../plugins/jwt.js';
-import type { PublisherBlock, TrustManifest } from '../types/api/index-record.js';
+import type { TrustManifest } from '../types/api/index-record.js';
+import { isFqdn, PERSONAL_CARD_HOST } from '../lib/airUrn.js';
+import {
+  ALLOWED_MEDIA_TYPES,
+  HOSTING_PATHS,
+  EntryProfileError,
+  buildEntryProfile,
+  updateEntryProfile,
+  type CatalogExtensions,
+  type EntryProfile,
+  type HostingPath,
+} from '../lib/entryProfile.js';
 
-type HostingPath = 'registry' | 'dns-aid' | 'smb' | 'personal';
+/** Only the publisher's display name is client-controlled; its identifier is the verified domain. */
+const PUBLISHER_INPUT_SCHEMA = {
+  type: 'object',
+  required: ['displayName'],
+  properties: { displayName: { type: 'string', minLength: 1, maxLength: 255 } },
+} as const;
+
+const VERIFY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 
 /** Wire shape returned when an org admin requests a DNS challenge. */
 const DOMAIN_CHALLENGE_SCHEMA = {
@@ -37,14 +55,14 @@ interface CreateOrgBody {
   hosting_path?: HostingPath;
   domain?: string | null;
   contact_email: string;
-  registry_url?: string | null;
+  registry_url: string;
   ttl_seconds?: number;
   identifier?: string;
   media_type?: string;
   description?: string;
   tags?: string[];
-  publisher?: PublisherBlock;
-  catalog_metadata?: Record<string, unknown>;
+  publisher?: { displayName: string };
+  extensions?: CatalogExtensions;
   entry_data?: Record<string, unknown>;
   version?: string;
   trust_manifest?: TrustManifest;
@@ -57,12 +75,90 @@ interface UpdateOrgBody {
   ttl_seconds?: number;
   description?: string;
   tags?: string[];
-  publisher?: PublisherBlock;
-  catalog_metadata?: Record<string, unknown>;
+  publisher?: { displayName: string };
+  extensions?: CatalogExtensions;
   entry_data?: Record<string, unknown>;
   version?: string;
   /** undefined = leave unchanged; null = clear the stored manifest. */
   trust_manifest?: TrustManifest | null;
+}
+
+interface ApiError {
+  status: 400 | 409;
+  body: { error: string; detail: string };
+}
+
+const validationError = (detail: string): ApiError => ({ status: 400, body: { error: 'VALIDATION', detail } });
+const conflictError = (detail: string): ApiError => ({ status: 409, body: { error: 'CONFLICT', detail } });
+
+/** Checks the create body's hosting-path invariants; returns the first problem or null. */
+function validateCreateBody(body: CreateOrgBody, path: HostingPath): ApiError | null {
+  if (path === 'personal' && body.domain) {
+    return validationError('personal registrations have no domain — the identifier is anchored to the card host');
+  }
+  if (path !== 'personal' && !body.domain) {
+    return validationError(`domain is required for ${path} registrations`);
+  }
+  if (body.domain && !isFqdn(body.domain)) {
+    return validationError('domain must be a valid hostname (e.g. acme.com)');
+  }
+  if (!/^https?:\/\//.test(body.registry_url)) {
+    return validationError('registry_url must start with https://');
+  }
+  return null;
+}
+
+/** Rejects an identifier or domain another entry already holds. */
+async function findConflict(identifier: string, domain: string | null, selfOrgId?: string): Promise<ApiError | null> {
+  const byIdentifier = await findByIdentifier(identifier);
+  if (byIdentifier && byIdentifier.orgId !== selfOrgId) {
+    return conflictError(`identifier "${identifier}" is already registered`);
+  }
+  const byDomain = domain ? await findByDomain(domain) : null;
+  if (byDomain && byDomain.orgId !== selfOrgId) {
+    return conflictError(`domain "${domain}" is already registered`);
+  }
+  return null;
+}
+
+/** Postgres unique_violation — a concurrent registration won the identifier/domain race. */
+function isUniqueViolation(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && (err as { code?: unknown }).code === '23505';
+}
+
+const RACE_CONFLICT = conflictError('identifier or domain was registered concurrently — retry');
+
+/** Current stored entry as an EntryProfile, for updateEntryProfile. */
+function profileOf(org: Organization): EntryProfile {
+  return {
+    identifier: org.identifier,
+    mediaType: org.mediaType,
+    publisher: org.publisher ?? {
+      identifier: org.domain ?? PERSONAL_CARD_HOST.domain,
+      displayName: org.domain ? org.displayName : PERSONAL_CARD_HOST.displayName,
+      identityType: 'dns',
+    },
+    extensions: org.extensions,
+  };
+}
+
+function buildProfileOrError(body: CreateOrgBody, path: HostingPath): EntryProfile | ApiError {
+  try {
+    return buildEntryProfile({
+      path,
+      orgId: body.org_id,
+      domain: body.domain ?? null,
+      contactEmail: body.contact_email,
+      displayName: body.display_name,
+      identifier: body.identifier,
+      mediaType: body.media_type,
+      publisherDisplayName: body.publisher?.displayName,
+      extensions: body.extensions,
+    });
+  } catch (err) {
+    if (err instanceof EntryProfileError) return validationError(err.message);
+    throw err;
+  }
 }
 
 /**
@@ -114,33 +210,24 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       summary: 'Register a new organization (creates index record)',
       body: {
         type: 'object',
-        required: ['org_id', 'display_name', 'contact_email'],
+        required: ['org_id', 'display_name', 'contact_email', 'registry_url'],
         properties: {
           org_id:        { type: 'string', pattern: '^[a-z0-9][a-z0-9-]*[a-z0-9]$', minLength: 2, maxLength: 64 },
           display_name:  { type: 'string', minLength: 1, maxLength: 255 },
-          hosting_path:  { type: 'string', enum: ['registry', 'dns-aid', 'smb', 'personal'] },
+          hosting_path:  { type: 'string', enum: HOSTING_PATHS },
           domain:        { type: 'string', maxLength: 255 },
           contact_email: { type: 'string', format: 'email' },
           registry_url:  { type: 'string', maxLength: 512 },
           ttl_seconds:   { type: 'integer', minimum: 3600, maximum: 604800 },
           identifier:    { type: 'string', maxLength: 512 },
-          media_type:    { type: 'string', maxLength: 128,
-                           enum: ['application/ai-catalog+json', 'application/vnd.dns-aid+json', 'application/a2a-agent-card+json', 'application/mcp-server-card+json', 'application/agentskill+zip'] },
+          media_type:    { type: 'string', maxLength: 128, enum: ALLOWED_MEDIA_TYPES },
           description:   { type: 'string', maxLength: 1000 },
           tags:          { type: 'array', items: { type: 'string', maxLength: 64 }, maxItems: 20 },
           version:       { type: 'string', maxLength: 64 },
-          publisher: {
-            type: 'object',
-            required: ['identifier', 'displayName'],
-            properties: {
-              identifier:   { type: 'string' },
-              displayName:  { type: 'string' },
-              identityType: { type: 'string' },
-            },
-          },
-          catalog_metadata: { type: 'object', additionalProperties: true },
-          entry_data:       { type: 'object', additionalProperties: true },
-          trust_manifest:   TRUST_MANIFEST_SCHEMA,
+          publisher:     PUBLISHER_INPUT_SCHEMA,
+          extensions:    EXTENSIONS_SCHEMA,
+          entry_data:    { type: 'object', additionalProperties: true },
+          trust_manifest: TRUST_MANIFEST_SCHEMA,
         },
       },
       response: {
@@ -152,37 +239,22 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
   }, async (request, reply) => {
     const user = request.user as JwtPayload;
     const body = request.body;
-
     const path = body.hosting_path ?? 'registry';
-    const isDnsAid = path === 'dns-aid';
-    const isPersonal = path === 'personal';
 
-    // Domain: required for all paths except personal
-    if (!isPersonal && !body.domain) {
-      return reply.code(400).send({ error: 'VALIDATION', detail: 'domain is required for registry, dns-aid, and smb registrations' });
-    }
-    if (body.domain && !/^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/.test(body.domain)) {
-      return reply.code(400).send({ error: 'VALIDATION', detail: 'domain must be a valid hostname (e.g. acme.com)' });
-    }
+    const invalid = validateCreateBody(body, path);
+    if (invalid) return reply.code(invalid.status).send(invalid.body);
 
-    // registry_url: required for registry, smb, personal — not for dns-aid
-    if (!isDnsAid) {
-      if (!body.registry_url) {
-        return reply.code(400).send({ error: 'VALIDATION', detail: 'registry_url is required for registry, smb, and personal registrations' });
-      }
-      if (!/^https?:\/\//.test(body.registry_url)) {
-        return reply.code(400).send({ error: 'VALIDATION', detail: 'registry_url must start with https://' });
-      }
-    }
+    const profile = buildProfileOrError(body, path);
+    if ('status' in profile) return reply.code(profile.status).send(profile.body);
 
-    // Check for duplicate org_id
-    const existing = await findByOrgId(body.org_id);
-    if (existing) {
+    if (await findByOrgId(body.org_id)) {
       return reply.code(409).send({ error: 'CONFLICT', detail: `org_id "${body.org_id}" is already taken` });
     }
+    const conflict = await findConflict(profile.identifier, body.domain ?? null);
+    if (conflict) return reply.code(conflict.status).send(conflict.body);
 
     const verifyToken = randomBytes(32).toString('hex');
-    const verifyTokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const verifyTokenExpiresAt = new Date(Date.now() + VERIFY_TOKEN_TTL_MS);
 
     // Best-effort write-time enrichment — never blocks or fails registration.
     // See llmEnrichment.ts: closes the phrasing gap plain keyword/stemmed
@@ -192,26 +264,32 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       buildConfig().llmEnrichment,
     );
 
-    const org = await insertOrganization({
-      orgId:                body.org_id,
-      displayName:          body.display_name,
-      domain:               body.domain ?? null,
-      contactEmail:         body.contact_email,
-      registryUrl:          body.registry_url ?? null,
-      verifyToken,
-      verifyTokenExpiresAt,
-      ttlSeconds:           body.ttl_seconds,
-      identifier:           body.identifier,
-      mediaType:            body.media_type,
-      description:          body.description,
-      tags:                 body.tags,
-      publisher:            body.publisher,
-      catalogMetadata:      body.catalog_metadata,
-      entryData:            body.entry_data,
-      version:              body.version,
-      trustManifest:        body.trust_manifest,
-      representativeQueries,
-    });
+    let org: Organization;
+    try {
+      org = await insertOrganization({
+        orgId:                body.org_id,
+        displayName:          body.display_name,
+        domain:               body.domain?.toLowerCase() ?? null,
+        contactEmail:         body.contact_email,
+        registryUrl:          body.registry_url,
+        verifyToken,
+        verifyTokenExpiresAt,
+        ttlSeconds:           body.ttl_seconds,
+        identifier:           profile.identifier,
+        mediaType:            profile.mediaType,
+        description:          body.description,
+        tags:                 body.tags,
+        publisher:            profile.publisher,
+        extensions:           profile.extensions,
+        entryData:            body.entry_data,
+        version:              body.version,
+        trustManifest:        body.trust_manifest,
+        representativeQueries,
+      });
+    } catch (err) {
+      if (isUniqueViolation(err)) return reply.code(RACE_CONFLICT.status).send(RACE_CONFLICT.body);
+      throw err;
+    }
 
     await insertMembership(user.userId, org.orgId, 'admin');
     await sendVerificationEmail(body.contact_email, verifyToken, body.org_id);
@@ -362,16 +440,8 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
           description:      { type: 'string', maxLength: 1000 },
           tags:             { type: 'array', items: { type: 'string', maxLength: 64 }, maxItems: 20 },
           version:          { type: 'string', maxLength: 64 },
-          publisher: {
-            type: 'object',
-            required: ['identifier', 'displayName'],
-            properties: {
-              identifier:   { type: 'string' },
-              displayName:  { type: 'string' },
-              identityType: { type: 'string' },
-            },
-          },
-          catalog_metadata: { type: 'object', additionalProperties: true },
+          publisher:        PUBLISHER_INPUT_SCHEMA,
+          extensions:       EXTENSIONS_SCHEMA,
           entry_data:       { type: 'object', additionalProperties: true },
           // Nullable: an explicit null revokes/clears the stored manifest.
           trust_manifest:   { anyOf: [{ type: 'null' }, TRUST_MANIFEST_SCHEMA] },
@@ -379,47 +449,76 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       },
       response: {
         200: INDEX_RECORD_SCHEMA,
+        400: apiErrorSchema,
         403: apiErrorSchema,
         404: apiErrorSchema,
+        409: apiErrorSchema,
       },
     },
   }, async (request, reply) => {
     const body = request.body;
+    const current = await findByOrgId(request.params.org_id);
+    if (!current) {
+      return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
+    }
+
+    if (body.domain !== undefined) {
+      if (!current.domain) {
+        return reply.code(400).send({ error: 'VALIDATION', detail: 'personal registrations cannot take a domain' });
+      }
+      if (!isFqdn(body.domain)) {
+        return reply.code(400).send({ error: 'VALIDATION', detail: 'domain must be a valid hostname (e.g. acme.com)' });
+      }
+    }
+    if (body.registry_url != null && !/^https?:\/\//.test(body.registry_url)) {
+      return reply.code(400).send({ error: 'VALIDATION', detail: 'registry_url must start with https://' });
+    }
+
+    const next = updateEntryProfile(profileOf(current), {
+      domain: body.domain,
+      publisherDisplayName: body.publisher?.displayName,
+      extensions: body.extensions,
+    });
+    const conflict = await findConflict(next.identifier, body.domain?.toLowerCase() ?? null, current.orgId);
+    if (conflict) return reply.code(conflict.status).send(conflict.body);
 
     // Only re-run enrichment when a field it depends on actually changed —
     // avoids an LLM call on unrelated updates (e.g. just registry_url).
-    // Merge with the current row so the prompt reflects the org's full state,
-    // not just the fields present in this particular PATCH-like request.
-    let representativeQueries: string[] | undefined;
-    if (body.display_name !== undefined || body.description !== undefined || body.tags !== undefined) {
-      const current = await findByOrgId(request.params.org_id);
-      if (current) {
-        representativeQueries = await generateRepresentativeQueries(
-          {
-            displayName: body.display_name ?? current.displayName,
-            description: body.description ?? current.description,
-            tags: body.tags ?? current.tags,
-          },
-          buildConfig().llmEnrichment,
-        );
-      }
-    }
+    // Merged with the current row so the prompt reflects the org's full state.
+    const representativeQueries =
+      body.display_name !== undefined || body.description !== undefined || body.tags !== undefined
+        ? await generateRepresentativeQueries(
+            {
+              displayName: body.display_name ?? current.displayName,
+              description: body.description ?? current.description,
+              tags: body.tags ?? current.tags,
+            },
+            buildConfig().llmEnrichment,
+          )
+        : undefined;
 
-    const updated = await updateOrganization(request.params.org_id, {
-      displayName:     body.display_name,
-      domain:          body.domain,
-      registryUrl:     body.registry_url,
-      ttlSeconds:      body.ttl_seconds,
-      description:     body.description,
-      tags:            body.tags,
-      publisher:       body.publisher,
-      catalogMetadata: body.catalog_metadata,
-      entryData:       body.entry_data,
-      version:         body.version,
-      // No ?? null here: undefined (omitted) must stay distinct from null (clear).
-      trustManifest:   body.trust_manifest,
-      representativeQueries,
-    });
+    let updated: Organization | null;
+    try {
+      updated = await updateOrganization(request.params.org_id, {
+        displayName:     body.display_name,
+        domain:          body.domain?.toLowerCase(),
+        identifier:      next.identifier,
+        registryUrl:     body.registry_url,
+        ttlSeconds:      body.ttl_seconds,
+        description:     body.description,
+        tags:            body.tags,
+        publisher:       next.publisher,
+        extensions:      next.extensions,
+        entryData:       body.entry_data,
+        version:         body.version,
+        // No ?? null here: undefined (omitted) must stay distinct from null (clear).
+        trustManifest:   body.trust_manifest,
+        representativeQueries,
+      });
+    } catch (err) {
+      if (isUniqueViolation(err)) return reply.code(RACE_CONFLICT.status).send(RACE_CONFLICT.body);
+      throw err;
+    }
     if (!updated) {
       return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
     }

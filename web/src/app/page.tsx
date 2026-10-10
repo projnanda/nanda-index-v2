@@ -5,61 +5,53 @@ export default function HomePage() {
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
       <div className="space-y-5 text-base leading-relaxed text-ink-medium">
         <p>
-          Agent discovery is diverging into multiple useful approaches — a natural
-          consequence of innovation across different communities, use cases, and
-          deployment environments. AI Catalog is a useful starting point for public
-          enterprise agent and AI-resource discovery. It provides a typed, nestable,
-          machine-readable container for heterogeneous AI artifacts: A2A Agent Cards,
-          MCP server descriptors, nested catalogs, tools, skills, datasets, gateways,
-          and other AI resources.
+          Software agents are increasingly able to discover, compose, and invoke one
+          another&apos;s capabilities across organizational boundaries. The mechanisms
+          used to discover these agents, however, are diverging. Enterprises,
+          platforms, and developer communities have each adopted different systems,
+          including AI Catalogs, DNS-based service discovery, enterprise gateways,
+          agent descriptors such as A2A Agent Cards and MCP servers, and a growing set
+          of platform, telecom, and sector-specific registries. Each system is
+          authoritative within its own domain, but no common layer connects them.
+          This fragments the ecosystem into isolated discovery islands.
         </p>
 
         <p>
-          However, AI Catalog needs to be strengthened by allowing other discovery
-          mechanisms to connect through it. These include DNS-AID, ANS, .well-known,
-          A2A cards, MCP, gateways, and platform registries. In addition, telecom
-          directories, EdgeAI registries, IoT systems, and country- or sector-specific
-          discovery systems will each continue to solve part of the problem. These
-          non-compatible or emerging approaches are valuable — the product of real
-          innovation — but they can also create discovery islands when left
-          unconnected.
+          The missing piece is a resolution layer that complements discovery
+          protocols (such as ARD) by bridging resource identifiers to the appropriate
+          discovery entry point. Given a stable resource identifier, such as{" "}
+          <span className="font-mono text-sm">urn:air:moonbakery.com:agent:orders</span>,
+          this layer determines which discovery mechanism a requester should use and
+          then defers to that mechanism. Because it reuses the AI Catalog format as
+          its record type, it introduces no new schema.
         </p>
 
         <p>
-          A NandaIndex Federated Resolution Architecture is proposed as a global
-          switchboard that uses the AI Catalog format itself as the common
-          index-record format. NandaIndex strengthens AI Catalog by making it the
-          preferred framework through which other discovery systems can be bridged.
-          The switchboard proposed by NANDA and AGNTCY, built jointly by Outshift
-          (Cisco) and MIT Media Lab, provides the starting point for this
-          architecture. The architecture considers improvements to AI
-          Catalog and extends the switchboard model to cover enterprises, SMBs, and
-          individuals.
+          NandaIndex is a concrete realization of that layer: a global switchboard
+          across heterogeneous systems. It extends the NANDA and AGNTCY switchboard,
+          built jointly by Outshift (Cisco) and MIT Media Lab, by leveraging the ARD
+          and AI Catalog standards as the foundation to unify identity, trust, and
+          federation across platforms.
         </p>
 
-        <p>The focus is on three practical needs:</p>
+        <p>It applies to three settings:</p>
 
         <ul className="list-disc space-y-3 pl-6">
           <li>
-            Enterprise heterogeneity, where some companies use AI Catalog and others
-            use DNS-AID, gateways, .well-known, or legacy registries.
+            Enterprises with mixed discovery infrastructure: some publish an AI
+            Catalog at a well-known endpoint, others use DNS-based service discovery
+            (DNS-SD, SVCB), gateways, or legacy registries.
           </li>
           <li>
-            SMBs such as MoonBakery, where website maybe listed on Wix, Squarespace or Shopify, agents may be hosted on AWS while agent cards are hosted by a third party such as host39.org.
+            Small businesses such as Moon Bakery, whose agent runtime (e.g. AWS) and
+            agent card (e.g. host39.org) are hosted by separate providers.
           </li>
           <li>
-            Individuals such as john@hotmail.com, who do not own a domain name, where
-            a personal agent may be hosted on AWS, Azure, GCP, or another provider,
-            while the agent card lives elsewhere.
+            Individuals such as john@hotmail.com, who do not own a domain. Their
+            identifier is anchored to the card host, for example{" "}
+            <span className="font-mono text-sm">urn:air:host39.org:personal:john-hotmail-com</span>.
           </li>
         </ul>
-
-        <p>
-          NandaIndex presents an architecture proposal and initial design. It
-          identifies the missing bootstrap layer between identity and discovery,
-          defines the role of NandaIndex within that layer, and outlines the
-          identity, trust, and federation mechanisms that must be formalized.
-        </p>
       </div>
 
       <p className="mt-10 text-sm text-ink-medium">

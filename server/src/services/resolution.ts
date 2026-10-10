@@ -1,5 +1,7 @@
-import { findByDomain, findByOrgId, findByIdentifier, toIndexRecord } from '../db/queries/organizations.js';
-import type { ParsedLocator, ResolveResponse } from '../types/api/resolve.js';
+import { findByDomain, findByIdentifier, toIndexRecord, type Organization } from '../db/queries/organizations.js';
+import type { ParsedAirUrn } from '../lib/airUrn.js';
+import { CATALOG_MEDIA_TYPES } from '../lib/entryProfile.js';
+import type { ResolveMatch, ResolveResponse } from '../types/api/resolve.js';
 
 export class ResolutionError extends Error {
   constructor(
@@ -11,29 +13,44 @@ export class ResolutionError extends Error {
   }
 }
 
-export async function resolveAgent(locator: ParsedLocator): Promise<ResolveResponse> {
-  const { urn, type, domain, email, identifier } = locator;
+/** Resolvable only while active and, for domain entries, with domain ownership proven. */
+function isLive(org: Organization | null): org is Organization {
+  return org?.status === 'active' && (org.domain === null || org.domainVerified);
+}
 
-  let org;
+export interface ResolvedEntry {
+  readonly org: Organization;
+  readonly match: ResolveMatch;
+}
 
-  if (type === 'email') {
-    // Email-identity: look up by the full stored identifier URN
-    org = await findByIdentifier(urn);
-  } else {
-    // Domain-based: exact domain match only
-    org = await findByDomain(domain!);
+/**
+ * Maps a urn:air: identifier to the next discovery object (paper §5.4):
+ * the entry registered under exactly that identifier, or — when the
+ * publisher fronts its resources with an AI Catalog / registry — that
+ * catalog entry, which the requester then queries for the resource. An agent
+ * card is never returned for a different identifier. Returns null on a miss.
+ */
+export async function findResolvedEntry(parsed: ParsedAirUrn): Promise<ResolvedEntry | null> {
+  const exact = await findByIdentifier(parsed.urn);
+  if (isLive(exact)) return { org: exact, match: 'exact' };
+
+  const publisher = await findByDomain(parsed.publisherDomain);
+  if (isLive(publisher) && CATALOG_MEDIA_TYPES.includes(publisher.mediaType)) {
+    return { org: publisher, match: 'publisher' };
   }
+  return null;
+}
 
-  if (!org || org.status !== 'active') {
-    throw new ResolutionError(
-      `"${urn}" not found in NANDA Index or is not active`,
-      'not_found',
-    );
+export async function resolveIdentifier(parsed: ParsedAirUrn): Promise<ResolveResponse> {
+  const resolved = await findResolvedEntry(parsed);
+  if (!resolved) {
+    throw new ResolutionError(`"${parsed.urn}" not found in NANDA Index or is not active`, 'not_found');
   }
 
   return {
-    locator: urn,
-    identifier,
-    index_record: toIndexRecord(org),
+    locator: parsed.urn,
+    identifier: parsed.shortName,
+    match: resolved.match,
+    index_record: toIndexRecord(resolved.org),
   };
 }

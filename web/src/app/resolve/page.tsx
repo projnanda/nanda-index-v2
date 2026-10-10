@@ -128,7 +128,7 @@ export default function ResolvePage() {
     const { registry_url, media_type } = indexData.index_record;
 
     if (!registry_url) {
-      setHop2({ status: "skipped", url: "No catalog URL — DNS-AID or custom discovery path." });
+      setHop2({ status: "skipped", url: "No URL to follow — inline data or custom discovery path." });
       setResolving(false);
       setLatency(Math.round(performance.now() - t0));
       return;
@@ -232,7 +232,7 @@ export default function ResolvePage() {
         <input
           value={locator}
           onChange={(e) => setLocator(e.target.value)}
-          placeholder="urn:ai:domain:acme.com:agent:time"
+          placeholder="urn:air:acme.com:agent:time"
           className="flex-1 rounded-2xl border border-black/10 bg-white px-5 py-3 font-mono text-sm outline-none focus:ring-2 focus:ring-slate-300"
         />
         <button
@@ -257,7 +257,7 @@ export default function ResolvePage() {
             <HopCard
               n={1}
               label="NANDA Index"
-              subtitle="Who manages this domain or identity? Returns an IndexRecord with a catalog or card URL."
+              subtitle="Which discovery entry point serves this identifier? Returns an IndexRecord with a catalog or card URL."
               hop={hop1}
             />
 
@@ -327,7 +327,7 @@ export default function ResolvePage() {
             Enter a URN above to trace the resolution hops.
           </p>
           <p className="mt-2 font-mono text-xs text-slate-300">
-            e.g. urn:ai:domain:acme.com:agent:time
+            e.g. urn:air:acme.com:agent:time
           </p>
         </div>
       )}

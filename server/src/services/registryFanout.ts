@@ -79,14 +79,14 @@ async function fetchAgentSearch(
 
 /** Synthesizes a single candidate directly from the org's own record — used
  * for every media_type except enterprise, where registry_url already IS the
- * one agent (SMB/personal cards, DNS-AID entries) rather than a registry with
+ * one agent (SMB/personal cards, DNS SVCB pointers) rather than a registry with
  * many agents to search underneath it. */
 function synthesizeSingleAgentCandidate(org: RankedOrganization): FanoutCandidate {
   return {
     org,
     basis: 'single_agent_org',
     entry: {
-      identifier: org.identifier ?? org.orgId,
+      identifier: org.identifier,
       displayName: org.displayName,
       mediaType: org.mediaType,
       url: org.registryUrl!,
@@ -121,7 +121,7 @@ async function runWithConcurrency<T>(
  * Expands ranked candidate orgs into agent-level candidates, branching by
  * media_type: enterprise orgs (backed by a nanda-registry instance) are
  * fanned out to live via GET <registry_url>/agents/search; every other type
- * (SMB/personal A2A cards, DNS-AID) has no registry to search underneath —
+ * (SMB/personal A2A cards, DNS SVCB pointers) has no registry to search underneath —
  * the org's own record already represents exactly one agent, so it's
  * emitted as-is with no HTTP call.
  */

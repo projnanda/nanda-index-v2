@@ -13,9 +13,9 @@ export function Hero() {
             Federated resolution for the agentic web.
           </h1>
           <p className="mt-6 max-w-2xl text-base leading-relaxed text-ink-medium">
-            NandaIndex resolves any agent identity (domain, email, or URN) to the
-            correct next discovery object: AI Catalog, DNS-AID, A2A Agent Card, or
-            personal agent card. It bridges agent discovery across enterprises, small
+            NandaIndex resolves a stable resource identifier (a urn:air: URN) to the
+            correct next discovery object: AI Catalog, DNS-based service discovery,
+            A2A Agent Card, or personal agent card. It bridges agent discovery across enterprises, small
             businesses, and individuals without replacing existing discovery systems.
           </p>
 

@@ -21,12 +21,12 @@ function makeOrg(overrides: Partial<RankedOrganization>): RankedOrganization {
     status: 'active',
     createdAt: new Date(),
     updatedAt: new Date(),
-    identifier: 'urn:ai:domain:default.example.com',
+    identifier: 'urn:air:default.example.com:catalog:root',
     mediaType: 'application/ai-catalog+json',
     description: 'A default org',
     tags: ['default'],
     publisher: null,
-    catalogMetadata: null,
+    extensions: { 'org.projectnanda': {} },
     entryData: null,
     version: null,
     trustManifest: null,
@@ -149,11 +149,12 @@ describe('fanOutAgentSearch', () => {
     });
   });
 
-  it('does not call fetch for a DNS-AID org — synthesizes a single candidate from its own record', async () => {
+  it('does not call fetch for a DNS SVCB pointer — synthesizes a single candidate from its own record', async () => {
     const dnsOrg = makeOrg({
       orgId: 'dns-acme',
-      mediaType: 'application/vnd.dns-aid+json',
-      registryUrl: 'https://acme.com',
+      mediaType: 'application/a2a-agent-card+json',
+      registryUrl: 'https://api.acme.com/agents/refunds.json',
+      extensions: { 'org.projectnanda': { resolutionRole: 'dns-svcb-pointer', preferredDiscovery: 'dns-svcb' } },
     });
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

@@ -14,14 +14,15 @@ async function seedOrg(
   const token = opts.verifyToken ?? randomBytes(16).toString('hex');
   const contactEmail = domain ? `admin@${domain}` : `${orgId}@example.com`;
   const registryUrl = domain ? `https://${domain}/registry` : `https://host39.org/personal/${orgId}`;
+  const identifier = domain ? `urn:air:${domain}:catalog:root` : `urn:air:host39.org:personal:${orgId}`;
   await sql`
     INSERT INTO organizations
       (org_id, display_name, domain, contact_email, registry_url,
-       verify_token, verify_token_expires_at, email_verified, status)
+       verify_token, verify_token_expires_at, email_verified, status, identifier)
     VALUES
       (${orgId}, ${displayName}, ${domain}, ${contactEmail},
        ${registryUrl}, ${token}, NOW() + INTERVAL '24 hours',
-       ${opts.emailVerified ?? true}, ${opts.status ?? 'active'})
+       ${opts.emailVerified ?? true}, ${opts.status ?? 'active'}, ${identifier})
     ON CONFLICT (org_id) DO NOTHING
   `;
 }

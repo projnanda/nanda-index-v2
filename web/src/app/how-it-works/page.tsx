@@ -9,7 +9,7 @@ const FLOWS: {
   id: string;
   title: string;
   subtitle: string;
-  identity: string;
+  identifier: string;
   mediaType: string;
   who: string;
   steps: { label: string; detail: string }[];
@@ -19,7 +19,7 @@ const FLOWS: {
       id: "enterprise-ai-catalog",
       title: "Enterprise AI Catalog",
       subtitle: "Teams / Orgs",
-      identity: "urn:ai:domain:example.com",
+      identifier: "urn:air:example.com:catalog:root",
       mediaType: "application/ai-catalog+json",
       who: "This is the simple case. An enterprise publishes at .well-known/ai-catalog.json. Any requester can fetch it directly, so direct resolution works and NANDA Index is not required. A NANDA Index entry is optional: useful for federation, fallback, and anti-squatting.",
       steps: [
@@ -31,27 +31,27 @@ const FLOWS: {
       resolution: "Requester fetches AI Catalog directly, selects agent, tool, MCP server, or gateway, follows artifact URL.",
     },
     {
-      id: "dns-aid",
-      title: "DNS-AID",
+      id: "dns-svcb",
+      title: "DNS-Based Service Discovery",
       subtitle: "Enterprise / DNS",
-      identity: "urn:ai:domain:skyblue.com:agent:refunds",
-      mediaType: "application/vnd.dns-aid+json",
-      who: "SkyBlue uses DNS-AID at refunds._agents.skyblue.com. NANDA Index does not replace DNS-AID: it makes the DNS-AID path reachable from the global switchboard.",
+      identifier: "urn:air:skyblue.com:agent:refunds",
+      mediaType: "application/a2a-agent-card+json",
+      who: "SkyBlue uses DNS-based service discovery via SVCB (RFC 9460). NANDA Index makes this DNS-based discovery path reachable from the global switchboard while representing the target using a recognized A2A Agent Card type.",
       steps: [
-        { label: "Publish DNS records", detail: "Add DNS-AID TXT records at _agents.yourdomain.com." },
-        { label: "Register org", detail: "Create an org in NANDA Index with your DNS-AID discovery name. NANDA stores a pointer; resolvers query your DNS directly." },
-        { label: "Verify & go live", detail: "Confirm your contact email. No catalog server required." },
-        { label: "Update via DNS", detail: "Any change to your TXT records is immediately visible to all resolvers." },
+        { label: "Publish DNS records", detail: "Publish SVCB/HTTPS records (or DNS-SD, RFC 6763) for your agent's endpoint under your domain." },
+        { label: "Register org", detail: "Create an org in NANDA Index with your A2A Agent Card URL. NANDA stores a federated pointer; your DNS stays authoritative." },
+        { label: "Verify & go live", detail: "Prove domain ownership with a DNS TXT record. No catalog server required." },
+        { label: "Update via DNS", detail: "Any change to your SVCB records is immediately visible to all resolvers." },
       ],
-      resolution: "NANDA Index, DNS-AID lookup, SkyBlue gateway or Agent Card, auth, agent.",
+      resolution: "NANDA Index, DNS SVCB lookup, A2A Agent Card, auth, agent.",
     },
     {
       id: "smb-agent-card",
       title: "SMB Agent Card",
       subtitle: "Small Business",
-      identity: "urn:ai:domain:moonbakery39.com:agent:orders",
+      identifier: "urn:air:moonbakery.com:agent:orders",
       mediaType: "application/a2a-agent-card+json",
-      who: "Moon Bakery owns a domain but runs no enterprise infrastructure. Its runtime, agent card, and domain are with three separate providers, a practical example of permissionless deployment. It needs only a stable identity and a delegated path: no dedicated agent-discovery DNS records, enterprise gateway, or organization-operated catalog endpoint required. NANDA Index becomes the primary discovery entry point.",
+      who: "Moon Bakery owns a domain but runs no enterprise infrastructure. Its runtime, agent card, and domain are with three separate providers, a practical example of permissionless deployment. It needs only a stable resource identifier and a delegated path: no dedicated agent-discovery DNS records, enterprise gateway, or organization-operated catalog endpoint required. NANDA Index becomes the primary discovery entry point.",
       steps: [
         { label: "Create card", detail: "Build your A2A Agent Card on host39.org. No server setup required." },
         { label: "Register org", detail: "Create an org in NANDA Index and paste your agent card URL." },
@@ -64,13 +64,13 @@ const FLOWS: {
       id: "personal-agent",
       title: "Personal Agent",
       subtitle: "Individual",
-      identity: "urn:ai:email:john@hotmail.com",
+      identifier: "urn:air:host39.org:personal:john-hotmail-com",
       mediaType: "application/a2a-agent-card+json",
-      who: "John has no domain. His runtime is on Azure; his agent card is with a third-party host. No personal controlled domain is required. NANDA Index enables identity-first discovery for individuals, when the underlying account identity is verifiably bound to the resolution record.",
+      who: "John has no domain. His runtime is on Azure; his agent card is with a third-party host. No personal controlled domain is required. The AIR identifier is anchored to the card host (host39.org) and the account email is carried as subjectAccount. NANDA Index enables identity-first discovery for individuals, when the underlying account identity is verifiably bound to the resolution record.",
       steps: [
         { label: "Create card", detail: "Build your personal agent card on host39.org." },
-        { label: "Register org", detail: "Create an org in NANDA Index with your email address as identity." },
-        { label: "Verify & go live", detail: "Confirm your email. Your identity: urn:ai:email:you@example.com." },
+        { label: "Register org", detail: "Create an org in NANDA Index with your email address as the subject account." },
+        { label: "Verify & go live", detail: "Confirm your email. Your identifier: urn:air:host39.org:personal:you-example-com." },
         { label: "Update via host39", detail: "Edit your card any time on host39.org. No index update needed." },
       ],
       resolution: "NANDA Index, Agent Card at host39.org, Azure runtime, user consent required for private actions.",
@@ -79,33 +79,33 @@ const FLOWS: {
 
 // ── Resolution stages ──────────────────────────────────────────────────────────
 // Names and definitions are the paper's own (Section 5.1, Conceptual Model):
-// "Identity → Resolution → Discovery → Invocation". The input/output/api lines
+// "Resource Identifier → Resolution → Discovery → Invocation". The input/output/api lines
 // below each definition are how NANDA Index concretely implements that stage;
 // that implementation detail is the app's, not the paper's.
 
 const STAGES = [
   {
-    id: "identity",
-    label: "Identity",
+    id: "identifier",
+    label: "Resource Identifier / Lookup Key",
     definition:
-      "a stable identifier, such as a domain-anchored identifier, platform identity, DID, or provider-verified account identity.",
-    input: "urn:ai:domain:example.com, urn:ai:domain:skyblue.com:agent:refunds, urn:ai:domain:moonbakery39.com:agent:orders, or urn:ai:email:john@hotmail.com",
+      "a stable identifier used to initiate resolution, such as a domain, DID, or provider-verified account identifier. As an AI Catalog/ARD entry identifier it uses the domain-anchored form urn:air:<publisher-FQDN>:<namespace...>:<short-name>.",
+    input: "urn:air:example.com:catalog:root, urn:air:skyblue.com:agent:refunds, urn:air:moonbakery.com:agent:orders, or urn:air:host39.org:personal:john-hotmail-com",
   },
   {
     id: "resolution",
     label: "Resolution",
     definition: "selection of an authoritative discovery entry point.",
     detail:
-      "The resolver sends the identity to the NANDA Index API. The Index returns an IndexRecord containing a catalog URL, a direct agent card URL, or a DNS-AID pointer, plus a TTL for caching.",
-    input: "locator: urn:ai:domain:acme.com:agent:time",
-    output: "IndexRecord { registry_url, media_type, identifier, ttl_seconds }",
+      "The resolver sends the identifier to the NANDA Index API. An exact match returns that entry (a catalog, an agent card, or a DNS SVCB pointer); otherwise, if the publisher fronts its resources with an AI Catalog, that catalog entry is returned (match: publisher) for the requester to look inside. Each record carries a TTL for caching.",
+    input: "locator: urn:air:acme.com:agent:time",
+    output: "{ match, identifier, index_record { identifier, registry_url, media_type, publisher, extensions, ttl_seconds } }",
     api: "GET /api/v1/resolve?locator=…",
   },
   {
     id: "discovery",
     label: "Discovery",
     definition:
-      "retrieval or search of capabilities through AI Catalog, ARD, DNS-AID, a gateway, or another native mechanism.",
+      "retrieval or search of capabilities through AI Catalog, ARD, DNS-based service discovery, a gateway, or another native mechanism.",
     detail:
       "The resolver fetches the agent's catalog entry, then the full agent card, from the URL returned by Resolution. Enterprise registries serve an AI Catalog document; SMB and personal entries point directly to an A2A Agent Card, collapsing these into one request.",
     input: "IndexRecord.registry_url  +  IndexRecord.identifier",
@@ -125,7 +125,7 @@ const STAGES = [
 ];
 
 const RESOLUTION_FLOW_STEPS = [
-  "A requester starts with an identity (domain, email, or URN)",
+  "A requester starts with a lookup key or subject identity (for example, a domain, email address, DID, or AIR URN)",
   "The requester queries a resolution system",
   "The system returns AI Catalog–formatted resolution entries",
   "Each entry specifies a discovery path",
@@ -143,9 +143,9 @@ export default function HowItWorksPage() {
         <p className="mt-4 text-sm leading-relaxed text-ink-medium">
           Federated resolution separates two concerns: Resolution, determining where and how
           discovery should begin, and Discovery, finding capabilities via mechanisms such as ARD.
-          This yields Identity, Resolution, Discovery, Invocation. NANDA Index is a concrete
-          instantiation of this architecture: a federated index of AI Catalog-formatted resolution
-          records that map an identity to the correct next discovery object.
+          This yields Resource Identifier, Resolution, Discovery, Invocation. NANDA Index is a
+          concrete instantiation of this architecture: a federated index of AI Catalog-formatted
+          resolution records that map a resource identifier to the correct next discovery object.
         </p>
 
         {/* ── Registration ───────────────────────────────────────────────── */}
@@ -153,7 +153,8 @@ export default function HowItWorksPage() {
           <h2 className="mt-10 text-lg font-bold text-ink-strong">Registration</h2>
           <p className="mt-2 text-sm leading-relaxed text-ink-medium">
             There are four registration paths. These mirror the paper&apos;s four deployment
-            contexts: enterprise on AI Catalog, enterprise on DNS-AID, SMB, and individual. Pick
+            contexts: enterprise on AI Catalog, enterprise on DNS-based service discovery, SMB, and
+            individual. Pick
             the path that matches how you host agents.
           </p>
         </section>
@@ -164,7 +165,7 @@ export default function HowItWorksPage() {
               {flow.title} ({flow.subtitle})
             </h3>
             <p className="mt-1 text-sm text-ink-medium">
-              Identity: <span className="font-mono text-xs">{flow.identity}</span>
+              Identifier: <span className="font-mono text-xs">{flow.identifier}</span>
               <br />
               Media type: <span className="font-mono text-xs">{flow.mediaType}</span>
             </p>
@@ -187,10 +188,10 @@ export default function HowItWorksPage() {
         {/* ── Resolution flow ────────────────────────────────────────────── */}
         <section id="resolution-flow" className="scroll-mt-24">
           <h2 className="mt-10 text-lg font-bold text-ink-strong">
-            Identity, Resolution, Discovery, Invocation
+            Resource Identifier, Resolution, Discovery, Invocation
           </h2>
           <p className="mt-2 text-sm leading-relaxed text-ink-medium">
-            The paper&apos;s typical flow: a requester starts with an identity, queries a
+            The paper&apos;s typical flow: a requester starts with a resource identifier, queries a
             resolution system, gets back AI Catalog-formatted resolution entries, follows the
             discovery path each entry specifies, then discovery, verification, and invocation
             proceed.
@@ -227,7 +228,7 @@ export default function HowItWorksPage() {
         <p className="mt-10 text-sm leading-relaxed text-ink-medium">
           To try it,{" "}
           <Link href="/resolve" className="underline hover:text-ink-strong transition-colors">
-            resolve a live identity
+            resolve a live identifier
           </Link>{" "}
           to trace every stage, or{" "}
           <Link href="/login" className="underline hover:text-ink-strong transition-colors">

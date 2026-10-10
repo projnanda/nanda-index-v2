@@ -9,10 +9,10 @@ async function seedOrg(orgId: string, domain: string, displayName: string): Prom
   const verifyToken = randomBytes(16).toString('hex');
   await sql`
     INSERT INTO organizations
-      (org_id, display_name, domain, contact_email, registry_url, verify_token, email_verified, status)
+      (org_id, display_name, domain, contact_email, registry_url, verify_token, email_verified, status, identifier)
     VALUES
       (${orgId}, ${displayName}, ${domain}, ${`admin@${domain}`},
-       ${`https://${domain}/registry`}, ${verifyToken}, true, 'active')
+       ${`https://${domain}/registry`}, ${verifyToken}, true, 'active', ${`urn:air:${domain}:catalog:root`})
     ON CONFLICT (org_id) DO NOTHING
   `;
 }

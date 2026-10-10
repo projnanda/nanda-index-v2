@@ -23,26 +23,26 @@ export const heroStats = [
   { value: "4", label: "registration types" },
   { value: "3", label: "resolution hops" },
   { value: "24h", label: "default TTL" },
-  { value: "open", label: "identity scheme" },
+  { value: "urn:air", label: "identifier scheme" },
 ];
 
 export const architectureLayers = [
   {
     layer: "Enterprise",
-    function: "Exposes agents via AI Catalog, DNS-AID, or gateways",
-    analogy: "urn:ai:domain:example.com",
+    function: "Exposes agents via AI Catalog, DNS-based service discovery (SVCB), or gateways",
+    analogy: "urn:air:example.com:catalog:root",
     hosted: "Optional: fallback and federation",
   },
   {
     layer: "SMB",
     function: "Agent runtime on AWS/GCP; agent card hosted by a third party",
-    analogy: "urn:ai:domain:moonbakery39.com:agent:orders",
+    analogy: "urn:air:moonbakery.com:agent:orders",
     hosted: "Primary resolver via NandaIndex",
   },
   {
     layer: "Individual",
-    function: "No domain needed; email identity with delegated card hosting",
-    analogy: "urn:ai:email:john@hotmail.com",
+    function: "No domain needed; identifier anchored to the card host, email as subject account",
+    analogy: "urn:air:host39.org:personal:john-hotmail-com",
     hosted: "Primary resolver via NandaIndex",
   },
 ];

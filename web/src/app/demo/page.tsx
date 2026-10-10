@@ -88,7 +88,7 @@ function HopResult({ hop }: { hop: HopState }) {
 
 const DEFAULT_REGISTRY = "http://localhost:3002";
 const DEFAULT_TOKEN    = "dev-token-change-in-production";
-const DEFAULT_LOCATOR  = "urn:ai:domain:acme.com:agent:time";
+const DEFAULT_LOCATOR  = "urn:air:acme.com:agent:time";
 
 export default function DemoPage() {
   // ── Register panel state ─────────────────────────────────────────────────
@@ -185,7 +185,7 @@ export default function DemoPage() {
     // Hop 2 — Registry Server
     const { registry_url } = indexResult.index_record;
     if (!registry_url) {
-      setHop2({ status: "error", message: "This entry has no registry URL (DNS-AID or custom discovery)." });
+      setHop2({ status: "error", message: "This entry has no URL to follow (inline data or custom discovery)." });
       setResolving(false);
       return;
     }
@@ -409,7 +409,7 @@ export default function DemoPage() {
                   Registered — URN for resolution:
                 </p>
                 <p className="font-mono text-sm text-slate-950 break-all">
-                  urn:ai:&lt;your-domain&gt;:{registered.identifier}
+                  urn:air:&lt;your-domain&gt;:agent:{registered.identifier}
                 </p>
                 <Textarea
                   readOnly
@@ -438,7 +438,7 @@ export default function DemoPage() {
               <Input
                 value={locator}
                 onChange={(e) => setLocator(e.target.value)}
-                placeholder="urn:ai:nasiko.com:ankit"
+                placeholder="urn:air:nasiko.com:agent:ankit"
                 className="flex-1"
               />
               <button

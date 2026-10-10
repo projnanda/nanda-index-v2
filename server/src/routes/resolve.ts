@@ -1,21 +1,22 @@
 import type { FastifyInstance } from 'fastify';
 import { apiErrorSchema } from '../types/api/common.js';
 import { resolveResponseSchema } from '../types/api/resolve.js';
-import { parseLocator } from '../lib/locatorParser.js';
-import { resolveAgent, ResolutionError } from '../services/resolution.js';
+import { parseAirUrn } from '../lib/airUrn.js';
+import { resolveIdentifier, ResolutionError } from '../services/resolution.js';
 
 interface ResolveQuerystring {
   locator: string;
 }
 
 /**
- * Agent locator resolution endpoint.
+ * Resolution endpoint — maps a resource identifier to its discovery entry point.
  *
- *   GET /api/v1/resolve?locator=urn:ai:nasiko.com:ankit
+ *   GET /api/v1/resolve?locator=urn:air:moonbakery.com:agent:orders
  *
- * Looks up the org in the NANDA Index DB → returns IndexRecord (with registry_url)
- * plus the parsed identifier. The caller then fetches the AgentRecord directly:
- *   GET <index_record.registry_url>/agents/<identifier>
+ * Returns the matching IndexRecord. On match "exact" the record's
+ * registry_url is the next hop itself (agent card, catalog, …); on match
+ * "publisher" it is the publisher's catalog, and the caller looks up
+ * <identifier> (the locator's short-name) inside it.
  */
 export async function registerResolveRoute(fastify: FastifyInstance): Promise<void> {
   fastify.get<{ Querystring: ResolveQuerystring }>('/api/v1/resolve', {
@@ -40,13 +41,13 @@ export async function registerResolveRoute(fastify: FastifyInstance): Promise<vo
 
     let parsed;
     try {
-      parsed = parseLocator(locator);
+      parsed = parseAirUrn(locator);
     } catch (err) {
       return reply.code(400).send({ error: 'invalid_locator', detail: (err as Error).message });
     }
 
     try {
-      const result = await resolveAgent(parsed);
+      const result = await resolveIdentifier(parsed);
       return reply.code(200).send(result);
     } catch (err) {
       if (!(err instanceof ResolutionError)) throw err;

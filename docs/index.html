@@ -567,7 +567,7 @@
       <div class="group">Data model</div>
       <a href="#index-record">IndexRecord</a>
       <a href="#media-types">Media types</a>
-      <a href="#urn">Identity URNs</a>
+      <a href="#urn">Identifiers (urn:air)</a>
       <a href="#database">Database schema</a>
 
       <div class="group">Guides</div>
@@ -594,9 +594,10 @@
           <h1 class="page">NANDA Index</h1>
           <p class="tagline">A global switchboard for AI agent discovery — federated resolution for the agentic web.</p>
           <p>
-            NANDA Index stores <strong>one index record per organization</strong> and maps any identity
-            — a domain, an email, or a URN — to the correct <em>next</em> discovery object: an AI Catalog,
-            a DNS-AID path, an A2A Agent Card, or a personal agent card.
+            NANDA Index stores <strong>one AI Catalog-formatted index record per organization</strong> and maps a
+            stable resource identifier — an ARD domain-anchored <code>urn:air:</code> URN — to the correct
+            <em>next</em> discovery object: an AI Catalog, a DNS-based service-discovery (SVCB) pointer, an A2A
+            Agent Card, or a personal agent card.
           </p>
           <p>It is the first hop in a three-hop resolution chain:</p>
           <div class="chain">Requester <span class="arrow">→</span> <b>NANDA Index</b> <span class="arrow">→</span>
@@ -607,7 +608,7 @@
             <span class="pill">Enterprise</span>
             <span class="pill">SMB</span>
             <span class="pill">Individual</span>
-            <span class="pill">Open URN identity</span>
+            <span class="pill">urn:air identifiers</span>
           </div>
         </section>
 
@@ -631,15 +632,15 @@
               <tbody>
                 <tr>
                   <td>Enterprise AI Catalog</td>
-                  <td><code>ai catalog</code></td>
+                  <td><code>registry</code></td>
                   <td>Orgs running their own nanda-registry-server</td>
                   <td><code>GET registry_url/agents/&lt;slug&gt;</code></td>
                 </tr>
                 <tr>
-                  <td>DNS-AID</td>
-                  <td><code>dns-aid</code></td>
-                  <td>Domain-controlled discovery via DNS</td>
-                  <td>DNS-AID lookup using the <code>data</code> field</td>
+                  <td>DNS-Based Service Discovery</td>
+                  <td><code>dns-svcb</code></td>
+                  <td>Domain-controlled discovery via DNS SVCB (RFC 9460) / DNS-SD (RFC 6763)</td>
+                  <td>Fetch the A2A Agent Card at <code>registry_url</code>; the domain&rsquo;s SVCB records stay authoritative</td>
                 </tr>
                 <tr>
                   <td>SMB Agent Card</td>
@@ -650,7 +651,7 @@
                 <tr>
                   <td>Personal Agent</td>
                   <td><code>personal</code></td>
-                  <td>Individuals, email identity (no domain)</td>
+                  <td>Individuals without a domain — identifier anchored to host39.org, email as <code>subjectAccount</code></td>
                   <td>Fetch the card directly from <code>registry_url</code></td>
                 </tr>
               </tbody>
@@ -665,16 +666,16 @@
         <section id="architecture">
           <h2>Architecture</h2>
           <p>The index is a thin, queryable mapping. A single row points a requester at the right downstream system:</p>
-          <pre class="code"><code>┌───────────────────────────────────────────────────────────────┐
-│                          NANDA Index                          │
-│                                                               │
-│  org_id      media_type                    registry_url       │
-│  ──────────  ─────────────────────────     ────────────────   │
-│  acme-corp   application/ai-catalog+json   https://reg.acme   │
-│  skyblue     application/vnd.dns-aid+json  (data field)       │
-│  moonbakery  application/a2a-agent-card    https://host39.org │
-│  john        application/a2a-agent-card    https://host39.org │
-└───────────────────────────────────────────────────────────────┘</code></pre>
+          <pre class="code"><code>┌───────────────────────────────────────────────────────────────────┐
+│                            NANDA Index                            │
+│                                                                   │
+│  identifier                                     registry_url      │
+│  ─────────────────────────────────────────────  ────────────────  │
+│  urn:air:acme.com:catalog:root                  registry.acme.com │
+│  urn:air:skyblue.com:agent:refunds              api.skyblue.com   │
+│  urn:air:moonbakery.com:agent:orders            host39.org        │
+│  urn:air:host39.org:personal:john-hotmail-com   host39.org        │
+└───────────────────────────────────────────────────────────────────┘</code></pre>
           <h3>Where each layer fits</h3>
           <div class="table-wrap">
             <table>
@@ -682,24 +683,24 @@
                 <tr>
                   <th>Layer</th>
                   <th>Function</th>
-                  <th>Example identity</th>
+                  <th>Example identifier</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
                   <td>Enterprise</td>
-                  <td>Exposes agents via AI Catalog, DNS-AID, or gateways</td>
-                  <td><code>urn:ai:domain:example.com</code></td>
+                  <td>Exposes agents via AI Catalog, DNS-based service discovery (SVCB), or gateways</td>
+                  <td><code>urn:air:example.com:catalog:root</code></td>
                 </tr>
                 <tr>
                   <td>SMB</td>
                   <td>Agent runtime on a cloud host; card hosted by a third party</td>
-                  <td><code>urn:ai:domain:moonbakery39.com:agent:orders</code></td>
+                  <td><code>urn:air:moonbakery.com:agent:orders</code></td>
                 </tr>
                 <tr>
                   <td>Individual</td>
-                  <td>No domain needed; email identity with delegated card hosting</td>
-                  <td><code>urn:ai:email:john@hotmail.com</code></td>
+                  <td>No domain needed; identifier anchored to the card host, email as subject account</td>
+                  <td><code>urn:air:host39.org:personal:john-hotmail-com</code></td>
                 </tr>
               </tbody>
             </table>
@@ -712,8 +713,9 @@
           <p>Give the index a locator; it returns the next discovery object. Each hop narrows from identity → registry →
             agent card → live runtime.</p>
           <pre class="code"><span class="c"># 1 — Resolve a locator to an IndexRecord</span>
-GET /api/v1/resolve?locator=<span class="k">urn:ai:domain:acme.com:agent:flights</span>
-   <span class="c">→ IndexRecord { registry_url, identifier }</span>
+GET /api/v1/resolve?locator=<span class="k">urn:air:acme.com:agent:flights</span>
+   <span class="c">→ { match, identifier, index_record { registry_url, … } }</span>
+   <span class="c">  (match "exact" on an agent card → registry_url is the card; skip to 3)</span>
 
 <span class="c"># 2 — Fetch the catalog entry from the org's registry</span>
 GET &lt;registry_url&gt;/agents/&lt;identifier&gt;
@@ -727,13 +729,15 @@ GET &lt;catalogEntry.url&gt;
 POST &lt;agentCard.url&gt;/run
    <span class="c">→ Agent response</span></pre>
           <h3>Example response</h3>
-          <pre class="code">curl <span class="s">"https://api.nandaindex.org/api/v1/resolve?locator=urn:ai:domain:acme.com:agent:flights"</span>
+          <pre class="code">curl <span class="s">"https://api.nandaindex.org/api/v1/resolve?locator=urn:air:acme.com:agent:flights"</span>
 
 {
-  <span class="k">"locator"</span>: <span class="s">"urn:ai:domain:acme.com:agent:flights"</span>,
+  <span class="k">"locator"</span>: <span class="s">"urn:air:acme.com:agent:flights"</span>,
   <span class="k">"identifier"</span>: <span class="s">"flights"</span>,
+  <span class="k">"match"</span>: <span class="s">"publisher"</span>,   <span class="c">// "exact" when an entry has exactly this identifier</span>
   <span class="k">"index_record"</span>: {
     <span class="k">"org_id"</span>: <span class="s">"acme"</span>,
+    <span class="k">"identifier"</span>: <span class="s">"urn:air:acme.com:catalog:root"</span>,
     <span class="k">"registry_url"</span>: <span class="s">"https://registry.acme.com"</span>,
     <span class="k">"media_type"</span>: <span class="s">"application/ai-catalog+json"</span>
   }
@@ -748,7 +752,7 @@ POST &lt;agentCard.url&gt;/run
   org_id:          <span class="k">string</span>;
   display_name:    <span class="k">string</span>;
   domain:          <span class="k">string</span> | <span class="k">null</span>;   <span class="c">// null for personal (email-identity) entries</span>
-  registry_url:    <span class="k">string</span> | <span class="k">null</span>;   <span class="c">// null for DNS-AID entries</span>
+  registry_url:    <span class="k">string</span> | <span class="k">null</span>;   <span class="c">// catalog URL or agent card URL</span>
   ttl_seconds:     <span class="k">number</span>;          <span class="c">// 3600–604800 (default 86400 / 24h)</span>
   status:          <span class="s">"pending"</span> | <span class="s">"active"</span> | <span class="s">"suspended"</span>;
   email_verified:  <span class="k">boolean</span>;
@@ -756,14 +760,14 @@ POST &lt;agentCard.url&gt;/run
   created_at:      <span class="k">string</span>;
   updated_at:      <span class="k">string</span>;
 
-  <span class="c">// Catalog fields (optional)</span>
-  identifier?:  <span class="k">string</span>;             <span class="c">// URN, e.g. "urn:ai:domain:acme.com"</span>
-  media_type?:  <span class="k">string</span>;
+  <span class="c">// AI Catalog fields</span>
+  identifier:   <span class="k">string</span>;             <span class="c">// e.g. "urn:air:acme.com:catalog:root"</span>
+  media_type?:  <span class="k">string</span>;             <span class="c">// the AI Catalog entry `type`</span>
   description?: <span class="k">string</span> | <span class="k">null</span>;
   tags?:        <span class="k">string</span>[];
-  publisher?:   { identifier: <span class="k">string</span>; displayName: <span class="k">string</span>; identityType?: <span class="k">string</span> };
-  metadata?:    Record&lt;<span class="k">string</span>, <span class="k">unknown</span>&gt;;  <span class="c">// NANDA routing hints</span>
-  data?:        Record&lt;<span class="k">string</span>, <span class="k">unknown</span>&gt;;  <span class="c">// DNS-AID discovery data</span>
+  publisher?:   { identifier: <span class="k">string</span>; displayName: <span class="k">string</span>; identityType?: <span class="k">string</span> };  <span class="c">// identifier = bare domain</span>
+  extensions:   Record&lt;<span class="k">string</span>, Record&lt;<span class="k">string</span>, <span class="k">unknown</span>&gt;&gt;;  <span class="c">// { "org.projectnanda": { resolutionRole, … } }</span>
+  data?:        Record&lt;<span class="k">string</span>, <span class="k">unknown</span>&gt;;  <span class="c">// inline artifact (url XOR data)</span>
 }</pre>
           <div class="note warn"><strong>Two-step activation.</strong> A new record starts as <code>pending</code>.
             Verifying the contact email sets <code>email_verified</code> but does <em>not</em> activate the record. The
@@ -789,12 +793,12 @@ POST &lt;agentCard.url&gt;/run
                   <td>Self-hosted enterprise AI Catalog</td>
                 </tr>
                 <tr>
-                  <td><code>application/vnd.dns-aid+json</code></td>
-                  <td>DNS-AID discovery</td>
+                  <td><code>application/ai-registry+json</code></td>
+                  <td>ARD-compatible directory (e.g. AGNTCY ADS)</td>
                 </tr>
                 <tr>
                   <td><code>application/a2a-agent-card+json</code></td>
-                  <td>Direct A2A Agent Card (SMB or personal)</td>
+                  <td>Direct A2A Agent Card (SMB, personal, or DNS SVCB pointer)</td>
                 </tr>
                 <tr>
                   <td><code>application/mcp-server-card+json</code></td>
@@ -811,8 +815,11 @@ POST &lt;agentCard.url&gt;/run
 
         <!-- URN -->
         <section id="urn">
-          <h2>Identity URNs</h2>
-          <p>Locators are URNs. The resolver parses these forms:</p>
+          <h2>Identifiers (urn:air)</h2>
+          <p>Every entry is keyed on ARD&rsquo;s domain-anchored identifier,
+            <code>urn:air:&lt;publisher-FQDN&gt;:&lt;namespace...&gt;:&lt;short-name&gt;</code>. The publisher FQDN must be
+            the domain you verified; personal identifiers are derived from your verified email. The retired
+            <code>urn:ai:*</code> forms are rejected.</p>
           <div class="table-wrap">
             <table>
               <thead>
@@ -824,34 +831,31 @@ POST &lt;agentCard.url&gt;/run
               </thead>
               <tbody>
                 <tr>
-                  <td>Enterprise / org</td>
-                  <td><code>urn:ai:domain:&lt;domain&gt;</code></td>
-                  <td><code>urn:ai:domain:acme.com</code></td>
+                  <td>Enterprise catalog</td>
+                  <td><code>urn:air:&lt;domain&gt;:catalog:root</code></td>
+                  <td><code>urn:air:example.com:catalog:root</code></td>
                 </tr>
                 <tr>
-                  <td>Enterprise / agent</td>
-                  <td><code>urn:ai:domain:&lt;domain&gt;:agent:&lt;slug&gt;</code></td>
-                  <td><code>urn:ai:domain:acme.com:agent:support</code></td>
+                  <td>Agent (SMB / DNS SVCB)</td>
+                  <td><code>urn:air:&lt;domain&gt;:agent:&lt;short-name&gt;</code></td>
+                  <td><code>urn:air:moonbakery.com:agent:orders</code></td>
+                </tr>
+                <tr>
+                  <td>ARD directory</td>
+                  <td><code>urn:air:&lt;domain&gt;:registry:&lt;name&gt;</code></td>
+                  <td><code>urn:air:acme.com:registry:ard</code></td>
                 </tr>
                 <tr>
                   <td>Personal</td>
-                  <td><code>urn:ai:email:&lt;email&gt;</code></td>
-                  <td><code>urn:ai:email:john@hotmail.com</code></td>
-                </tr>
-                <tr>
-                  <td>Legacy</td>
-                  <td><code>urn:ai:&lt;domain&gt;:&lt;slug&gt;</code></td>
-                  <td><code>urn:ai:nasiko.com:ankit</code></td>
-                </tr>
-                <tr>
-                  <td>Custom</td>
-                  <td>any valid URN</td>
-                  <td><code>urn:ai:org.agntcy</code></td>
+                  <td><code>urn:air:host39.org:personal:&lt;email-slug&gt;</code></td>
+                  <td><code>urn:air:host39.org:personal:john-hotmail-com</code></td>
                 </tr>
               </tbody>
             </table>
           </div>
-          <p>For agent URNs the returned <code>identifier</code> is the slug; for email URNs it is the full URN.</p>
+          <p>Resolution returns the entry registered under exactly that identifier (<code>match: "exact"</code>). If
+            none exists but the publisher&rsquo;s domain has an AI Catalog or registry entry, that entry is returned
+            (<code>match: "publisher"</code>) and <code>identifier</code> is the short-name to look up inside it.</p>
         </section>
 
         <!-- DATABASE -->
@@ -972,20 +976,19 @@ curl -X POST https://api.nandaindex.org/api/v1/orgs \
     "domain": "acme.com",
     "contact_email": "agents@acme.com",
     "registry_url": "https://registry.acme.com",
-    "identifier": "urn:ai:domain:acme.com",
-    "media_type": "application/ai-catalog+json",
     "description": "Acme enterprise AI Catalog.",
-    "tags": ["enterprise","ai-catalog"],
-    "publisher": {
-      "identifier": "urn:ai:domain:acme.com",
-      "displayName": "Acme Corp",
-      "identityType": "dns"
-    }
+    "tags": ["enterprise","ai-catalog"]
   }'</span>
-<span class="c"># → 201 IndexRecord (status: "pending")</span></pre>
+<span class="c"># → 201 IndexRecord (status: "pending")</span>
+<span class="c">#   identifier  urn:air:acme.com:catalog:root</span>
+<span class="c">#   publisher   { "identifier": "acme.com", "displayName": "Acme Corp", "identityType": "dns" }</span>
+<span class="c">#   extensions  { "org.projectnanda": { "resolutionRole": "nested-ai-catalog", … } }</span></pre>
               <p><strong>Validation:</strong> <code>org_id</code> is lowercase <code>^[a-z0-9][a-z0-9-]*[a-z0-9]$</code>
                 (2–64 chars); <code>domain</code> is required for every path except <code>personal</code>;
-                <code>registry_url</code> is required for every path except <code>dns-aid</code>;
+                <code>registry_url</code> is required for every path; an optional <code>identifier</code> must be
+                anchored to <code>domain</code> (personal identifiers are always derived); <code>resolutionRole</code>,
+                <code>preferredDiscovery</code>, <code>authoritativeSystem</code> and <code>subjectAccount</code> in
+                <code>extensions["org.projectnanda"]</code> are server-owned;
                 <code>ttl_seconds</code> is 3600–604800.
               </p>
             </li>

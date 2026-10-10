@@ -1,7 +1,8 @@
 /**
  * Demo seed — inserts one representative NANDA Index record per frontend
  * category so the homepage grid and the detail drawer can be exercised
- * end-to-end. Records use the AI-Catalog shapes from the switchboard paper (§6).
+ * end-to-end. Records use the AI-Catalog shapes from the switchboard paper (§6, §7.3):
+ * urn:air: identifiers and the namespaced `org.projectnanda` extension.
  *
  * Run via:  npm run demo:seed   (sets DEMO_MODE=true and loads .env)
  *
@@ -11,15 +12,15 @@
 import { getSql } from '../src/db/client.js';
 import { insertOrganization, type InsertOrgParams } from '../src/db/queries/organizations.js';
 import type { TrustManifest } from '../src/types/api/index-record.js';
+import { NANDA_EXTENSION, type CatalogExtensions } from '../src/lib/entryProfile.js';
 
 if (process.env.DEMO_MODE !== 'true') {
   console.error('Refusing to seed: set DEMO_MODE=true (use `npm run demo:seed`).');
   process.exit(1);
 }
 
-/** Namespace bare keys under the org.projectnanda.* metadata prefix. */
-const pn = (o: Record<string, unknown>): Record<string, unknown> =>
-  Object.fromEntries(Object.entries(o).map(([k, v]) => [`org.projectnanda.${k}`, v]));
+/** Wraps bare keys in the AI Catalog `extensions` namespace NANDA owns. */
+const pn = (fields: Record<string, unknown>): CatalogExtensions => ({ [NANDA_EXTENSION]: fields });
 
 const ZERO_DIGEST = 'sha256:0000000000000000000000000000000000000000000000000000000000000000';
 
@@ -42,7 +43,7 @@ function demoTrust(identity: string, identityType: string): TrustManifest {
       },
     ],
     provenance: [
-      { relation: 'derivedFrom', sourceId: 'urn:ai:nanda:demo-seed', signatureRef: ZERO_DIGEST },
+      { relation: 'derivedFrom', sourceId: 'urn:air:nandaindex.org:seed:demo', signatureRef: ZERO_DIGEST },
     ],
     signature: 'eyJkZW1vIjogInNpZ25hdHVyZSJ9',
     metadata: {},
@@ -58,13 +59,13 @@ const records: DemoRecord[] = [
     domain: 'travel26.com',
     contactEmail: 'ai@travel26.com',
     registryUrl: 'https://travel26.com/.well-known/ai-catalog.json',
-    identifier: 'urn:ai:domain:travel26.com',
+    identifier: 'urn:air:travel26.com:catalog:root',
     mediaType: 'application/ai-catalog+json',
     description:
       'Public enterprise AI Catalog for Travel26 — agents, tools, MCP servers, and gateways.',
     tags: ['enterprise', 'ai-catalog', 'travel', 'public-agent-discovery'],
-    publisher: { identifier: 'urn:ai:domain:travel26.com', displayName: 'Travel26', identityType: 'dns' },
-    catalogMetadata: pn({
+    publisher: { identifier: 'travel26.com', displayName: 'Travel26', identityType: 'dns' },
+    extensions: pn({
       resolutionRole: 'nested-ai-catalog',
       preferredDiscovery: 'ai-catalog',
       nandaIndexRole: 'optional-fallback-entry',
@@ -73,30 +74,22 @@ const records: DemoRecord[] = [
   },
   {
     orgId: 'skyblue-refunds',
-    displayName: 'SkyBlue Refunds Agent DNS-AID Pointer',
+    displayName: 'SkyBlue Refunds Agent',
     domain: 'skyblue.com',
     contactEmail: 'agents@skyblue.com',
-    registryUrl: null,
-    identifier: 'urn:ai:domain:skyblue.com:agent:refunds',
-    mediaType: 'application/vnd.dns-aid+json',
-    description:
-      "Federated entry pointing to SkyBlue's DNS-AID discovery path for its refunds agent.",
-    tags: ['enterprise', 'dns-aid', 'airline', 'refunds', 'gateway'],
-    publisher: { identifier: 'urn:ai:domain:skyblue.com', displayName: 'SkyBlue Airlines', identityType: 'dns' },
-    catalogMetadata: pn({
-      resolutionRole: 'dns-aid-pointer',
-      preferredDiscovery: 'dns-aid',
+    registryUrl: 'https://api.skyblue.com/agents/refunds.json',
+    identifier: 'urn:air:skyblue.com:agent:refunds',
+    mediaType: 'application/a2a-agent-card+json',
+    description: 'Federated AI Catalog entry for SkyBlue Refund Agent',
+    tags: ['enterprise', 'airline', 'refunds'],
+    publisher: { identifier: 'skyblue.com', displayName: 'SkyBlue Airlines', identityType: 'dns' },
+    extensions: pn({
+      resolutionRole: 'dns-svcb-pointer',
+      preferredDiscovery: 'dns-svcb',
       authoritativeSystem: 'skyblue.com DNS',
       nandaIndexRole: 'federated-pointer',
     }),
-    entryData: {
-      method: 'dns-aid',
-      domain: 'skyblue.com',
-      organizationDiscoveryName: '_agents.skyblue.com',
-      agentDiscoveryName: 'refunds._agents.skyblue.com',
-      serviceHint: 'refunds',
-      expectedResult: 'DNS-AID returns a gateway, catalog, or agent-card pointer controlled by skyblue.com',
-    },
+    entryData: null,
   },
   {
     orgId: 'moonbakery-orders',
@@ -104,13 +97,13 @@ const records: DemoRecord[] = [
     domain: 'moonbakery.com',
     contactEmail: 'orders@moonbakery.com',
     registryUrl: 'https://agentcards.host39.org/moonbakery.com/orders.json',
-    identifier: 'urn:ai:domain:moonbakery.com:agent:orders',
+    identifier: 'urn:air:moonbakery.com:agent:orders',
     mediaType: 'application/a2a-agent-card+json',
     description:
-      'Ordering agent for Moon Bakery. Menu lookup, order placement, pickup scheduling, and order status.',
+      'Ordering agent for Moon Bakery. Supports menu lookup, order placement, pickup scheduling, and order status.',
     tags: ['smb', 'bakery', 'orders', 'commerce', 'a2a-agent-card'],
-    publisher: { identifier: 'urn:ai:domain:moonbakery.com', displayName: 'Moon Bakery', identityType: 'dns' },
-    catalogMetadata: pn({
+    publisher: { identifier: 'moonbakery.com', displayName: 'Moon Bakery', identityType: 'dns' },
+    extensions: pn({
       resolutionRole: 'smb-agent-card',
       preferredDiscovery: 'nandaindex',
       agentCardHost: 'host39.org',
@@ -126,22 +119,22 @@ const records: DemoRecord[] = [
     displayName: "John's Personal Agent",
     domain: null,
     contactEmail: 'john@hotmail.com',
-    registryUrl: 'https://agentcards.host39.org/personal/john%40hotmail.com/card.json',
-    identifier: 'urn:ai:email:john@hotmail.com',
+    registryUrl: 'https://agentcards.host39.org/personal/john@hotmail.com/card.json',
+    identifier: 'urn:air:host39.org:personal:john-hotmail-com',
     mediaType: 'application/a2a-agent-card+json',
     description:
-      'Personal agent for john@hotmail.com. Public metadata is minimal; private actions require user consent.',
+      'Personal agent associated with john@hotmail.com. Public metadata is minimal; private actions require user consent.',
     tags: ['personal-agent', 'individual', 'email-identity', 'a2a-agent-card'],
-    publisher: { identifier: 'urn:ai:email:john@hotmail.com', displayName: 'John', identityType: 'email' },
-    catalogMetadata: pn({
+    publisher: { identifier: 'host39.org', displayName: 'Host39', identityType: 'dns' },
+    extensions: pn({
       resolutionRole: 'personal-agent-card',
       preferredDiscovery: 'nandaindex',
       agentCardHost: 'host39.org',
+      subjectAccount: 'john@hotmail.com',
       'runtime.provider': 'Azure',
       'runtime.url': 'https://john-agent.azure.com',
       'auth.metadata': 'public_minimal',
       'auth.execution': 'user_consent_required',
-      nandaIndexRole: 'optional-fallback-entry',
     }),
     entryData: null,
   },
@@ -151,12 +144,12 @@ const records: DemoRecord[] = [
     domain: 'acme.dev',
     contactEmail: 'dev@acme.dev',
     registryUrl: 'https://mcp.acme.dev/weather/card.json',
-    identifier: 'urn:ai:domain:acme.dev:mcp:weather',
+    identifier: 'urn:air:acme.dev:mcp:weather',
     mediaType: 'application/mcp-server-card+json',
     description: 'MCP server exposing weather tools — current conditions, forecasts, and alerts.',
     tags: ['mcp', 'tools', 'weather'],
-    publisher: { identifier: 'urn:ai:domain:acme.dev', displayName: 'ACME Dev', identityType: 'dns' },
-    catalogMetadata: pn({ resolutionRole: 'mcp-server-card', preferredDiscovery: 'nandaindex' }),
+    publisher: { identifier: 'acme.dev', displayName: 'ACME Dev', identityType: 'dns' },
+    extensions: pn({ resolutionRole: 'mcp-server-card', preferredDiscovery: 'nandaindex' }),
     entryData: null,
   },
   {
@@ -165,26 +158,26 @@ const records: DemoRecord[] = [
     domain: 'skills.acme.dev',
     contactEmail: 'dev@acme.dev',
     registryUrl: 'https://skills.acme.dev/pdf-extractor.zip',
-    identifier: 'urn:ai:domain:acme.dev:skill:pdf-extractor',
+    identifier: 'urn:air:skills.acme.dev:skill:pdf-extractor',
     mediaType: 'application/agentskill+zip',
     description: 'Agent skill bundle that extracts structured data from PDF documents.',
     tags: ['skill', 'pdf', 'extraction'],
-    publisher: { identifier: 'urn:ai:domain:acme.dev', displayName: 'ACME Dev', identityType: 'dns' },
-    catalogMetadata: pn({ resolutionRole: 'agent-skill', preferredDiscovery: 'nandaindex' }),
+    publisher: { identifier: 'skills.acme.dev', displayName: 'ACME Dev', identityType: 'dns' },
+    extensions: pn({ resolutionRole: 'agent-skill', preferredDiscovery: 'nandaindex' }),
     entryData: null,
   },
   {
     orgId: 'acme-ard',
-    displayName: 'ACME Federated Directory (ARD)',
-    domain: 'directory.acme.com',
+    displayName: 'ACME Federated Directory',
+    domain: 'acme.com',
     contactEmail: 'ops@acme.com',
     registryUrl: 'https://directory.acme.com/ard',
-    identifier: 'urn:ai:domain:acme.com',
+    identifier: 'urn:air:acme.com:registry:ard',
     mediaType: 'application/ai-registry+json',
     description: 'ARD-compatible discovery endpoint backed by AGNTCY Agent Directory.',
     tags: ['enterprise', 'ard', 'agent-directory'],
-    publisher: { identifier: 'urn:ai:domain:acme.com', displayName: 'ACME Corp', identityType: 'dns' },
-    catalogMetadata: pn({
+    publisher: { identifier: 'acme.com', displayName: 'ACME Corp', identityType: 'dns' },
+    extensions: pn({
       resolutionRole: 'ard-endpoint',
       preferredDiscovery: 'ard',
       nandaIndexRole: 'federated-pointer',
@@ -202,11 +195,10 @@ async function main(): Promise<void> {
 
   const verifyTokenExpiresAt = new Date(Date.now() + 86_400_000);
   for (const r of records) {
-    const identity = r.identifier ?? (r.domain ? `urn:ai:domain:${r.domain}` : `urn:ai:org:${r.orgId}`);
     await insertOrganization({
       ...r,
       version: r.version ?? '1.0.0',
-      trustManifest: r.trustManifest ?? demoTrust(identity, r.publisher?.identityType ?? 'dns'),
+      trustManifest: r.trustManifest ?? demoTrust(r.identifier, r.publisher?.identityType ?? 'dns'),
       verifyToken: `seed-${r.orgId}`,
       verifyTokenExpiresAt,
     });

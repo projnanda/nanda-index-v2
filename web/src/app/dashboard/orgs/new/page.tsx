@@ -7,27 +7,24 @@ import { PageShell } from "@/components/PageShell";
 import { ApiError, createOrg } from "@/lib/nanda-api";
 import { cn } from "@/lib/utils";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
-import type { IndexRecord } from "@/lib/nanda-types";
+import type { CatalogExtensions, HostingPath, IndexRecord } from "@/lib/nanda-types";
+import { NANDA_EXTENSION, PERSONAL_CARD_HOST, isAnchoredTo, previewIdentifier } from "@/lib/air";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
 type Step = 1 | 2 | 3;
-type HostingPath = "registry" | "dns-aid" | "smb" | "personal";
 
 interface FormState {
   hosting_path: HostingPath;
   // Step 1 — identity
   org_id: string;
   display_name: string;
-  domain: string;           // registry / dns-aid / smb
-  identity_email: string;   // personal only
-  identifier: string;       // auto-populated, editable in advanced
+  domain: string;           // registry / dns-svcb / smb
+  identity_email: string;   // personal only — also the verified contact address
+  identifier: string;       // optional override in advanced (domain paths only)
   // Step 2 — catalog details (varies by path)
-  registry_url: string;         // registry, smb, personal — the URL field
-  org_discovery_name: string;   // dns-aid
-  agent_discovery_name: string; // dns-aid optional
-  service_hint: string;         // dns-aid optional
-  agent_id: string;             // smb optional — e.g. "orders"
+  registry_url: string;         // catalog URL (registry) or agent card URL (others)
+  agent_id: string;             // smb / dns-svcb optional — identifier short-name, e.g. "orders"
   runtime_provider: string;     // smb / personal optional
   runtime_url: string;          // smb / personal optional
   auth_metadata: string;        // smb / personal optional
@@ -48,9 +45,6 @@ const EMPTY: FormState = {
   identity_email: "",
   identifier: "",
   registry_url: "",
-  org_discovery_name: "",
-  agent_discovery_name: "",
-  service_hint: "",
   agent_id: "",
   runtime_provider: "",
   runtime_url: "",
@@ -71,6 +65,15 @@ const TTL_OPTIONS = [
 ];
 
 const RUNTIME_PROVIDERS = ["AWS", "Azure", "GCP", "Railway", "GoDaddy", "Vercel", "Other"];
+
+const PATH_LABEL: Record<HostingPath, string> = {
+  registry: "Enterprise AI Catalog",
+  "dns-svcb": "DNS SVCB",
+  smb: "SMB Agent Card",
+  personal: "Personal Agent",
+};
+
+const SHORT_NAME_RE = /^[A-Za-z0-9._~-]+$/;
 
 const ORG_ID_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$|^[a-z0-9]$/;
 const DOMAIN_RE = /^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/;
@@ -107,34 +110,24 @@ function validateStep1(form: FormState): Record<string, string> {
 
 function validateStep2(form: FormState): Record<string, string> {
   const e: Record<string, string> = {};
-  if (form.hosting_path === "registry") {
-    if (!form.registry_url) {
-      e.registry_url = "Required.";
-    } else if (!/^https?:\/\/.+/.test(form.registry_url)) {
-      e.registry_url = "Must start with https:// (or http:// in development).";
-    }
-  } else if (form.hosting_path === "dns-aid") {
-    if (!form.org_discovery_name) {
-      e.org_discovery_name = "Required.";
-    } else if (!/^_agents\..+/.test(form.org_discovery_name)) {
-      e.org_discovery_name = "Must follow DNS-AID convention, e.g. _agents.skyblue.com.";
-    }
-  } else {
-    // smb + personal
-    if (!form.registry_url) {
-      e.registry_url = "Required.";
-    } else if (!/^https?:\/\/.+/.test(form.registry_url)) {
-      e.registry_url = "Must be a valid URL starting with https://.";
-    }
+  if (!form.registry_url) {
+    e.registry_url = "Required.";
+  } else if (!/^https?:\/\/.+/.test(form.registry_url)) {
+    e.registry_url = "Must start with https:// (or http:// in development).";
   }
-  if (form.identifier && !form.identifier.startsWith("urn:")) {
-    e.identifier = "Must start with urn: (e.g., urn:ai:domain:example.com).";
+  if (form.agent_id && !SHORT_NAME_RE.test(form.agent_id)) {
+    e.agent_id = "Letters, numbers, dots, hyphens and underscores only.";
+  }
+  if (form.identifier && form.hosting_path !== "personal" && !isAnchoredTo(form.identifier, form.domain)) {
+    e.identifier = `Must be urn:air:${form.domain || "<domain>"}:<namespace>:<name>.`;
   }
   return e;
 }
 
 function validateStep3(form: FormState): Record<string, string> {
   const e: Record<string, string> = {};
+  // Personal registrations verify the identity email itself — it is the contact.
+  if (form.hosting_path === "personal") return e;
   if (!form.contact_email) {
     e.contact_email = "Required.";
   } else if (!EMAIL_RE.test(form.contact_email)) {
@@ -256,6 +249,10 @@ function SuccessScreen({ record, path }: { record: IndexRecord; path: HostingPat
         <h2 className="font-serif text-2xl italic text-emerald-900">Registered</h2>
         <p className="mt-1 font-mono text-sm text-emerald-700">{record.org_id}</p>
       </div>
+      <div className="rounded-2xl border border-black/5 bg-slate-50 px-4 py-3">
+        <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400">Identifier</p>
+        <p className="mt-1 break-all font-mono text-sm text-slate-950">{record.identifier}</p>
+      </div>
       {isPersonal ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
           <p className="text-sm font-semibold text-amber-800">Confirm your email to go live</p>
@@ -267,7 +264,7 @@ function SuccessScreen({ record, path }: { record: IndexRecord; path: HostingPat
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
           <p className="text-sm font-semibold text-amber-800">Verify your domain to go live</p>
           <p className="mt-0.5 text-xs text-amber-700">
-            Your record is <span className="font-semibold">pending</span> and hidden from the public index until you prove ownership of <span className="font-mono">{record.domain}</span> by adding a DNS TXT record. Open your org to get the record. (We&apos;ve also emailed a link to confirm your contact address.)
+            Your record is <span className="font-semibold">pending</span> and hidden from the public index until you prove ownership of <span className="mx-0.5 font-mono">{record.domain}</span> by adding a DNS TXT record. Open your org to get the record. (We&apos;ve also emailed a link to confirm your contact address.)
           </p>
         </div>
       )}
@@ -299,10 +296,10 @@ function SuccessScreen({ record, path }: { record: IndexRecord; path: HostingPat
             <span className="mt-0.5 text-xs text-slate-500">Check status and edit details.</span>
           </Link>
         )}
-        {path === "dns-aid" && (
+        {path === "dns-svcb" && (
           <div className="flex flex-col rounded-2xl border border-black/10 bg-white p-4">
-            <span className="text-sm font-semibold text-slate-950">DNS-AID active</span>
-            <span className="mt-0.5 text-xs text-slate-500">Resolvers will query your DNS-AID records directly.</span>
+            <span className="text-sm font-semibold text-slate-950">DNS SVCB pointer</span>
+            <span className="mt-0.5 text-xs text-slate-500">Resolvers can confirm the endpoint via your SVCB records.</span>
           </div>
         )}
       </div>
@@ -339,39 +336,15 @@ export default function NewOrgPage() {
   const isPersonal = form.hosting_path === "personal";
   const isAgentCard = form.hosting_path === "smb" || isPersonal;
 
-  // Auto-populate identifier from domain or email depending on path
-  function patchDomain(v: string) {
-    setForm((f) => ({
-      ...f,
-      domain: v,
-      identifier: f.identifier && f.identifier !== `urn:ai:domain:${f.domain}`
-        ? f.identifier
-        : `urn:ai:domain:${v}`,
-      org_discovery_name: f.org_discovery_name && f.org_discovery_name !== `_agents.${f.domain}`
-        ? f.org_discovery_name
-        : `_agents.${v}`,
-    }));
-  }
-
-  function patchEmail(v: string) {
-    setForm((f) => ({
-      ...f,
-      identity_email: v,
-      identifier: f.identifier && f.identifier !== `urn:ai:email:${f.identity_email}`
-        ? f.identifier
-        : `urn:ai:email:${v}`,
-    }));
-  }
+  const isAgentPointer = form.hosting_path === "smb" || form.hosting_path === "dns-svcb";
+  // What the server will assign unless the advanced override is used.
+  const derivedIdentifier = previewIdentifier(form.hosting_path, {
+    domain: form.domain, email: form.identity_email, shortName: form.agent_id || form.org_id,
+  });
 
   function patchPath(v: HostingPath) {
-    setForm((f) => ({
-      ...f,
-      hosting_path: v,
-      // re-derive identifier when switching paths
-      identifier: v === "personal"
-        ? (f.identity_email ? `urn:ai:email:${f.identity_email}` : "")
-        : (f.domain ? `urn:ai:domain:${f.domain}` : ""),
-    }));
+    // An identifier override is anchored to the old path's shape — drop it.
+    setForm((f) => ({ ...f, hosting_path: v, identifier: "" }));
   }
 
   function advanceTo2() {
@@ -383,9 +356,7 @@ export default function NewOrgPage() {
   }
 
   function advanceTo3() {
-    const fields = form.hosting_path === "dns-aid"
-      ? ["org_discovery_name", "identifier"]
-      : ["registry_url", "identifier"];
+    const fields = ["registry_url", "agent_id", "identifier"];
     touch(...fields);
     if (fields.every((f) => !s2Errors[f])) setStep(3);
   }
@@ -399,78 +370,36 @@ export default function NewOrgPage() {
     try {
       const tagList = form.tags.split(",").map((t) => t.trim()).filter(Boolean);
 
-      const isDnsAid = form.hosting_path === "dns-aid";
-      const isSmbOrPersonal = isAgentCard;
-
-      // Derive identifier
-      let identifier = form.identifier;
-      if (!identifier) {
-        if (isPersonal) {
-          identifier = `urn:ai:email:${form.identity_email}`;
-        } else if (form.hosting_path === "smb" && form.agent_id) {
-          identifier = `urn:ai:domain:${form.domain}:agent:${form.agent_id}`;
-        } else {
-          identifier = `urn:ai:domain:${form.domain}`;
-        }
-      }
-
-      // Publisher block
-      const publisher = isPersonal
-        ? { identifier: `urn:ai:email:${form.identity_email}`, displayName: form.display_name, identityType: "email" }
-        : { identifier: `urn:ai:domain:${form.domain}`, displayName: form.display_name, identityType: "dns" };
-
-      // media_type
-      const mediaType = isDnsAid
-        ? "application/vnd.dns-aid+json"
-        : isSmbOrPersonal
-          ? "application/a2a-agent-card+json"
-          : "application/ai-catalog+json";
-
-      // catalog_metadata
-      const catalogMetadata: Record<string, string> = isDnsAid
-        ? { "org.projectnanda.preferredDiscovery": "dns-aid", "org.projectnanda.resolutionRole": "dns-aid-pointer" }
-        : isSmbOrPersonal
-          ? {
-            "org.projectnanda.preferredDiscovery": "nandaindex",
-            "org.projectnanda.resolutionRole": isPersonal ? "personal-agent-card" : "smb-agent-card",
-            "org.projectnanda.nandaIndexRole": "optional-fallback-entry",
-            ...(form.registry_url
-              ? { "org.projectnanda.agentCardHost": new URL(form.registry_url).hostname }
-              : {}),
-            ...(form.runtime_provider ? { "org.projectnanda.runtime.provider": form.runtime_provider } : {}),
-            ...(form.runtime_url ? { "org.projectnanda.runtime.url": form.runtime_url } : {}),
-            ...(form.auth_metadata ? { "org.projectnanda.auth.metadata": form.auth_metadata } : {}),
-            ...(form.auth_execution ? { "org.projectnanda.auth.execution": form.auth_execution } : {}),
-          }
-          : { "org.projectnanda.preferredDiscovery": "ai-catalog", "org.projectnanda.resolutionRole": "nested-ai-catalog" };
-
-      // entry_data for DNS-AID
-      const entryData = isDnsAid
+      // Client-controlled routing hints only — the server owns resolutionRole,
+      // preferredDiscovery, subjectAccount and the identifier/publisher anchor.
+      const nandaHints: Record<string, string> = isAgentCard
         ? {
-          method: "dns-aid",
-          domain: form.domain,
-          organizationDiscoveryName: form.org_discovery_name,
-          ...(form.agent_discovery_name ? { agentDiscoveryName: form.agent_discovery_name } : {}),
-          ...(form.service_hint ? { serviceHint: form.service_hint } : {}),
+          agentCardHost: new URL(form.registry_url).hostname,
+          ...(form.runtime_provider ? { "runtime.provider": form.runtime_provider } : {}),
+          ...(form.runtime_url ? { "runtime.url": form.runtime_url } : {}),
+          ...(form.auth_metadata ? { "auth.metadata": form.auth_metadata } : {}),
+          ...(form.auth_execution ? { "auth.execution": form.auth_execution } : {}),
         }
-        : undefined;
+        : {};
+      const extensions: CatalogExtensions = { [NANDA_EXTENSION]: nandaHints };
+
+      // Advanced override or custom short-name; otherwise the server derives it.
+      const identifier = form.identifier
+        || (isAgentPointer && form.agent_id ? derivedIdentifier : undefined);
 
       const record = await createOrg({
         org_id: form.org_id,
         display_name: form.display_name,
         hosting_path: form.hosting_path,
         domain: isPersonal ? undefined : (form.domain || undefined),
-        contact_email: form.contact_email,
-        registry_url: isDnsAid ? null : (form.registry_url || null),
+        contact_email: isPersonal ? form.identity_email : form.contact_email,
+        registry_url: form.registry_url,
         ttl_seconds: parseInt(form.ttl_seconds, 10) || 86400,
-        identifier,
-        media_type: mediaType,
+        identifier: isPersonal ? undefined : identifier,
         description: form.description || undefined,
         tags: tagList.length ? tagList : undefined,
         version: form.version || undefined,
-        publisher,
-        catalog_metadata: catalogMetadata,
-        entry_data: entryData,
+        extensions,
       });
       setCreated(record);
     } catch (err) {
@@ -509,15 +438,15 @@ export default function NewOrgPage() {
               <PathCard value="registry" selected={form.hosting_path} onSelect={patchPath}
                 title="Enterprise AI Catalog" subtitle="Teams / Orgs"
                 description="Run your own nanda-ai-catalog. Full control over your AI catalog." />
-              <PathCard value="dns-aid" selected={form.hosting_path} onSelect={patchPath}
-                title="DNS-AID" subtitle="Enterprise / DNS"
-                description="Publish agent discovery via DNS records. NandaIndex acts as a federated pointer." />
+              <PathCard value="dns-svcb" selected={form.hosting_path} onSelect={patchPath}
+                title="DNS SVCB" subtitle="Enterprise / DNS"
+                description="Your agent is discoverable via DNS service binding (SVCB, RFC 9460). NandaIndex acts as a federated pointer." />
               <PathCard value="smb" selected={form.hosting_path} onSelect={patchPath}
                 title="SMB Agent Card" subtitle="Small Business"
                 description="You own a domain but don't run infrastructure. Host your agent card on host39.org." />
               <PathCard value="personal" selected={form.hosting_path} onSelect={patchPath}
                 title="Personal Agent" subtitle="Individual"
-                description="No domain needed. Your email is your identity. Host your agent card on host39.org." />
+                description="No domain needed. Your verified email is your identity, anchored at host39.org." />
             </div>
 
             <Field label="Org ID" value={form.org_id} onChange={(v) => patch("org_id", v)}
@@ -531,7 +460,7 @@ export default function NewOrgPage() {
 
             {/* Domain (all except personal) */}
             {!isPersonal && (
-              <Field label="Domain" value={form.domain} onChange={patchDomain}
+              <Field label="Domain" value={form.domain} onChange={(v) => patch("domain", v)}
                 onBlur={() => touch("domain")} placeholder="moonbakery.com"
                 hint="Agents will be addressable under this domain."
                 error={visible("domain")} />
@@ -539,9 +468,9 @@ export default function NewOrgPage() {
 
             {/* Email identity (personal only) */}
             {isPersonal && (
-              <Field label="Email Identity" value={form.identity_email} onChange={patchEmail}
+              <Field label="Email Identity" value={form.identity_email} onChange={(v) => patch("identity_email", v)}
                 onBlur={() => touch("identity_email")} type="email" placeholder="john@hotmail.com"
-                hint="Your email becomes your agent identity: urn:ai:email:john@hotmail.com"
+                hint={`We email a verification link here. Your identifier: urn:air:${PERSONAL_CARD_HOST}:personal:john-hotmail-com`}
                 error={visible("identity_email")} />
             )}
 
@@ -550,19 +479,8 @@ export default function NewOrgPage() {
               (!isPersonal && form.domain && !s1Errors.domain)) && (
                 <div className="rounded-2xl border border-black/5 bg-slate-50 px-4 py-3">
                   <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400">Identifier preview</p>
-                  <p className="mt-1 font-mono text-sm text-slate-700 break-all">
-                    {isPersonal ? (
-                      <>
-                        <span className="text-slate-400">urn:ai:email:</span>
-                        <span className="text-slate-950">{form.identity_email}</span>
-                      </>
-                    ) : (
-                      <>
-                        <span className="text-slate-400">urn:ai:domain:</span>
-                        <span className="text-slate-950">{form.domain}</span>
-                        {form.hosting_path === "smb" && <span className="text-slate-400">:agent:&lt;id&gt;</span>}
-                      </>
-                    )}
+                  <p className="mt-1 font-mono text-sm text-slate-950 break-all">
+                    {derivedIdentifier}
                   </p>
                 </div>
               )}
@@ -586,14 +504,14 @@ export default function NewOrgPage() {
           <div className="rounded-3xl border border-black/10 bg-white p-6 shadow-sm space-y-4">
             <div>
               <h2 className="font-serif text-xl italic text-slate-950">
-                {form.hosting_path === "registry" && "Registry details"}
-                {form.hosting_path === "dns-aid" && "DNS-AID details"}
+                {form.hosting_path === "registry" && "Catalog details"}
+                {form.hosting_path === "dns-svcb" && "Agent card details"}
                 {form.hosting_path === "smb" && "Agent card details"}
                 {form.hosting_path === "personal" && "Agent card details"}
               </h2>
               <p className="mt-0.5 text-xs text-slate-500">
-                {form.hosting_path === "registry" && "Where your self-hosted registry is."}
-                {form.hosting_path === "dns-aid" && "Your DNS-AID discovery names."}
+                {form.hosting_path === "registry" && "Where your AI Catalog is published."}
+                {form.hosting_path === "dns-svcb" && "The agent card your SVCB records point to."}
                 {form.hosting_path === "smb" && "Your agent card URL and optional runtime info."}
                 {form.hosting_path === "personal" && "Your agent card URL and optional runtime info."}
               </p>
@@ -603,34 +521,34 @@ export default function NewOrgPage() {
             {form.hosting_path === "registry" && (
               <Field label="AI Catalog Hosted URL" value={form.registry_url}
                 onChange={(v) => patch("registry_url", v)} onBlur={() => touch("registry_url")}
-                placeholder="https://registry.acme.com"
-                hint="The base URL of your nanda-registry server. Clone the repo, deploy to a VPS, point your domain."
+                placeholder="https://example.com/.well-known/ai-catalog.json"
+                hint="Your AI Catalog endpoint (or the base URL of your nanda-registry server)."
                 error={visible("registry_url")} />
             )}
 
-            {/* DNS-AID path */}
-            {form.hosting_path === "dns-aid" && (
+            {/* DNS SVCB path */}
+            {form.hosting_path === "dns-svcb" && (
               <>
                 <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3">
                   <p className="text-xs font-semibold text-sky-800">Before you continue</p>
                   <p className="mt-0.5 text-xs text-sky-700">
-                    Publish your DNS-AID TXT records first, then fill in the discovery names below. NandaIndex stores a federated pointer — resolvers query your DNS directly.
+                    Publish SVCB/HTTPS records (RFC 9460) under {form.domain || "your domain"} for this agent&apos;s endpoint. NandaIndex stores a federated pointer to the A2A Agent Card; your DNS stays authoritative.
                   </p>
                 </div>
-                <Field label="Organization discovery name" value={form.org_discovery_name}
-                  onChange={(v) => patch("org_discovery_name", v)} onBlur={() => touch("org_discovery_name")}
-                  placeholder={`_agents.${form.domain || "skyblue.com"}`}
-                  hint="The DNS name where your org-level DNS-AID TXT record is published."
-                  error={visible("org_discovery_name")} />
-                <Field label="Agent discovery name" value={form.agent_discovery_name}
-                  onChange={(v) => patch("agent_discovery_name", v)}
-                  placeholder={`refunds._agents.${form.domain || "skyblue.com"}`}
-                  hint="Specific agent DNS name (e.g. refunds._agents.skyblue.com). Leave blank for org-level." optional />
-                <Field label="Service hint" value={form.service_hint}
-                  onChange={(v) => patch("service_hint", v)}
-                  placeholder="refunds"
-                  hint="Short label for the service this entry points to." optional />
+                <Field label="Agent Card URL" value={form.registry_url}
+                  onChange={(v) => patch("registry_url", v)} onBlur={() => touch("registry_url")}
+                  placeholder={`https://api.${form.domain || "skyblue.com"}/agents/refunds.json`}
+                  hint="The URL of the A2A Agent Card your DNS records point to."
+                  error={visible("registry_url")} />
               </>
+            )}
+
+            {isAgentPointer && (
+              <Field label="Agent ID" value={form.agent_id}
+                onChange={(v) => patch("agent_id", v)} onBlur={() => touch("agent_id")}
+                placeholder="orders"
+                hint={`Identifier short-name: urn:air:${form.domain || "<domain>"}:agent:<id>. Defaults to your Org ID.`}
+                error={visible("agent_id")} optional />
             )}
 
             {/* SMB + Personal paths */}
@@ -654,13 +572,6 @@ export default function NewOrgPage() {
                   }
                   hint="The URL of your A2A Agent Card."
                   error={visible("registry_url")} />
-
-                {form.hosting_path === "smb" && (
-                  <Field label="Agent ID" value={form.agent_id}
-                    onChange={(v) => patch("agent_id", v)}
-                    placeholder="orders"
-                    hint="Short slug for this specific agent (e.g. orders, support). Used to build the identifier URN." optional />
-                )}
 
                 {/* Runtime info */}
                 <div className="space-y-3 border-t border-black/5 pt-3">
@@ -715,12 +626,17 @@ export default function NewOrgPage() {
               </button>
               {showAdvanced && (
                 <div className="mt-3">
-                  <Field label="Identifier (URN)" value={form.identifier}
-                    onChange={(v) => patch("identifier", v)} onBlur={() => touch("identifier")}
-                    placeholder={isPersonal ? `urn:ai:email:${form.identity_email || "john@hotmail.com"}`
-                      : `urn:ai:domain:${form.domain || "example.com"}`}
-                    hint="Auto-generated. Override only if you need a custom URN."
-                    error={visible("identifier")} optional />
+                  {isPersonal ? (
+                    <p className="text-xs text-slate-500">
+                      Personal identifiers are derived from your verified email and cannot be overridden.
+                    </p>
+                  ) : (
+                    <Field label="Identifier (urn:air)" value={form.identifier}
+                      onChange={(v) => patch("identifier", v)} onBlur={() => touch("identifier")}
+                      placeholder={derivedIdentifier}
+                      hint={`Override only if you need a custom path. Must stay under urn:air:${form.domain || "<domain>"}:`}
+                      error={visible("identifier")} optional />
+                  )}
                 </div>
               )}
             </div>
@@ -747,11 +663,19 @@ export default function NewOrgPage() {
               <p className="mt-0.5 text-xs text-slate-500">Confirm your details before submitting.</p>
             </div>
 
-            <Field label="Contact Email" value={form.contact_email}
-              onChange={(v) => patch("contact_email", v)} onBlur={() => touch("contact_email")}
-              placeholder="admin@moonbakery.com" type="email"
-              hint="A verification link will be sent here to activate your index record."
-              error={visible("contact_email")} />
+            {isPersonal ? (
+              <div className="rounded-2xl border border-black/5 bg-slate-50 px-4 py-3">
+                <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400">Verification email</p>
+                <p className="mt-1 font-mono text-sm text-slate-950 break-all">{form.identity_email}</p>
+                <p className="mt-1 text-[11px] text-slate-400">Confirming this address binds it to your identifier and activates the record.</p>
+              </div>
+            ) : (
+              <Field label="Contact Email" value={form.contact_email}
+                onChange={(v) => patch("contact_email", v)} onBlur={() => touch("contact_email")}
+                placeholder="admin@moonbakery.com" type="email"
+                hint="A verification link will be sent here to activate your index record."
+                error={visible("contact_email")} />
+            )}
 
             <div>
               <span className="mb-1 block text-xs font-medium uppercase tracking-[0.16em] text-slate-500">Cache TTL</span>
@@ -769,14 +693,13 @@ export default function NewOrgPage() {
                 {[
                   { label: "Org ID", value: form.org_id },
                   { label: "Display Name", value: form.display_name },
-                  {
-                    label: "Path",
-                    value: { registry: "Enterprise Registry", "dns-aid": "DNS-AID", smb: "SMB Agent Card", personal: "Personal Agent" }[form.hosting_path],
-                  },
+                  { label: "Path", value: PATH_LABEL[form.hosting_path] },
+                  { label: "Identifier", value: form.identifier || derivedIdentifier },
                   ...(!isPersonal && form.domain ? [{ label: "Domain", value: form.domain }] : []),
                   ...(isPersonal && form.identity_email ? [{ label: "Email Identity", value: form.identity_email }] : []),
-                  ...(form.hosting_path !== "dns-aid" && form.registry_url ? [{ label: "Agent Card URL", value: form.registry_url }] : []),
-                  ...(form.hosting_path === "dns-aid" && form.org_discovery_name ? [{ label: "Org Discovery", value: form.org_discovery_name }] : []),
+                  ...(form.registry_url
+                    ? [{ label: form.hosting_path === "registry" ? "Catalog URL" : "Agent Card URL", value: form.registry_url }]
+                    : []),
                   ...(form.description ? [{ label: "Description", value: form.description }] : []),
                   ...(form.tags ? [{ label: "Tags", value: form.tags }] : []),
                 ].map(({ label, value }) => (

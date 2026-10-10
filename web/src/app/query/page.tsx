@@ -11,7 +11,8 @@ import { ApiError, getIndexRecord, searchIndexRecords, resolveAgent, fetchAgentR
 import type { IndexRecord, SearchResponse, ResolveResponse, CatalogEntry, AgenticSearchResponse } from "@/lib/nanda-types";
 
 // Matches urn:<nid>:<domain>:<identifier>
-const URN_RE = /^urn:[a-z0-9][a-z0-9-]{0,30}:[^:]+:[^:]+$/i;
+// urn:air:<publisher-FQDN>:<namespace...>:<short-name>
+const URN_RE = /^urn:air:[^:\s]+(:[^:\s]+){2,}$/i;
 
 type Mode = "org_id" | "search" | "agentic";
 type ResultKind = "single" | "search" | "resolve" | "agentic";
@@ -82,7 +83,7 @@ export default function QueryPage() {
         let agent = null;
         let agentError: string | undefined;
         if (!indexData.index_record.registry_url) {
-          agentError = "This entry has no registry URL (DNS-AID or custom discovery).";
+          agentError = "This entry has no URL to follow (inline data or custom discovery).";
         } else {
           try {
             agent = await fetchAgentRecord(
@@ -124,7 +125,7 @@ export default function QueryPage() {
         ? "moonbakery39"
         : mode === "agentic"
           ? "Help me place an order for a custom cake"
-          : "moonbakery39  or  urn:ai:moonbakery39.com:order";
+          : "moonbakery  or  urn:air:moonbakery.com:agent:orders";
 
   return (
     <PageShell
@@ -320,7 +321,7 @@ export default function QueryPage() {
         {!result && !error && (
           <TableEmptyState
             title="No query yet"
-            description='Try keyword, or a full URN like "urn:ai:moonbakery.com:order".'
+            description='Try keyword, or a full URN like "urn:air:moonbakery.com:agent:orders".'
           />
         )}
       </div>

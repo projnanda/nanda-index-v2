@@ -43,6 +43,9 @@ export interface ArdSearchResultItem {
   url: string;
   description?: string | null;
   tags?: string[];
+  /** AI Catalog publisher + extensions — present on index-entry listings. */
+  publisher?: { identifier: string; displayName: string; identityType?: string };
+  extensions?: Record<string, Record<string, unknown>>;
   provenance?: { orgId: string; registryUrl: string; basis: string };
   score: number;
 }
@@ -80,6 +83,8 @@ const ARD_SEARCH_RESULT_ITEM_SCHEMA = {
     url: { type: 'string' },
     description: { type: ['string', 'null'] },
     tags: { type: 'array', items: { type: 'string' } },
+    publisher: { type: 'object', additionalProperties: true },
+    extensions: { type: 'object', additionalProperties: { type: 'object', additionalProperties: true } },
     provenance: { type: 'object', additionalProperties: true },
     score: { type: 'number' },
   },

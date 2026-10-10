@@ -167,8 +167,9 @@ describe('Org management routes — protected CRUD', () => {
       provider: 'github', providerId: 'other-provider',
     });
     await sql`
-      INSERT INTO organizations (org_id, display_name, domain, contact_email, registry_url, verify_token)
-      VALUES ('org-other','Other','other.example.com','a@other.com','https://other.example.com/r', 'tok')
+      INSERT INTO organizations (org_id, display_name, domain, contact_email, registry_url, verify_token, identifier)
+      VALUES ('org-other','Other','other.example.com','a@other.com','https://other.example.com/r', 'tok',
+              'urn:air:other.example.com:catalog:root')
     `;
     await sql`
       INSERT INTO org_memberships (user_id, org_id) VALUES (${otherUser.id}, 'org-other')
@@ -207,7 +208,7 @@ describe('Org management routes — protected CRUD', () => {
   // ── version + trust_manifest (AI Catalog parity fields) ─────────────────────
 
   const TRUST_MANIFEST = {
-    identity:     'urn:ai:domain:trusted.example.com',
+    identity:     'urn:air:trusted.example.com:catalog:root',
     identityType: 'domain',
     attestations: [
       { type: 'soc2', uri: 'https://trusted.example.com/soc2.pdf', mediaType: 'application/pdf' },
@@ -399,6 +400,8 @@ describe('Org management routes — protected CRUD', () => {
 
   it('allows an admin to suspend → reactivate → hard-delete the full lifecycle', async () => {
     await createOrg(fastify, token, 'org-admin-lifecycle');
+    // Reactivation restores 'active' only for a proven domain — simulate a passed DNS challenge.
+    await getSql()`UPDATE organizations SET domain_verified = true, status = 'active' WHERE org_id = 'org-admin-lifecycle'`;
 
     const suspended = await fastify.inject({
       method: 'DELETE',

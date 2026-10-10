@@ -1,5 +1,7 @@
+import type postgres from 'postgres';
 import { getSql } from '../client.js';
 import type { IndexRecord, PublisherBlock, TrustManifest } from '../../types/api/index-record.js';
+import type { CatalogExtensions } from '../../lib/entryProfile.js';
 
 /** Domain type — camelCase (postgres.camel maps snake_case columns). */
 export interface Organization {
@@ -22,12 +24,12 @@ export interface Organization {
   updatedAt: Date;
 
   // AI Catalog fields
-  identifier: string | null;
+  identifier: string;
   mediaType: string;
   description: string | null;
   tags: string[];
   publisher: PublisherBlock | null;
-  catalogMetadata: Record<string, unknown> | null;
+  extensions: CatalogExtensions;
   entryData: Record<string, unknown> | null;
   version: string | null;
   trustManifest: TrustManifest | null;
@@ -47,12 +49,12 @@ export interface InsertOrgParams {
   verifyToken: string;
   verifyTokenExpiresAt: Date;
   ttlSeconds?: number;
-  identifier?: string;
+  identifier: string;
   mediaType?: string;
   description?: string | null;
   tags?: string[];
   publisher?: PublisherBlock | null;
-  catalogMetadata?: Record<string, unknown> | null;
+  extensions?: CatalogExtensions;
   entryData?: Record<string, unknown> | null;
   version?: string | null;
   trustManifest?: TrustManifest | null;
@@ -62,16 +64,22 @@ export interface InsertOrgParams {
 export interface UpdateOrgParams {
   displayName?: string;
   domain?: string;
+  identifier?: string;
   registryUrl?: string | null;
   ttlSeconds?: number;
   description?: string | null;
   tags?: string[];
   publisher?: PublisherBlock | null;
-  catalogMetadata?: Record<string, unknown> | null;
+  extensions?: CatalogExtensions;
   entryData?: Record<string, unknown> | null;
   version?: string | null;
   trustManifest?: TrustManifest | null;
   representativeQueries?: string[];
+}
+
+/** Deep-copies a readonly extensions object into a plain JSON value. */
+function toJsonObject(extensions: CatalogExtensions): Record<string, Record<string, unknown>> & postgres.JSONValue {
+  return JSON.parse(JSON.stringify(extensions)) as Record<string, Record<string, unknown>> & postgres.JSONValue;
 }
 
 /** Maps a domain Organization to the wire IndexRecord shape. */
@@ -87,12 +95,12 @@ export function toIndexRecord(org: Organization): IndexRecord {
     domain_verified: org.domainVerified,
     created_at:     org.createdAt.toISOString(),
     updated_at:     org.updatedAt.toISOString(),
-    identifier:     org.identifier ?? undefined,
+    identifier:     org.identifier,
     media_type:     org.mediaType,
     description:    org.description,
     tags:           org.tags,
     publisher:      org.publisher ?? undefined,
-    metadata:       org.catalogMetadata ?? undefined,
+    extensions:     toJsonObject(org.extensions),
     data:           org.entryData ?? undefined,
     version:        org.version ?? undefined,
     trust_manifest: org.trustManifest ?? undefined,
@@ -119,14 +127,14 @@ export async function findByOrgId(orgId: string): Promise<Organization | null> {
 export async function findByDomain(domain: string): Promise<Organization | null> {
   const sql = getSql();
   const rows = await sql<Organization[]>`
-    SELECT * FROM organizations WHERE domain = ${domain} LIMIT 1
+    SELECT * FROM organizations WHERE lower(domain) = lower(${domain}) LIMIT 1
   `;
   return rows[0] ?? null;
 }
 
 /**
- * Finds an organization by its stored identifier URN.
- * Used for email-identity lookups (e.g. urn:ai:email:john@example.com).
+ * Finds an organization by its exact (normalised) urn:air: identifier —
+ * the primary resolution key for every entry.
  */
 export async function findByIdentifier(identifier: string): Promise<Organization | null> {
   const sql = getSql();
@@ -167,23 +175,22 @@ export async function findAllActive(): Promise<Organization[]> {
  */
 export async function insertOrganization(params: InsertOrgParams): Promise<Organization> {
   const sql = getSql();
-  const identifier = params.identifier ?? (params.domain ? `urn:ai:domain:${params.domain}` : null);
   const rows = await sql<Organization[]>`
     INSERT INTO organizations
       (org_id, display_name, domain, contact_email, registry_url,
        verify_token, verify_token_expires_at, ttl_seconds,
-       identifier, media_type, description, tags, publisher, catalog_metadata, entry_data,
+       identifier, media_type, description, tags, publisher, extensions, entry_data,
        version, trust_manifest, representative_queries)
     VALUES
       (${params.orgId}, ${params.displayName}, ${params.domain ?? null}, ${params.contactEmail},
        ${params.registryUrl ?? null}, ${params.verifyToken}, ${params.verifyTokenExpiresAt},
        ${params.ttlSeconds ?? 86400},
-       ${identifier},
+       ${params.identifier},
        ${params.mediaType ?? 'application/ai-catalog+json'},
        ${params.description ?? null},
        ${sql.array(params.tags ?? [])},
        ${params.publisher ? sql.json(JSON.parse(JSON.stringify(params.publisher))) : null},
-       ${params.catalogMetadata ? sql.json(JSON.parse(JSON.stringify(params.catalogMetadata))) : null},
+       ${sql.json(toJsonObject(params.extensions ?? {}))},
        ${params.entryData ? sql.json(JSON.parse(JSON.stringify(params.entryData))) : null},
        ${params.version ?? null},
        ${params.trustManifest ? sql.json(JSON.parse(JSON.stringify(params.trustManifest))) : null},
@@ -223,13 +230,14 @@ export async function updateOrganization(
     UPDATE organizations SET
       display_name     = COALESCE(${patch.displayName ?? null}, display_name),
       domain           = COALESCE(${newDomain}, domain),
+      identifier       = COALESCE(${patch.identifier ?? null}, identifier),
       registry_url     = COALESCE(${patch.registryUrl ?? null}, registry_url),
       ttl_seconds      = COALESCE(${patch.ttlSeconds ?? null}, ttl_seconds),
       description      = COALESCE(${patch.description ?? null}, description),
       tags             = COALESCE(${patch.tags != null ? sql.array(patch.tags) : null}, tags),
       representative_queries = COALESCE(${patch.representativeQueries != null ? sql.array(patch.representativeQueries) : null}, representative_queries),
       publisher        = COALESCE(${patch.publisher ? sql.json(JSON.parse(JSON.stringify(patch.publisher))) : null}, publisher),
-      catalog_metadata = COALESCE(${patch.catalogMetadata ? sql.json(JSON.parse(JSON.stringify(patch.catalogMetadata))) : null}, catalog_metadata),
+      extensions       = COALESCE(${patch.extensions ? sql.json(toJsonObject(patch.extensions)) : null}, extensions),
       entry_data       = COALESCE(${patch.entryData ? sql.json(JSON.parse(JSON.stringify(patch.entryData))) : null}, entry_data),
       version          = COALESCE(${patch.version ?? null}, version),
       trust_manifest   = CASE WHEN ${trustProvided} THEN ${trustValue} ELSE trust_manifest END,
@@ -258,7 +266,7 @@ export async function updateOrganization(
 /**
  * Marks an organization's contact email as verified and clears the token.
  *
- * For domain-based orgs (registry/dns-aid/smb) this proves contact-email
+ * For domain-based orgs (registry/dns-svcb/smb) this proves contact-email
  * reachability only — activation still requires domain ownership (see
  * markDomainVerified). Personal orgs have no domain to prove, so email
  * verification is their only activation gate: a still-pending org with
@@ -344,14 +352,17 @@ export async function suspendOrganization(orgId: string): Promise<Organization |
 }
 
 /**
- * Reactivates a suspended organization by setting status back to 'active'.
+ * Reactivates a suspended organization. It returns to 'active' only when its
+ * ownership proof still holds — a domain org whose domain is unverified (e.g.
+ * the domain was changed while suspended) goes back to 'pending' instead, so
+ * suspend → change domain → reactivate cannot bypass the DNS challenge.
  * Returns null if org_id not found.
  */
 export async function reactivateOrganization(orgId: string): Promise<Organization | null> {
   const sql = getSql();
   const rows = await sql<Organization[]>`
     UPDATE organizations SET
-      status     = 'active',
+      status     = CASE WHEN domain IS NOT NULL AND NOT domain_verified THEN 'pending' ELSE 'active' END,
       updated_at = NOW()
     WHERE org_id = ${orgId}
     RETURNING *

@@ -1,6 +1,6 @@
 # NANDA Index
 
-A global switchboard for AI agent discovery. NANDA Index stores one index record per organization and maps any identity (domain, email, or URN) to the correct next discovery object: an AI Catalog, DNS-AID path, A2A Agent Card, or personal agent card.
+A global switchboard for AI agent discovery. NANDA Index stores one AI Catalog-formatted index record per organization and maps a stable resource identifier — an ARD domain-anchored `urn:air:<publisher-FQDN>:<namespace...>:<short-name>` — to the correct next discovery object: an AI Catalog, a DNS-based service-discovery (SVCB) pointer, an A2A Agent Card, or a personal agent card.
 
 It is the first hop in a three-hop resolution chain:
 
@@ -15,16 +15,16 @@ NANDA Index does not host agents. It tells you where to find them.
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        NANDA Index                          │
-│                                                             │
-│  org_id     media_type                    registry_url      │
-│  ─────────  ─────────────────────────     ────────────────  │
-│  acme-corp  application/ai-catalog+json   https://reg.acme  │
-│  skyblue    application/vnd.dns-aid+json  (data field)      │
-│  moonbakery application/a2a-agent-card    https://host39.org │
-│  john       application/a2a-agent-card    https://host39.org │
-└─────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────┐
+│                            NANDA Index                            │
+│                                                                   │
+│  identifier                                     registry_url      │
+│  ─────────────────────────────────────────────  ────────────────  │
+│  urn:air:acme.com:catalog:root                  registry.acme.com │
+│  urn:air:skyblue.com:agent:refunds              api.skyblue.com   │
+│  urn:air:moonbakery.com:agent:orders            host39.org        │
+│  urn:air:host39.org:personal:john-hotmail-com   host39.org        │
+└───────────────────────────────────────────────────────────────────┘
 ```
 
 Four registration types:
@@ -32,9 +32,9 @@ Four registration types:
 | Type | Who | How resolved |
 |------|-----|-------------|
 | Enterprise AI Catalog | Orgs running their own nanda-registry-server | Hop 2: `GET registry_url/agents/<slug>` |
-| DNS-AID | Domain-controlled discovery via DNS | Hop 2: DNS-AID lookup using `data` field |
+| DNS SVCB (`dns-svcb`) | Domain-controlled discovery via DNS service binding (RFC 9460) | Hop 2: fetch the A2A Agent Card at `registry_url` (verifiable via the domain's SVCB records) |
 | SMB Agent Card | Small businesses using host39.org | Hop 2: fetch card directly from `registry_url` |
-| Personal Agent | Individuals, email identity | Hop 2: fetch card directly from `registry_url` |
+| Personal Agent | Individuals without a domain; identifier anchored to host39.org, email as `subjectAccount` | Hop 2: fetch card directly from `registry_url` |
 
 ---
 
@@ -137,7 +137,7 @@ DB_MAX_CONNECTIONS=10
 
 Go to `https://nandaindex.org` → Sign in → Dashboard → New Organization.
 
-Choose your registration type, fill in the form, and verify your email. Personal (no-domain) agents go live as soon as email is verified. Registry/DNS-AID/SMB registrations also require verifying ownership of the domain (via a DNS TXT record) before going live.
+Choose your registration type, fill in the form, and verify your email. Personal (no-domain) agents go live as soon as email is verified. Registry/DNS SVCB/SMB registrations also require verifying ownership of the domain (via a DNS TXT record) before going live.
 
 ### Via the API
 
@@ -161,20 +161,17 @@ curl -X POST https://api.nandaindex.org/api/v1/orgs \
     "domain": "acme.com",
     "contact_email": "agents@acme.com",
     "registry_url": "https://registry.acme.com",
-    "identifier": "urn:ai:domain:acme.com",
-    "media_type": "application/ai-catalog+json",
     "description": "Acme enterprise AI Catalog.",
-    "tags": ["enterprise","ai-catalog"],
-    "publisher": {
-      "identifier": "urn:ai:domain:acme.com",
-      "displayName": "Acme Corp",
-      "identityType": "dns"
-    },
-    "catalog_metadata": {
-      "org.projectnanda.preferredDiscovery": "ai-catalog",
-      "org.projectnanda.resolutionRole": "nested-ai-catalog"
-    }
+    "tags": ["enterprise","ai-catalog"]
   }'
+# The server derives the AI Catalog fields from hosting_path + domain:
+#   identifier  urn:air:acme.com:catalog:root   (must be anchored to your domain)
+#   publisher   { "identifier": "acme.com", "displayName": "Acme Corp", "identityType": "dns" }
+#   extensions  { "org.projectnanda": { "resolutionRole": "nested-ai-catalog",
+#                                       "preferredDiscovery": "ai-catalog", ... } }
+# You may pass your own `extensions` (e.g. runtime.* / auth.* hints) and an
+# `identifier` under urn:air:<your-domain>:; resolutionRole, preferredDiscovery,
+# authoritativeSystem and subjectAccount are always server-owned.
 
 # Step 3: Verify your email
 # Check inbox for a verification link. This example uses hosting_path "registry"
@@ -197,7 +194,7 @@ interface IndexRecord {
   org_id:         string;
   display_name:   string;
   domain:         string | null;   // null for personal (email-identity) entries
-  registry_url:   string | null;   // null for DNS-AID entries
+  registry_url:   string | null;   // catalog URL or agent card URL
   ttl_seconds:    number;
   status:         "pending" | "active" | "suspended";
   email_verified: boolean;
@@ -205,13 +202,13 @@ interface IndexRecord {
   updated_at:     string;
 
   // AI Catalog fields
-  identifier:  string;             // URN, e.g. "urn:ai:domain:acme.com"
-  media_type:  string;
+  identifier:  string;             // e.g. "urn:air:acme.com:catalog:root"
+  media_type:  string;             // the AI Catalog entry `type`
   description: string | null;
   tags:        string[];
-  publisher:   { identifier: string; displayName: string; identityType: string };
-  metadata:    Record<string, unknown>;  // NANDA routing hints
-  data:        Record<string, unknown>;  // DNS-AID discovery data
+  publisher:   { identifier: string; displayName: string; identityType: string }; // identifier = bare domain
+  extensions:  Record<string, Record<string, unknown>>; // { "org.projectnanda": { resolutionRole, ... } }
+  data?:       Record<string, unknown>;  // inline artifact (AI Catalog url XOR data)
 }
 ```
 
@@ -220,17 +217,21 @@ interface IndexRecord {
 | Value | Meaning |
 |-------|---------|
 | `application/ai-catalog+json` | Self-hosted enterprise registry |
-| `application/vnd.dns-aid+json` | DNS-AID discovery |
-| `application/a2a-agent-card+json` | Direct A2A Agent Card (SMB or personal) |
+| `application/ai-registry+json` | ARD-compatible directory (e.g. AGNTCY ADS) |
+| `application/a2a-agent-card+json` | Direct A2A Agent Card (SMB, personal, or DNS SVCB pointer) |
+| `application/mcp-server-card+json` | MCP server descriptor |
+| `application/agentskill+zip` | Agent skill bundle |
 
 ### identifier URN formats
 
 | Type | Format | Example |
 |------|--------|---------|
-| Enterprise / org | `urn:ai:domain:<domain>` | `urn:ai:domain:acme.com` |
-| Enterprise / agent | `urn:ai:domain:<domain>:agent:<slug>` | `urn:ai:domain:acme.com:agent:support` |
-| Personal | `urn:ai:email:<email>` | `urn:ai:email:john@hotmail.com` |
-| Custom | any valid URN | `urn:ai:org.agntcy` |
+| Enterprise catalog | `urn:air:<domain>:catalog:root` | `urn:air:example.com:catalog:root` |
+| Agent (SMB / DNS SVCB) | `urn:air:<domain>:agent:<short-name>` | `urn:air:moonbakery.com:agent:orders` |
+| ARD directory | `urn:air:<domain>:registry:<name>` | `urn:air:acme.com:registry:ard` |
+| Personal | `urn:air:host39.org:personal:<email-slug>` | `urn:air:host39.org:personal:john-hotmail-com` |
+
+Identifiers follow ARD's `urn:air:<publisher-FQDN>:<namespace...>:<short-name>`. The publisher FQDN must be the domain you verified; personal identifiers are derived from your verified email. The retired `urn:ai:*` forms are rejected.
 
 ---
 
@@ -271,13 +272,15 @@ interface IndexRecord {
 ### Resolution Example
 
 ```bash
-curl "https://api.nandaindex.org/api/v1/resolve?locator=urn:ai:domain:acme.com:agent:flights"
+curl "https://api.nandaindex.org/api/v1/resolve?locator=urn:air:acme.com:agent:flights"
 
 {
-  "locator": "urn:ai:domain:acme.com:agent:flights",
+  "locator": "urn:air:acme.com:agent:flights",
   "identifier": "flights",
+  "match": "publisher",          // "exact" when an entry has exactly this identifier
   "index_record": {
     "org_id": "acme",
+    "identifier": "urn:air:acme.com:catalog:root",
     "registry_url": "https://registry.acme.com",
     "media_type": "application/ai-catalog+json",
     ...
@@ -290,8 +293,9 @@ curl "https://api.nandaindex.org/api/v1/resolve?locator=urn:ai:domain:acme.com:a
 ## Resolution Chain
 
 ```
-1. GET /api/v1/resolve?locator=urn:ai:domain:acme.com:agent:flights
-   Returns: IndexRecord { registry_url, identifier }
+1. GET /api/v1/resolve?locator=urn:air:acme.com:agent:flights
+   Returns: { match, identifier, index_record { registry_url, ... } }
+   (match "exact" on an agent card → registry_url is the card; skip to 3)
 
 2. GET <registry_url>/agents/<identifier>
    Returns: CatalogEntry { url (facts URL) }

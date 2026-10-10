@@ -12,12 +12,21 @@ function hostOf(baseUrl: string): string {
   }
 }
 
+function hostnameOf(baseUrl: string): string {
+  try {
+    return new URL(baseUrl).hostname;
+  } catch {
+    return baseUrl;
+  }
+}
+
 /** Builds the ARD registry descriptor served at GET /api/ard, in the same
  *  shape ora.ai's own descriptor uses (specVersion/registry/endpoints/
  *  mediaTypes/capabilities/links). */
 export function buildDescriptor(config: Config): ArdRegistryDescriptor {
   const base = config.apiBaseUrl.replace(/\/+$/, '');
   const host = hostOf(config.apiBaseUrl);
+  const hostname = hostnameOf(config.apiBaseUrl);
 
   const mediaTypes = Array.from(new Set(Object.values(NANDA_TO_ARD_TYPE))).map((type) => ({
     type,
@@ -38,12 +47,12 @@ export function buildDescriptor(config: Config): ArdRegistryDescriptor {
   return {
     specVersion: '1.0',
     type: 'application/ai-registry+json',
-    identifier: `urn:air:nanda-index:${host}`,
+    identifier: `urn:air:${hostname}:registry:nanda-index`,
     registry: {
       displayName: 'NANDA Index',
       identity: `did:web:${host}`,
       description:
-        'NANDA Index — federated agent discovery. Ranks candidate organizations locally and fans out live to their registries (enterprise, SMB/personal, DNS-AID) for agent-level search results.',
+        'NANDA Index — federated agent discovery. Ranks candidate organizations locally and fans out live to their registries (enterprise catalogs, SMB/personal agent cards, DNS SVCB pointers) for agent-level search results.',
       documentationUrl: `${base}/docs`,
     },
     endpoints: {
@@ -107,12 +116,14 @@ export function agentCandidateToArdResult(c: AgentCandidate): ArdSearchResultIte
  *  every page request, which is a crawl in disguise). */
 export function organizationToArdResult(org: Organization): ArdSearchResultItem {
   return {
-    identifier: org.identifier ?? org.orgId,
+    identifier: org.identifier,
     displayName: org.displayName,
     type: toArdType(org.mediaType),
     url: org.registryUrl ?? '',
     description: org.description,
     tags: org.tags,
+    publisher: org.publisher ?? undefined,
+    extensions: org.extensions,
     provenance: {
       orgId: org.orgId,
       registryUrl: org.registryUrl ?? '',
