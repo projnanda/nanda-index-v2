@@ -67,7 +67,7 @@ class Guest:
     via: str = VIA_INDEX_V2
     #: For ``index-v2``: the capability to match against the org's catalog tags.
     capability: str = ""
-    #: For ``index-v3``: the key-anchored name to resolve.
+    #: For the second-index route: the key-anchored name to resolve.
     urn: str = ""
     #: Used only when discovery fails, and recorded as ``configured`` when it is.
     agent_url: str = ""
