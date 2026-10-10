@@ -1,0 +1,88 @@
+{
+    "specVersion": "1.0",
+    "entries": [
+        {
+            "identifier": "astrocity",
+            "displayName": "AstroCity",
+            "mediaType": "application/a2a-agent-card+json",
+            "url": "https://server-production-9ec7.up.railway.app/.well-known/agent.json",
+            "description": "A non-profit advancing space-science education and public engagement.",
+            "tags": [
+                "space-science",
+                "education",
+                "outreach",
+                "programs",
+                "fundraising",
+                "communications",
+                "research",
+                "observation-scheduling"
+            ],
+            "version": "0.2.0"
+        },
+        {
+            "identifier": "astrocity-executive-director",
+            "displayName": "Executive Director",
+            "mediaType": "application/a2a-agent-card+json",
+            "url": "https://server-production-5a9d.up.railway.app/astrocity.org/executive-director.json",
+            "tags": [
+                "strategy",
+                "governance",
+                "partnerships",
+                "board-relations"
+            ],
+            "description": ""
+        },
+        {
+            "identifier": "astrocity-chief-scientist",
+            "displayName": "Chief Scientist",
+            "mediaType": "application/a2a-agent-card+json",
+            "url": "https://chief-scientist-production.up.railway.app/.well-known/agent.json",
+            "tags": [
+                "orbital-analysis",
+                "payload-science",
+                "peer-review",
+                "observation-scheduling"
+            ],
+            "description": ""
+        },
+        {
+            "identifier": "astrocity-outreach-director",
+            "displayName": "Director of Outreach",
+            "mediaType": "application/a2a-agent-card+json",
+            "url": "https://server-production-5a9d.up.railway.app/astrocity.org/outreach-director.json",
+            "tags": [
+                "community-workshops",
+                "school-partnerships",
+                "public-engagement"
+            ],
+            "description": ""
+        },
+        {
+            "identifier": "astrocity-communications-lead",
+            "displayName": "Communications Lead",
+            "mediaType": "application/a2a-agent-card+json",
+            "url": "https://server-production-5a9d.up.railway.app/astrocity.org/communications-lead.json",
+            "tags": [
+                "social-media",
+                "storytelling",
+                "press",
+                "content"
+            ],
+            "description": ""
+        },
+        {
+            "identifier": "astrocity-programs-director",
+            "displayName": "Director of Programs",
+            "mediaType": "application/a2a-agent-card+json",
+            "url": "https://programs-director-production.up.railway.app/.well-known/agent.json",
+            "tags": [
+                "program-design",
+                "impact-measurement",
+                "curriculum"
+            ],
+            "description": ""
+        }
+    ],
+    "omittedMembers": 19,
+    "withheldMembers": 0
+}

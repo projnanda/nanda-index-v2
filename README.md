@@ -10,6 +10,11 @@ Requester → NANDA Index → Registry / Agent Card Host → Agent Runtime
 
 NANDA Index does not host agents. It tells you where to find them.
 
+A worked example of the whole chain lives in [`demo/`](demo/): an agent that
+searches the index for two organisations, follows each to the agent it needs by a
+different route, books a restaurant, and leaves a signed record. MIT-licensed,
+separate from this repository's Apache-2.0 license.
+
 ---
 
 ## Architecture

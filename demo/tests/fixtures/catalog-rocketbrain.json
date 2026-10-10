@@ -1,0 +1,86 @@
+{
+    "specVersion": "1.0",
+    "entries": [
+        {
+            "identifier": "rocketbrain",
+            "displayName": "RocketBrain",
+            "mediaType": "application/a2a-agent-card+json",
+            "url": "https://server-production-c3f5.up.railway.app/.well-known/agent.json",
+            "description": "An enterprise AI company building intelligent automation for business.",
+            "tags": [
+                "automation",
+                "enterprise",
+                "product",
+                "engineering",
+                "customer-success",
+                "sales",
+                "executive"
+            ],
+            "version": "0.2.0"
+        },
+        {
+            "identifier": "rocketbrain-head-of-product",
+            "displayName": "Head of Product",
+            "mediaType": "application/a2a-agent-card+json",
+            "url": "https://server-production-5a9d.up.railway.app/rocketbrain.ai/head-of-product.json",
+            "tags": [
+                "product-management",
+                "roadmap",
+                "ux-strategy"
+            ],
+            "description": ""
+        },
+        {
+            "identifier": "rocketbrain-ceo",
+            "displayName": "CEO",
+            "mediaType": "application/a2a-agent-card+json",
+            "url": "https://server-production-5a9d.up.railway.app/rocketbrain.ai/ceo.json",
+            "tags": [
+                "strategy",
+                "vision",
+                "fundraising",
+                "leadership"
+            ],
+            "description": ""
+        },
+        {
+            "identifier": "rocketbrain-head-of-sales",
+            "displayName": "Head of Sales",
+            "mediaType": "application/a2a-agent-card+json",
+            "url": "https://server-production-5a9d.up.railway.app/rocketbrain.ai/head-of-sales.json",
+            "tags": [
+                "enterprise-sales",
+                "partnerships",
+                "gtm"
+            ],
+            "description": ""
+        },
+        {
+            "identifier": "rocketbrain-cto",
+            "displayName": "CTO",
+            "mediaType": "application/a2a-agent-card+json",
+            "url": "https://server-production-5a9d.up.railway.app/rocketbrain.ai/cto.json",
+            "tags": [
+                "ml-architecture",
+                "engineering",
+                "r-and-d",
+                "infra"
+            ],
+            "description": ""
+        },
+        {
+            "identifier": "rocketbrain-head-of-cs",
+            "displayName": "Head of Customer Success",
+            "mediaType": "application/a2a-agent-card+json",
+            "url": "https://server-production-5a9d.up.railway.app/rocketbrain.ai/head-of-cs.json",
+            "tags": [
+                "onboarding",
+                "support",
+                "retention"
+            ],
+            "description": ""
+        }
+    ],
+    "omittedMembers": 1,
+    "withheldMembers": 0
+}

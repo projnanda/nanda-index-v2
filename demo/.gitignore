@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.eggs/
+
+# virtualenvs
+.venv/
+venv/
+env/
+ENV/
+
+# tooling caches
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+coverage.json
+coverage.xml
+htmlcov/
+
+# runtime state — the signing key and the receipt chains this agent writes
+.concierge/
+receipts/
+
+# editor / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# dev/internal/audit — never commit
+scratch/
+tmp/
+notes/
+NOTES.md
+TODO.md
+*.log
+*.bak
+.claude/
+internal/
+audit/
+AUDIT*.md
+DISCUSSION*.md
+.env
+.env.*
+!.env.example
