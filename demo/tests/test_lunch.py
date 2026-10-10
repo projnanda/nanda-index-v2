@@ -219,7 +219,7 @@ def test_the_v2_guest_is_found_by_capability_in_the_org_catalog(me, monkeypatch)
 
 
 def test_the_v3_guest_is_found_by_resolving_its_key_anchored_name(me, monkeypatch):
-    """One hop, and it answers only 'where is this agent' — which is all v3 undertakes."""
+    """One hop, and it answers only 'where is this agent' — all that index undertakes."""
     urn = "urn:ai:key:uABC/agent"
     guest = lunch.Guest(
         who="the scientist",

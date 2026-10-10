@@ -116,7 +116,7 @@ def entry_claims(entry: dict[str, Any], capability: str) -> bool:
 
 
 def resolve_pointer(urn: str, *, index_url: str, timeout: float = 20.0) -> dict[str, Any]:
-    """The index-v3 record for ``urn``: where this key says it can be reached."""
+    """The second index's record for ``urn``: where this key says it can be reached."""
     query = urllib.parse.urlencode({"id": urn})
     try:
         payload = _get_json(f"{index_url.rstrip('/')}/v1/resolve?{query}", timeout=timeout)

@@ -1,6 +1,7 @@
 """The clock that keeps this agent's name resolvable.
 
-The defect: an index v3 record lives three days and registration happened once,
+The defect: a record in the second index lives three days and registration
+happened once,
 at startup. Nothing renewed it, so the agent stayed resolvable for exactly as
 long as it had been running — and then the venue refused it, because the venue
 requires a caller whose key an index resolves.

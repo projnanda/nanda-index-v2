@@ -21,9 +21,10 @@ __all__ = [
 #:
 #: Regentix's CEO comes from index v2: search the org by name, read its catalog,
 #: pick the agent whose tags claim `leadership`, follow its card to the address
-#: it answers on. AstroCity's chief scientist comes from index v3: resolve a
-#: key-anchored name to its current pointer. v3 holds no capability metadata, so
-#: it answers "where is this agent" and not "which agent does X".
+#: it answers on. AstroCity's chief scientist comes from a second index that
+#: binds a name to a key: resolve the name to its current pointer. That index
+#: holds no capability metadata, so it answers "where is this agent" and not
+#: "which agent does X".
 DEFAULT_GUESTS = [
     Guest(
         who="the CEO of Regentix",
@@ -74,7 +75,7 @@ def host_label() -> str:
 
 
 def index_v3_url() -> str:
-    """The key-anchored index. Same one the venue resolves callers against."""
+    """The second index, which binds a name to a key. Same one the venue uses."""
     return index_url()
 
 
@@ -83,7 +84,12 @@ def venue_url() -> str:
 
 
 def index_url() -> str:
-    """The index v3 the venue itself resolves callers against."""
+    """The second index: the one the venue resolves callers against.
+
+    Registering in a different one means being refused for not being registered
+    while holding a perfectly good entry, so this defaults to the index the
+    hosted demo uses.
+    """
     return os.environ.get("CONCIERGE_INDEX_URL", "https://nanda-index-v3-production.up.railway.app")
 
 

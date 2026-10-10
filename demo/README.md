@@ -15,7 +15,9 @@ Nothing tells the agent where those people are, which restaurant to use, or what
 the answer is. It looks them up.
 
 Nine services take part: two indexes, three organisation servers, two guest
-agents, a restaurant, and this agent. This agent is built on the official
+agents, a restaurant, and this agent. The two indexes answer different
+questions — one finds organisations and their agents, the other binds a name to
+a key and resolves it to a current address. This agent is built on the official
 [`a2a-sdk`](https://pypi.org/project/a2a-sdk/) and shares no code with any of
 them, so every exchange is between separate implementations.
 
@@ -32,10 +34,11 @@ Each guest is found by a different route, to show both.
    address the agent answers on.
 4. `GET <address>/agentfacts.json` for the skills the agent claims itself.
 
-**AstroCity's chief scientist — through index v3**
+**AstroCity's chief scientist — through a second index**
 
-`GET /v1/resolve?id=<urn>` returns the endpoint that key currently claims. v3
-holds no capability metadata, so it answers "where is this agent" only.
+`GET /v1/resolve?id=<urn>` returns the endpoint that key currently claims. That
+index binds a name to a key and holds no capability metadata, so it answers
+"where is this agent" only.
 
 Note the two surfaces on index v2: `/api/v1/search` is a keyword match over
 `org_id`, `domain`, `display_name` and `identifier`, so a tag-only term like
@@ -88,7 +91,7 @@ Copy `.env.example` and set what you need.
 | `CONCIERGE_HOME` | where the signing key lives. Use a persistent volume — the agent's name comes from its key, so losing it means becoming someone else |
 | `CONCIERGE_BASE_URL` | this agent's own address; its card and its index entry are both built from it |
 | `PUBLIC_INDEX_URL` | the index v2 used for search (default `https://api.nandaindex.org`) |
-| `CONCIERGE_INDEX_URL` | the index v3 the restaurant checks callers against |
+| `CONCIERGE_INDEX_URL` | the second index, which the restaurant checks callers against |
 | `VENUE_URL` | the restaurant |
 | `REGENTIX_SERVER_URL`, `ASTROCITY_SERVER_URL`, `ROCKETBRAIN_SERVER_URL` | the three organisation servers |
 | `REGENTIX_CEO_URL`, `ASTROCITY_SCIENCE_URL` | guest addresses, used if discovery fails and recorded as configured |

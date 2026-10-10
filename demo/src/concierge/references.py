@@ -60,9 +60,8 @@ def catalogue() -> list[Reference]:
         ),
         Reference(
             # Named for what it is to this demo rather than for its software
-            # version: a reader does not need to know there was a v2 of it, and
-            # calling it "NANDA Index v3" alongside the public NANDA Index made
-            # two different services look like two releases of one.
+            # version, so two different services do not read as two releases of
+            # one.
             name="Second Index",
             kind="Directory",
             url=config.index_v3_url(),
