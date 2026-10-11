@@ -59,8 +59,20 @@ UPDATE organizations
  WHERE extensions -> 'org.projectnanda' ->> 'preferredDiscovery' = 'dns-aid'
     OR extensions -> 'org.projectnanda' ->> 'resolutionRole'     = 'dns-aid-pointer';
 
--- 3. Personal (no-domain) rows: host-anchored identifier, Host39 publisher,
---    the account email carried as subjectAccount.
+-- 3. Personal (no-domain) rows: host-anchored identifier whose short-name is
+--    the email itself (urn:air:host39.org:personal:john@hotmail.com), Host39
+--    publisher, the account email carried as subjectAccount. Mirrors
+--    emailSegment() in src/lib/airUrn.ts: lowercase, URN-safe characters kept,
+--    everything else percent-encoded as UTF-8 — reversible, so collision-free.
+CREATE FUNCTION pg_temp.air_email_segment(email text) RETURNS text AS $$
+  SELECT coalesce(string_agg(
+           CASE WHEN c.ch ~ '^[a-z0-9._~!$&''()*+,;=@-]$' THEN c.ch
+                ELSE (SELECT string_agg('%' || upper(lpad(to_hex(get_byte(convert_to(c.ch, 'UTF8'), i)), 2, '0')), '' ORDER BY i)
+                        FROM generate_series(0, octet_length(convert_to(c.ch, 'UTF8')) - 1) AS i)
+           END, '' ORDER BY c.ord), '')
+    FROM regexp_split_to_table(lower(trim(email)), '') WITH ORDINALITY AS c(ch, ord)
+$$ LANGUAGE sql IMMUTABLE;
+
 WITH personal AS (
   SELECT id,
          lower(CASE WHEN identifier ILIKE 'urn:ai:email:%' THEN substr(identifier, 14)
@@ -69,8 +81,7 @@ WITH personal AS (
    WHERE domain IS NULL
 )
 UPDATE organizations o
-   SET identifier = 'urn:air:host39.org:personal:'
-                    || trim(both '-' from regexp_replace(p.email, '[^a-z0-9]+', '-', 'g')),
+   SET identifier = 'urn:air:host39.org:personal:' || pg_temp.air_email_segment(p.email),
        publisher  = '{"identifier": "host39.org", "displayName": "Host39", "identityType": "dns"}'::jsonb,
        extensions = jsonb_set(
          o.extensions, '{org.projectnanda}',

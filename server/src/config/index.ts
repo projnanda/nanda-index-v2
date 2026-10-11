@@ -93,6 +93,13 @@ export interface FederationConfig {
   readonly timeoutMs: number;
 }
 
+export interface OutboundConfig {
+  /** Let server-side fan-out fetch registries on private/loopback hosts.
+   *  Local development only (e.g. a nanda-registry on localhost) — leaving it
+   *  on in production re-opens SSRF into the internal network. */
+  readonly allowPrivateHosts: boolean;
+}
+
 export interface LlmEnrichmentConfig {
   /** undefined = enrichment disabled; orgs are registered/updated without it. */
   readonly apiKey: string | undefined;
@@ -115,6 +122,7 @@ export interface Config {
    *  endpoint URLs in the /api/ard registry descriptor. */
   readonly apiBaseUrl: string;
   readonly federation: FederationConfig;
+  readonly outbound: OutboundConfig;
   readonly llmEnrichment: LlmEnrichmentConfig;
 }
 
@@ -209,6 +217,9 @@ export function buildConfig(): Config {
       timeoutMs: parsePositiveInt(
         'FEDERATION_TIMEOUT_MS', optionalEnv('FEDERATION_TIMEOUT_MS', '3000'),
       ),
+    },
+    outbound: {
+      allowPrivateHosts: optionalEnv('OUTBOUND_ALLOW_PRIVATE_HOSTS', 'false') === 'true',
     },
     llmEnrichment: {
       apiKey: process.env['OPENAI_API_KEY'] || undefined,

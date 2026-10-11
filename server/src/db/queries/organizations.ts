@@ -1,7 +1,8 @@
 import type postgres from 'postgres';
 import { getSql } from '../client.js';
 import type { IndexRecord, PublisherBlock, TrustManifest } from '../../types/api/index-record.js';
-import type { CatalogExtensions } from '../../lib/entryProfile.js';
+import { NANDA_EXTENSION, type CatalogExtensions } from '../../lib/entryProfile.js';
+import type { IndexEntry } from '../../types/api/index-entry.js';
 
 /** Domain type — camelCase (postgres.camel maps snake_case columns). */
 export interface Organization {
@@ -105,6 +106,41 @@ export function toIndexRecord(org: Organization): IndexRecord {
     version:        org.version ?? undefined,
     trust_manifest: org.trustManifest ?? undefined,
     representative_queries: org.representativeQueries.length > 0 ? org.representativeQueries : undefined,
+  };
+}
+
+/**
+ * Maps a domain Organization to the paper's AI Catalog entry shape (see
+ * IndexEntry). Routing hints come from the stored extensions; operational
+ * state is added under the NANDA extension at read time only.
+ */
+export function toIndexEntry(org: Organization): IndexEntry {
+  return {
+    identifier:  org.identifier,
+    displayName: org.displayName,
+    type:        org.mediaType,
+    // Exactly one of url / data (url takes precedence when both are present).
+    ...(org.registryUrl ? { url: org.registryUrl } : org.entryData ? { data: org.entryData } : {}),
+    ...(org.description ? { description: org.description } : {}),
+    tags:        org.tags,
+    ...(org.version ? { version: org.version } : {}),
+    ...(org.publisher ? { publisher: org.publisher } : {}),
+    ...(org.trustManifest ? { trustManifest: org.trustManifest } : {}),
+    updatedAt:   org.updatedAt.toISOString(),
+    extensions: {
+      ...org.extensions,
+      [NANDA_EXTENSION]: {
+        ...org.extensions[NANDA_EXTENSION],
+        orgId:          org.orgId,
+        status:         org.status,
+        ttlSeconds:     org.ttlSeconds,
+        emailVerified:  org.emailVerified,
+        domainVerified: org.domainVerified,
+        createdAt:      org.createdAt.toISOString(),
+        domain:         org.domain,
+        representativeQueries: org.representativeQueries,
+      },
+    },
   };
 }
 

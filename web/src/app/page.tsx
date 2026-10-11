@@ -49,7 +49,7 @@ export default function HomePage() {
           <li>
             Individuals such as john@hotmail.com, who do not own a domain. Their
             identifier is anchored to the card host, for example{" "}
-            <span className="font-mono text-sm">urn:air:host39.org:personal:john-hotmail-com</span>.
+            <span className="font-mono text-sm">urn:air:host39.org:personal:john@hotmail.com</span>.
           </li>
         </ul>
       </div>

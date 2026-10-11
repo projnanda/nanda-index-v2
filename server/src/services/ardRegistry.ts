@@ -1,7 +1,7 @@
 import type { Config } from '../config/index.js';
 import type { Organization } from '../db/queries/organizations.js';
-import type { AgentCandidate } from '../types/api/agentic-search.js';
-import type { ArdRegistryDescriptor, ArdSearchResultItem } from '../types/api/ard.js';
+import type { AgentCandidate, FinderReferral } from '../types/api/agentic-search.js';
+import type { ArdReferral, ArdRegistryDescriptor, ArdSearchResultItem } from '../types/api/ard.js';
 import { NANDA_TO_ARD_TYPE, toArdType } from '../lib/ardMapping.js';
 
 function hostOf(baseUrl: string): string {
@@ -60,7 +60,7 @@ export function buildDescriptor(config: Config): ArdRegistryDescriptor {
         method: 'POST',
         url: `${base}/api/ard/search`,
         requestType: 'application/json',
-        description: 'Natural-language relevance search with optional type filter and federation.',
+        description: 'Natural-language relevance search with optional type filter. Matching ARD finders (ai-registry entries) are returned as referrals; agent identifiers are urn:air: qualified.',
       },
       explore: {
         method: 'POST',
@@ -101,6 +101,7 @@ export function agentCandidateToArdResult(c: AgentCandidate): ArdSearchResultIte
     url: c.url,
     description: c.description,
     tags: c.tags,
+    publisher: c.publisher,
     provenance: {
       orgId: c.provenance.org_id,
       registryUrl: c.provenance.registry_url,
@@ -108,6 +109,11 @@ export function agentCandidateToArdResult(c: AgentCandidate): ArdSearchResultIte
     },
     score: c.score,
   };
+}
+
+/** Maps a NANDA-native finder referral (snake_case) to an ARD referral. */
+export function finderReferralToArd(r: FinderReferral): ArdReferral {
+  return { identifier: r.identifier, displayName: r.display_name, searchUrl: r.search_url };
 }
 
 /** Maps an org-level Organization row to an ARD result item — backs

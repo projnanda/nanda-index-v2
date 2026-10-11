@@ -61,37 +61,65 @@ describe('NANDA Index — public read routes', () => {
 
     const res = await fastify.inject({ method: 'GET', url: '/api/v1/index' });
     expect(res.statusCode).toBe(200);
-    const results = res.json() as Array<{ org_id: string }>;
-    const ids = results.map(r => r.org_id);
-    expect(ids).toContain('idx-active');
-    expect(ids).not.toContain('idx-pending');
+    const results = res.json() as Array<{ identifier: string }>;
+    const ids = results.map(r => r.identifier);
+    expect(ids).toContain('urn:air:active.example.com:catalog:root');
+    expect(ids).not.toContain('urn:air:pending.example.com:catalog:root');
   });
 
-  it('IndexRecord shape is correct', async () => {
+  it('returns records in the paper\'s AI Catalog entry shape, operational fields under the NANDA extension', async () => {
     await seedOrg('idx-shape', 'shape.example.com', 'Shape Org');
 
     const res = await fastify.inject({ method: 'GET', url: '/api/v1/index' });
     const record = (res.json() as Array<Record<string, unknown>>)
-      .find(r => r['org_id'] === 'idx-shape');
-    expect(record).toMatchObject({
-      org_id:         'idx-shape',
-      domain:         'shape.example.com',
-      registry_url:   'https://shape.example.com/registry',
-      status:         'active',
-      email_verified: true,
+      .find(r => r['identifier'] === 'urn:air:shape.example.com:catalog:root');
+
+    expect(record).toEqual({
+      identifier:  'urn:air:shape.example.com:catalog:root',
+      displayName: 'Shape Org',
+      type:        'application/ai-catalog+json',
+      url:         'https://shape.example.com/registry',
+      tags:        [],
+      updatedAt:   expect.any(String),
+      extensions: {
+        'org.projectnanda': {
+          orgId: 'idx-shape',
+          status: 'active',
+          ttlSeconds: 86400,
+          emailVerified: true,
+          domainVerified: false,
+          createdAt: expect.any(String),
+          domain: 'shape.example.com',
+          representativeQueries: [],
+        },
+      },
     });
-    expect(typeof record!['created_at']).toBe('string');
-    expect(typeof record!['updated_at']).toBe('string');
+    // NANDA-native field names are gone from this surface.
+    for (const legacy of ['org_id', 'display_name', 'media_type', 'registry_url', 'metadata', 'domain']) {
+      expect(record).not.toHaveProperty(legacy);
+    }
   });
 
   // ── GET /api/v1/index/:org_id ───────────────────────────────────────────────
 
-  it('returns a single IndexRecord by org_id', async () => {
+  it('reports domain as null for a personal (no-domain) entry', async () => {
+    await seedOrg('idx-solo', null, 'Solo Agent');
+
+    const res = await fastify.inject({ method: 'GET', url: '/api/v1/index/idx-solo' });
+
+    expect(res.json().extensions['org.projectnanda'].domain).toBeNull();
+  });
+
+  it('returns a single paper-shaped record by org_id', async () => {
     await seedOrg('idx-single', 'single.example.com', 'Single Org');
 
     const res = await fastify.inject({ method: 'GET', url: '/api/v1/index/idx-single' });
     expect(res.statusCode).toBe(200);
-    expect(res.json().org_id).toBe('idx-single');
+    expect(res.json()).toMatchObject({
+      identifier: 'urn:air:single.example.com:catalog:root',
+      displayName: 'Single Org',
+      extensions: { 'org.projectnanda': { orgId: 'idx-single' } },
+    });
   });
 
   it('returns 404 for unknown org_id', async () => {

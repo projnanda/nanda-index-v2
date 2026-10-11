@@ -1,4 +1,6 @@
 import type { RankedOrganization } from '../db/queries/organizations.js';
+import { MEDIA_TYPES } from '../lib/entryProfile.js';
+import { publicUrlGuard, type UrlGuard } from '../lib/outboundUrl.js';
 
 /** Wire shape returned by a nanda-registry instance's CatalogEntry (camelCase). */
 export interface RemoteCatalogEntry {
@@ -29,15 +31,22 @@ export interface FanoutCandidate {
 export interface FanoutResult {
   candidates: FanoutCandidate[];
   unreachable: string[];
+  /** Matching ARD finders (ai-registry entries): the requester should query
+   *  these directly, so they are referred to rather than expanded. */
+  finders: RankedOrganization[];
 }
 
 export interface FanoutOptions {
   concurrency?: number;
   timeoutMs?: number;
   perOrgLimit?: number;
+  /** SSRF check run on every registry URL before it is fetched. Defaults to
+   *  allowing only publicly routable hosts. */
+  urlGuard?: UrlGuard;
 }
 
-const ENTERPRISE_MEDIA_TYPE = 'application/ai-catalog+json';
+const ENTERPRISE_MEDIA_TYPE = MEDIA_TYPES.aiCatalog;
+const ARD_FINDER_MEDIA_TYPE = MEDIA_TYPES.aiRegistry;
 
 function isRemoteCatalogDocument(body: unknown): body is RemoteCatalogDocument {
   return (
@@ -58,12 +67,16 @@ async function fetchAgentSearch(
   query: string,
   timeoutMs: number,
   perOrgLimit: number,
+  urlGuard: UrlGuard,
 ): Promise<RemoteCatalogEntry[] | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const url = `${org.registryUrl}/agents/search?q=${encodeURIComponent(query)}`;
-    const res = await fetch(url, { signal: controller.signal });
+    // registry_url is registrant-controlled: refuse internal hosts, and
+    // refuse redirects so a public host can't bounce us to one.
+    await urlGuard(url);
+    const res = await fetch(url, { signal: controller.signal, redirect: 'error' });
     if (!res.ok) return null;
 
     const body: unknown = await res.json();
@@ -120,10 +133,12 @@ async function runWithConcurrency<T>(
 /**
  * Expands ranked candidate orgs into agent-level candidates, branching by
  * media_type: enterprise orgs (backed by a nanda-registry instance) are
- * fanned out to live via GET <registry_url>/agents/search; every other type
- * (SMB/personal A2A cards, DNS SVCB pointers) has no registry to search underneath —
- * the org's own record already represents exactly one agent, so it's
- * emitted as-is with no HTTP call.
+ * fanned out to live via GET <registry_url>/agents/search; ARD finders
+ * (ai-registry, e.g. an AGNTCY ADS node) are returned as finders to refer
+ * the requester to (paper §7.3–7.4: NandaIndex finds the right finder, the
+ * finder does the search); every other type (SMB/personal A2A cards, DNS
+ * SVCB pointers) already represents exactly one agent, so it's emitted
+ * as-is with no HTTP call.
  */
 export async function fanOutAgentSearch(
   orgs: RankedOrganization[],
@@ -133,17 +148,23 @@ export async function fanOutAgentSearch(
   const concurrency = opts.concurrency ?? 5;
   const timeoutMs = opts.timeoutMs ?? 2500;
   const perOrgLimit = opts.perOrgLimit ?? 10;
+  const urlGuard = opts.urlGuard ?? publicUrlGuard;
 
   const candidates: FanoutCandidate[] = [];
   const unreachable: string[] = [];
+  const finders: RankedOrganization[] = [];
 
   const tasks = orgs.map((org) => async () => {
+    if (org.mediaType === ARD_FINDER_MEDIA_TYPE) {
+      finders.push(org);
+      return;
+    }
     if (org.mediaType !== ENTERPRISE_MEDIA_TYPE) {
       candidates.push(synthesizeSingleAgentCandidate(org));
       return;
     }
 
-    const entries = await fetchAgentSearch(org, query, timeoutMs, perOrgLimit);
+    const entries = await fetchAgentSearch(org, query, timeoutMs, perOrgLimit, urlGuard);
     if (entries === null) {
       unreachable.push(org.orgId);
       return;
@@ -154,5 +175,5 @@ export async function fanOutAgentSearch(
   });
 
   await runWithConcurrency(tasks, concurrency);
-  return { candidates, unreachable };
+  return { candidates, unreachable, finders };
 }

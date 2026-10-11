@@ -3,9 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { listIndexRecords } from "@/lib/nanda-api";
 import { JsonPanel } from "@/components/JsonPanel";
-import { toCatalogEntry } from "@/lib/catalog-entry";
-import type { IndexRecord, TrustManifest } from "@/lib/nanda-types";
-import { nandaField } from "@/lib/air";
+import type { IndexCatalogEntry, TrustManifest } from "@/lib/nanda-types";
+import { entryOps, nandaField } from "@/lib/air";
 
 const PAGE_SIZE = 9;
 
@@ -53,8 +52,8 @@ const ROLE_CATEGORY: Record<string, Category> = {
 };
 
 /** Map a single record to one of the six categories, or null when it fits none. */
-function categoryOf(record: IndexRecord): Category | null {
-  const mt = record.media_type ?? "";
+function categoryOf(record: IndexCatalogEntry): Category | null {
+  const mt = record.type ?? "";
   const tags = (record.tags ?? []).map((t) => t.toLowerCase());
 
   // Media-type-driven categories take priority.
@@ -74,7 +73,7 @@ function categoryOf(record: IndexRecord): Category | null {
 }
 
 type Row = {
-  record: IndexRecord;
+  record: IndexCatalogEntry;
   category: Category | null;
   badgeLabel: string;
   badgeClass: string;
@@ -87,11 +86,11 @@ type Row = {
   version: string | null;
 };
 
-function mapRow(record: IndexRecord): Row {
+function mapRow(record: IndexCatalogEntry): Row {
   const category = categoryOf(record);
-  const name = record.display_name || record.org_id;
-  const date = record.updated_at ? new Date(record.updated_at).toLocaleDateString() : "";
-  const description = record.description || record.identifier || record.domain || "";
+  const name = record.displayName || entryOps(record).orgId;
+  const date = record.updatedAt ? new Date(record.updatedAt).toLocaleDateString() : "";
+  const description = record.description || record.identifier || entryOps(record).domain || "";
 
   // De-duplicate tags case-insensitively for the chip row.
   const seen = new Set<string>();
@@ -112,7 +111,7 @@ function mapRow(record: IndexRecord): Row {
     date,
     description,
     tags,
-    verified: !!record.email_verified,
+    verified: !!entryOps(record).emailVerified,
     version: record.version ?? null,
   };
 }
@@ -125,7 +124,7 @@ export default function ExplorePage() {
   const [search, setSearch] = useState("");
   const [categoryFilters, setCategoryFilters] = useState<Set<Category>>(new Set());
   const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState<IndexRecord | null>(null);
+  const [selected, setSelected] = useState<IndexCatalogEntry | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -173,7 +172,7 @@ export default function ExplorePage() {
         q &&
         !r.name.toLowerCase().includes(q) &&
         !r.identifier.toLowerCase().includes(q) &&
-        !(r.record.domain ?? "").toLowerCase().includes(q) &&
+        !(entryOps(r.record).domain ?? "").toLowerCase().includes(q) &&
         !r.description.toLowerCase().includes(q)
       ) {
         return false;
@@ -257,7 +256,7 @@ export default function ExplorePage() {
               <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
                 {pageItems.map((item) => (
                   <RegistryCard
-                    key={item.record.org_id}
+                    key={item.record.identifier}
                     item={item}
                     onSelect={() => setSelected(item.record)}
                   />
@@ -419,7 +418,7 @@ function RegistryCard({ item, onSelect }: { item: Row; onSelect: () => void }) {
 // A right-hand slide-over that surfaces the full record (formerly the right
 // panel of the Browse page) when a card is clicked.
 
-function DetailDrawer({ record, onClose }: { record: IndexRecord | null; onClose: () => void }) {
+function DetailDrawer({ record, onClose }: { record: IndexCatalogEntry | null; onClose: () => void }) {
   const open = !!record;
 
   useEffect(() => {
@@ -456,7 +455,7 @@ function DetailDrawer({ record, onClose }: { record: IndexRecord | null; onClose
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={record ? `${record.display_name} details` : "Details"}
+        aria-label={record ? `${record.displayName} details` : "Details"}
         className={`absolute right-0 top-0 h-full w-full max-w-lg bg-surface shadow-modal border-l border-line flex flex-col transition-transform duration-200 ease-out ${open ? "translate-x-0" : "translate-x-full"
           }`}
       >
@@ -466,7 +465,7 @@ function DetailDrawer({ record, onClose }: { record: IndexRecord | null; onClose
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <h2 className="font-semibold text-ink-strong text-xl truncate">
-                    {record.display_name}
+                    {record.displayName}
                   </h2>
                   <span
                     className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold flex-shrink-0 ${badgeClass}`}
@@ -495,8 +494,8 @@ function DetailDrawer({ record, onClose }: { record: IndexRecord | null; onClose
 
             <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
               <div className="bg-surface-light rounded-card border border-line p-5 shadow-card">
-                {record.domain && (
-                  <p className="text-sm text-ink-medium break-all">{record.domain}</p>
+                {entryOps(record).domain && (
+                  <p className="text-sm text-ink-medium break-all">{entryOps(record).domain}</p>
                 )}
                 {record.description && (
                   <p className="mt-2 text-sm leading-relaxed text-ink-medium">
@@ -517,7 +516,7 @@ function DetailDrawer({ record, onClose }: { record: IndexRecord | null; onClose
                 )}
                 <dl className="mt-4 grid gap-2 text-sm text-ink">
                   <DetailRow label="Media type">
-                    <span className="font-mono text-xs">{record.media_type ?? "-"}</span>
+                    <span className="font-mono text-xs">{record.type ?? "-"}</span>
                   </DetailRow>
                   {record.version && (
                     <DetailRow label="Version">
@@ -525,35 +524,40 @@ function DetailDrawer({ record, onClose }: { record: IndexRecord | null; onClose
                     </DetailRow>
                   )}
                   <DetailRow label="Catalog URL">
-                    {record.registry_url ? (
+                    {record.url ? (
                       <a
-                        href={record.registry_url}
+                        href={record.url}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="break-all font-mono text-xs text-brand-600 hover:underline"
                       >
-                        {record.registry_url}
+                        {record.url}
                       </a>
                     ) : (
                       <span className="text-ink-weak">-</span>
                     )}
                   </DetailRow>
-                  <DetailRow label="TTL">{record.ttl_seconds}s</DetailRow>
+                  <DetailRow label="TTL">{entryOps(record).ttlSeconds}s</DetailRow>
                   <DetailRow label="Email verified">
-                    {record.email_verified ? "Yes" : "No"}
+                    {entryOps(record).emailVerified ? "Yes" : "No"}
                   </DetailRow>
                   <DetailRow label="Status">
-                    <span className="capitalize">{record.status}</span>
+                    <span className="capitalize">{entryOps(record).status}</span>
                   </DetailRow>
-                  <DetailRow label="Created">
-                    {new Date(record.created_at).toLocaleDateString()}
+                  {entryOps(record).createdAt && (
+                    <DetailRow label="Created">
+                      {new Date(entryOps(record).createdAt).toLocaleDateString()}
+                    </DetailRow>
+                  )}
+                  <DetailRow label="Updated">
+                    {new Date(record.updatedAt).toLocaleDateString()}
                   </DetailRow>
                 </dl>
               </div>
 
-              {record.trust_manifest && <TrustManifestPanel tm={record.trust_manifest} />}
+              {record.trustManifest && <TrustManifestPanel tm={record.trustManifest} />}
 
-              <JsonPanel data={toCatalogEntry(record)} />
+              <JsonPanel data={record} />
             </div>
           </>
         )}

@@ -23,7 +23,7 @@ NANDA Index does not host agents. It tells you where to find them.
 │  urn:air:acme.com:catalog:root                  registry.acme.com │
 │  urn:air:skyblue.com:agent:refunds              api.skyblue.com   │
 │  urn:air:moonbakery.com:agent:orders            host39.org        │
-│  urn:air:host39.org:personal:john-hotmail-com   host39.org        │
+│  urn:air:host39.org:personal:john@hotmail.com   host39.org        │
 └───────────────────────────────────────────────────────────────────┘
 ```
 
@@ -229,7 +229,7 @@ interface IndexRecord {
 | Enterprise catalog | `urn:air:<domain>:catalog:root` | `urn:air:example.com:catalog:root` |
 | Agent (SMB / DNS SVCB) | `urn:air:<domain>:agent:<short-name>` | `urn:air:moonbakery.com:agent:orders` |
 | ARD directory | `urn:air:<domain>:registry:<name>` | `urn:air:acme.com:registry:ard` |
-| Personal | `urn:air:host39.org:personal:<email-slug>` | `urn:air:host39.org:personal:john-hotmail-com` |
+| Personal | `urn:air:host39.org:personal:<email>` | `urn:air:host39.org:personal:john@hotmail.com` |
 
 Identifiers follow ARD's `urn:air:<publisher-FQDN>:<namespace...>:<short-name>`. The publisher FQDN must be the domain you verified; personal identifiers are derived from your verified email. The retired `urn:ai:*` forms are rejected.
 
@@ -252,8 +252,8 @@ Identifiers follow ARD's `urn:air:<publisher-FQDN>:<namespace...>:<short-name>`.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/v1/index` | List all active organizations |
-| `GET` | `/api/v1/index/:org_id` | Get a single IndexRecord |
+| `GET` | `/api/v1/index` | List all active index entries, in the paper's AI Catalog entry shape (`identifier`, `displayName`, `type`, `url`, `publisher`, `extensions`); operational state (`orgId`, `status`, `ttlSeconds`, verification flags) is under `extensions["org.projectnanda"]` |
+| `GET` | `/api/v1/index/:org_id` | Get a single index entry (same shape) |
 | `GET` | `/api/v1/resolve?locator=<urn>` | Resolve a URN to an IndexRecord |
 | `GET` | `/api/v1/search?q=<query>` | Keyword or URN search |
 | `GET` | `/api/v1/verify-email?token=<token>` | Activate org via email link |

@@ -36,6 +36,56 @@ const PUBLISHER_INPUT_SCHEMA = {
 
 const VERIFY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 
+/** PUT /api/v1/orgs/:org_id body — exactly the fields an admin may change. */
+const UPDATE_ORG_BODY_SCHEMA = {
+  type: 'object',
+  properties: {
+    display_name:     { type: 'string', minLength: 1, maxLength: 255 },
+    domain:           { type: 'string', maxLength: 255 },
+    registry_url:     { type: 'string', maxLength: 512 },
+    ttl_seconds:      { type: 'integer', minimum: 3600, maximum: 604800 },
+    description:      { type: 'string', maxLength: 1000 },
+    tags:             { type: 'array', items: { type: 'string', maxLength: 64 }, maxItems: 20 },
+    version:          { type: 'string', maxLength: 64 },
+    publisher:        PUBLISHER_INPUT_SCHEMA,
+    extensions:       EXTENSIONS_SCHEMA,
+    entry_data:       { type: 'object', additionalProperties: true },
+    // Nullable: an explicit null revokes/clears the stored manifest.
+    trust_manifest:   { anyOf: [{ type: 'null' }, TRUST_MANIFEST_SCHEMA] },
+  },
+} as const;
+
+const EDITABLE_FIELDS: readonly string[] = Object.keys(UPDATE_ORG_BODY_SCHEMA.properties);
+const EDITABLE_PUBLISHER_FIELDS: readonly string[] = Object.keys(PUBLISHER_INPUT_SCHEMA.properties);
+
+/** Fields in an update body that can't be changed (top level, plus `publisher.*`). */
+function unknownUpdateFields(body: unknown): string[] {
+  if (typeof body !== 'object' || body === null) return [];
+  const fields = body as Record<string, unknown>;
+  const topLevel = Object.keys(fields).filter((key) => !EDITABLE_FIELDS.includes(key));
+  const publisher = fields.publisher;
+  const nested = typeof publisher === 'object' && publisher !== null
+    ? Object.keys(publisher).filter((key) => !EDITABLE_PUBLISHER_FIELDS.includes(key)).map((key) => `publisher.${key}`)
+    : [];
+  return [...topLevel, ...nested];
+}
+
+/**
+ * Rejects an update that names a field it can't change, rather than silently
+ * dropping it — a typo or a read-only field (contact_email, identifier, …)
+ * would otherwise look like a successful update. Server-owned keys inside
+ * extensions are still dropped, not rejected, so a record copied from a GET
+ * can be sent back.
+ */
+async function rejectUnknownUpdateFields(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const unknown = unknownUpdateFields(request.body);
+  if (unknown.length === 0) return;
+  reply.code(400).send({
+    error: 'UNKNOWN_FIELDS',
+    detail: `these fields cannot be changed via PUT: ${unknown.join(', ')}. Editable fields: ${EDITABLE_FIELDS.join(', ')} (publisher: ${EDITABLE_PUBLISHER_FIELDS.join(', ')})`,
+  });
+}
+
 /** Wire shape returned when an org admin requests a DNS challenge. */
 const DOMAIN_CHALLENGE_SCHEMA = {
   type: 'object',
@@ -109,10 +159,31 @@ function validateCreateBody(body: CreateOrgBody, path: HostingPath): ApiError | 
 }
 
 /** Rejects an identifier or domain another entry already holds. */
+/**
+ * A personal registration whose email was never verified and whose
+ * verification link has expired can never activate (there is no resend), so
+ * it must not keep holding the identifier: otherwise anyone could register a
+ * victim's email and lock them out of their own identifier forever. Domain
+ * rows are excluded — they activate via DNS, independently of the email link.
+ */
+function isAbandonedPersonal(org: Organization, now: Date = new Date()): boolean {
+  return org.domain === null
+    && org.status === 'pending'
+    && !org.emailVerified
+    && (org.verifyTokenExpiresAt === null || org.verifyTokenExpiresAt <= now);
+}
+
+/**
+ * Rejects an identifier or domain another entry already holds. An abandoned
+ * personal registration holding the identifier is deleted instead, freeing it.
+ */
 async function findConflict(identifier: string, domain: string | null, selfOrgId?: string): Promise<ApiError | null> {
   const byIdentifier = await findByIdentifier(identifier);
   if (byIdentifier && byIdentifier.orgId !== selfOrgId) {
-    return conflictError(`identifier "${identifier}" is already registered`);
+    if (!isAbandonedPersonal(byIdentifier)) {
+      return conflictError(`identifier "${identifier}" is already registered`);
+    }
+    await deleteOrganization(byIdentifier.orgId);
   }
   const byDomain = domain ? await findByDomain(domain) : null;
   if (byDomain && byDomain.orgId !== selfOrgId) {
@@ -421,7 +492,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Update own org's index record
   fastify.put<{ Params: { org_id: string }; Body: UpdateOrgBody }>('/api/v1/orgs/:org_id', {
-    preHandler: [fastify.authenticate, requireOrgRole('admin')],
+    preHandler: [fastify.authenticate, requireOrgRole('admin'), rejectUnknownUpdateFields],
     schema: {
       tags: ['orgs'],
       summary: 'Update your organization\'s index record',
@@ -430,23 +501,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
         required: ['org_id'],
         properties: { org_id: { type: 'string' } },
       },
-      body: {
-        type: 'object',
-        properties: {
-          display_name:     { type: 'string', minLength: 1, maxLength: 255 },
-          domain:           { type: 'string', maxLength: 255 },
-          registry_url:     { type: 'string', maxLength: 512 },
-          ttl_seconds:      { type: 'integer', minimum: 3600, maximum: 604800 },
-          description:      { type: 'string', maxLength: 1000 },
-          tags:             { type: 'array', items: { type: 'string', maxLength: 64 }, maxItems: 20 },
-          version:          { type: 'string', maxLength: 64 },
-          publisher:        PUBLISHER_INPUT_SCHEMA,
-          extensions:       EXTENSIONS_SCHEMA,
-          entry_data:       { type: 'object', additionalProperties: true },
-          // Nullable: an explicit null revokes/clears the stored manifest.
-          trust_manifest:   { anyOf: [{ type: 'null' }, TRUST_MANIFEST_SCHEMA] },
-        },
-      },
+      body: UPDATE_ORG_BODY_SCHEMA,
       response: {
         200: INDEX_RECORD_SCHEMA,
         400: apiErrorSchema,

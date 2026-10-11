@@ -68,15 +68,28 @@ describe('GET /api/v1/resolve — urn:air: resolution', () => {
 
   it('resolves a host39-anchored personal identifier', async () => {
     await seedEntry({
-      orgId: 'res-john', domain: null, identifier: 'urn:air:host39.org:personal:res-john-hotmail-com',
+      orgId: 'res-john', domain: null, identifier: 'urn:air:host39.org:personal:res-john@hotmail.com',
       mediaType: 'application/a2a-agent-card+json', registryUrl: 'https://agentcards.host39.org/personal/res-john/card.json',
     });
 
-    const res = await resolve(fastify, 'urn:air:host39.org:personal:res-john-hotmail-com');
+    const res = await resolve(fastify, 'urn:air:host39.org:personal:res-john@hotmail.com');
 
     expect(res.statusCode).toBe(200);
     expect(res.json().match).toBe('exact');
     expect(res.json().index_record.org_id).toBe('res-john');
+  });
+
+  it('resolves a personal identifier whatever the case of the email', async () => {
+    await seedEntry({
+      orgId: 'res-mixed', domain: null, identifier: 'urn:air:host39.org:personal:res-mixed@hotmail.com',
+      mediaType: 'application/a2a-agent-card+json', registryUrl: 'https://agentcards.host39.org/personal/res-mixed/card.json',
+    });
+
+    const res = await resolve(fastify, 'urn:air:host39.org:personal:Res-Mixed@HOTMAIL.com');
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().match).toBe('exact');
+    expect(res.json().index_record.org_id).toBe('res-mixed');
   });
 
   it('normalises the publisher FQDN before matching', async () => {

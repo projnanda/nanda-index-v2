@@ -120,7 +120,7 @@ const records: DemoRecord[] = [
     domain: null,
     contactEmail: 'john@hotmail.com',
     registryUrl: 'https://agentcards.host39.org/personal/john@hotmail.com/card.json',
-    identifier: 'urn:air:host39.org:personal:john-hotmail-com',
+    identifier: 'urn:air:host39.org:personal:john@hotmail.com',
     mediaType: 'application/a2a-agent-card+json',
     description:
       'Personal agent associated with john@hotmail.com. Public metadata is minimal; private actions require user consent.',

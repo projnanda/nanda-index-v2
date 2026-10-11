@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { fanOutAgentSearch } from '../../src/services/registryFanout.js';
+import { allowAnyUrl, OutboundUrlError } from '../../src/lib/outboundUrl.js';
 import type { RankedOrganization } from '../../src/db/queries/organizations.js';
 
 function makeOrg(overrides: Partial<RankedOrganization>): RankedOrganization {
@@ -62,7 +63,7 @@ describe('fanOutAgentSearch', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await fanOutAgentSearch([org], 'send email');
+    const result = await fanOutAgentSearch([org], 'send email', { urlGuard: allowAnyUrl });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(result.unreachable).toEqual([]);
@@ -79,7 +80,7 @@ describe('fanOutAgentSearch', () => {
     }));
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ specVersion: '1.0', entries }), { status: 200 })));
 
-    const result = await fanOutAgentSearch([org], 'query', { perOrgLimit: 2 });
+    const result = await fanOutAgentSearch([org], 'query', { urlGuard: allowAnyUrl, perOrgLimit: 2 });
     expect(result.candidates).toHaveLength(2);
   });
 
@@ -92,7 +93,7 @@ describe('fanOutAgentSearch', () => {
       return new Response(JSON.stringify({ specVersion: '1.0', entries: [{ identifier: 'a', displayName: 'A', mediaType: 'application/a2a-agent-card+json', url: 'https://x' }] }), { status: 200 });
     }));
 
-    const result = await fanOutAgentSearch([okOrg, badOrg], 'query');
+    const result = await fanOutAgentSearch([okOrg, badOrg], 'query', { urlGuard: allowAnyUrl });
     expect(result.unreachable).toEqual(['ent-bad']);
     expect(result.candidates).toHaveLength(1);
     expect(result.candidates[0]!.org.orgId).toBe('ent-ok');
@@ -102,7 +103,7 @@ describe('fanOutAgentSearch', () => {
     const org = makeOrg({ orgId: 'ent-malformed', mediaType: 'application/ai-catalog+json' });
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ oops: true }), { status: 200 })));
 
-    const result = await fanOutAgentSearch([org], 'query');
+    const result = await fanOutAgentSearch([org], 'query', { urlGuard: allowAnyUrl });
     expect(result.unreachable).toEqual(['ent-malformed']);
     expect(result.candidates).toEqual([]);
   });
@@ -119,7 +120,7 @@ describe('fanOutAgentSearch', () => {
       });
     }));
 
-    const result = await fanOutAgentSearch([org], 'query', { timeoutMs: 30 });
+    const result = await fanOutAgentSearch([org], 'query', { urlGuard: allowAnyUrl, timeoutMs: 30 });
     expect(result.unreachable).toEqual(['ent-slow']);
   });
 
@@ -135,7 +136,7 @@ describe('fanOutAgentSearch', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await fanOutAgentSearch([smbOrg], 'bread');
+    const result = await fanOutAgentSearch([smbOrg], 'bread', { urlGuard: allowAnyUrl });
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(result.candidates).toHaveLength(1);
@@ -159,11 +160,50 @@ describe('fanOutAgentSearch', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await fanOutAgentSearch([dnsOrg], 'query');
+    const result = await fanOutAgentSearch([dnsOrg], 'query', { urlGuard: allowAnyUrl });
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(result.candidates).toHaveLength(1);
     expect(result.candidates[0]!.basis).toBe('single_agent_org');
+  });
+
+  it('returns an ARD finder (ai-registry) as a finder to refer to — no fetch, no synthesized candidate', async () => {
+    const finder = makeOrg({
+      orgId: 'acme-ard',
+      mediaType: 'application/ai-registry+json',
+      registryUrl: 'https://directory.acme.com/ard',
+    });
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fanOutAgentSearch([finder], 'query', { urlGuard: allowAnyUrl });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.candidates).toEqual([]);
+    expect(result.finders.map((f) => f.orgId)).toEqual(['acme-ard']);
+  });
+
+  it('never fetches a registry whose URL fails the SSRF guard — it is reported unreachable', async () => {
+    const org = makeOrg({ orgId: 'ssrf', mediaType: 'application/ai-catalog+json', registryUrl: 'http://169.254.169.254' });
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const guard = vi.fn(async (url: string) => { throw new OutboundUrlError(`blocked ${url}`); });
+
+    const result = await fanOutAgentSearch([org], 'query', { urlGuard: guard });
+
+    expect(guard).toHaveBeenCalledWith('http://169.254.169.254/agents/search?q=query');
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.unreachable).toEqual(['ssrf']);
+  });
+
+  it('refuses redirects, so a public registry cannot bounce the server to an internal host', async () => {
+    const org = makeOrg({ orgId: 'redir', mediaType: 'application/ai-catalog+json', registryUrl: 'https://redir.example.com' });
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({ specVersion: '1.0', entries: [] }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fanOutAgentSearch([org], 'query', { urlGuard: allowAnyUrl });
+
+    expect(fetchMock.mock.calls[0]![1]).toMatchObject({ redirect: 'error' });
   });
 
   it('isolates failures per-org under concurrency — one bad registry does not affect others', async () => {
@@ -177,7 +217,7 @@ describe('fanOutAgentSearch', () => {
       return new Response(JSON.stringify({ specVersion: '1.0', entries: [{ identifier: 'b1', displayName: 'B1', mediaType: 'application/a2a-agent-card+json', url: 'https://b.example.com/b1' }] }), { status: 200 });
     }));
 
-    const result = await fanOutAgentSearch(orgs, 'query', { concurrency: 2 });
+    const result = await fanOutAgentSearch(orgs, 'query', { urlGuard: allowAnyUrl, concurrency: 2 });
     expect(result.unreachable).toEqual(['ent-a']);
     expect(result.candidates.map((c) => c.org.orgId).sort()).toEqual(['ent-b', 'smb-c']);
   });

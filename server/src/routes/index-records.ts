@@ -1,13 +1,14 @@
 import type { FastifyInstance } from 'fastify';
-import { findAllActive, findByOrgId, markEmailVerifiedByToken, toIndexRecord } from '../db/queries/organizations.js';
+import { findAllActive, findByOrgId, markEmailVerifiedByToken, toIndexEntry, toIndexRecord } from '../db/queries/organizations.js';
 import { INDEX_RECORD_SCHEMA } from '../types/api/index-record.js';
+import { INDEX_ENTRY_SCHEMA } from '../types/api/index-entry.js';
 import { apiErrorSchema } from '../types/api/common.js';
 
 /**
  * Public read-only routes for the NANDA Index.
  *
- * GET /api/v1/index           — list all active organizations as IndexRecord[]
- * GET /api/v1/index/:org_id   — get a single IndexRecord, 404 on miss
+ * GET /api/v1/index           — list all active entries, in the paper's AI Catalog entry shape
+ * GET /api/v1/index/:org_id   — get a single entry (same shape), 404 on miss
  * GET /api/v1/verify-email    — mark org contact email verified (also activates
  *                                personal/no-domain orgs; domain-based orgs
  *                                still need domain verification separately)
@@ -17,28 +18,28 @@ export async function registerIndexRecordRoutes(fastify: FastifyInstance): Promi
   fastify.get('/api/v1/index', {
     schema: {
       tags: ['index'],
-      summary: 'List all active index records',
+      summary: 'List all active index entries (AI Catalog entry shape)',
       response: {
-        200: { type: 'array', items: INDEX_RECORD_SCHEMA },
+        200: { type: 'array', items: INDEX_ENTRY_SCHEMA },
       },
     },
   }, async (_request, reply) => {
     const orgs = await findAllActive();
-    return reply.send(orgs.map(toIndexRecord));
+    return reply.send(orgs.map(toIndexEntry));
   });
 
   // Get a single index record by org_id
   fastify.get<{ Params: { org_id: string } }>('/api/v1/index/:org_id', {
     schema: {
       tags: ['index'],
-      summary: 'Get a single index record',
+      summary: 'Get a single index entry (AI Catalog entry shape)',
       params: {
         type: 'object',
         required: ['org_id'],
         properties: { org_id: { type: 'string' } },
       },
       response: {
-        200: INDEX_RECORD_SCHEMA,
+        200: INDEX_ENTRY_SCHEMA,
         404: apiErrorSchema,
       },
     },
@@ -47,7 +48,7 @@ export async function registerIndexRecordRoutes(fastify: FastifyInstance): Promi
     if (!org) {
       return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
     }
-    return reply.send(toIndexRecord(org));
+    return reply.send(toIndexEntry(org));
   });
 
   // Email verification — marks contact email verified. Activates personal

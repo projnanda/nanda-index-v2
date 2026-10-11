@@ -674,7 +674,7 @@
 │  urn:air:acme.com:catalog:root                  registry.acme.com │
 │  urn:air:skyblue.com:agent:refunds              api.skyblue.com   │
 │  urn:air:moonbakery.com:agent:orders            host39.org        │
-│  urn:air:host39.org:personal:john-hotmail-com   host39.org        │
+│  urn:air:host39.org:personal:john@hotmail.com   host39.org        │
 └───────────────────────────────────────────────────────────────────┘</code></pre>
           <h3>Where each layer fits</h3>
           <div class="table-wrap">
@@ -700,7 +700,7 @@
                 <tr>
                   <td>Individual</td>
                   <td>No domain needed; identifier anchored to the card host, email as subject account</td>
-                  <td><code>urn:air:host39.org:personal:john-hotmail-com</code></td>
+                  <td><code>urn:air:host39.org:personal:john@hotmail.com</code></td>
                 </tr>
               </tbody>
             </table>
@@ -847,8 +847,8 @@ POST &lt;agentCard.url&gt;/run
                 </tr>
                 <tr>
                   <td>Personal</td>
-                  <td><code>urn:air:host39.org:personal:&lt;email-slug&gt;</code></td>
-                  <td><code>urn:air:host39.org:personal:john-hotmail-com</code></td>
+                  <td><code>urn:air:host39.org:personal:&lt;email&gt;</code></td>
+                  <td><code>urn:air:host39.org:personal:john@hotmail.com</code></td>
                 </tr>
               </tbody>
             </table>
@@ -1119,12 +1119,12 @@ curl -X POST https://api.nandaindex.org/api/v1/orgs \
                 <tr>
                   <td><span class="method m-get">GET</span></td>
                   <td><code>/api/v1/index</code></td>
-                  <td>List all <code>active</code> organizations</td>
+                  <td>List all <code>active</code> index entries in the paper's AI Catalog entry shape (operational state under <code>extensions["org.projectnanda"]</code>)</td>
                 </tr>
                 <tr>
                   <td><span class="method m-get">GET</span></td>
                   <td><code>/api/v1/index/:org_id</code></td>
-                  <td>Get a single <code>IndexRecord</code></td>
+                  <td>Get a single index entry (same shape)</td>
                 </tr>
                 <tr>
                   <td><span class="method m-get">GET</span></td>

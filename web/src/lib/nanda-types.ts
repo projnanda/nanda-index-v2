@@ -99,8 +99,9 @@ export interface CatalogEntry {
 }
 
 /**
- * An index record projected to the switchboard paper's AI Catalog entry shape
- * (§6): `type` + `url` XOR `data`, with routing hints under `extensions`.
+ * An index entry in the switchboard paper's AI Catalog entry shape (§6), as
+ * served by GET /api/v1/index: `type` + `url` XOR `data`, routing hints under
+ * `extensions`.
  */
 export interface IndexCatalogEntry {
   identifier: string;
@@ -110,11 +111,14 @@ export interface IndexCatalogEntry {
   data?: Record<string, unknown>;
   version?: string;
   description?: string;
-  tags?: string[];
+  tags: string[];
   publisher?: PublisherBlock;
   trustManifest?: TrustManifest;
-  updatedAt?: string;
-  extensions?: CatalogExtensions;
+  updatedAt: string;
+  /** Routing hints, plus read-only operational state (orgId, status,
+   *  ttlSeconds, emailVerified, domainVerified, createdAt, domain,
+   *  representativeQueries) under "org.projectnanda". */
+  extensions: CatalogExtensions;
 }
 
 /** AI Catalog top-level document. */
@@ -169,6 +173,8 @@ export interface AgentCandidate {
   url: string;
   description: string | null;
   tags: string[];
+  /** Publisher of the index entry the candidate was found through. */
+  publisher?: PublisherBlock;
   trust_manifest?: TrustManifest;
   provenance: {
     org_id: string;
@@ -178,11 +184,19 @@ export interface AgentCandidate {
   score: number;
 }
 
+/** A matching ARD finder the requester should query directly. */
+export interface FinderReferral {
+  identifier: string;
+  display_name: string;
+  search_url: string;
+}
+
 export interface AgenticSearchResponse {
   query: string;
   count: number;
   candidates: AgentCandidate[];
   resolved: AgentCandidate | null;
+  referrals: FinderReferral[];
   orgs_queried: number;
   orgs_unreachable: string[];
   took_ms: number;

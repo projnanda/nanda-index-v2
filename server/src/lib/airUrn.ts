@@ -7,8 +7,10 @@
  * Every NANDA Index entry is keyed on one of these — the publisher FQDN is the
  * ownership anchor (proven via DNS TXT challenge), so it must be a real FQDN.
  * Individuals without a domain are anchored to their card host instead
- * (urn:air:host39.org:personal:<email-slug>), with the email carried as the
- * entry's `subjectAccount` extension.
+ * (urn:air:host39.org:personal:<email>), with the email carried as the
+ * entry's `subjectAccount` extension. The email is used verbatim (lowercased,
+ * percent-encoding only what a URN segment can't hold), so the mapping is
+ * reversible and two different emails can never share an identifier.
  */
 
 export interface ParsedAirUrn {
@@ -29,7 +31,10 @@ export const PERSONAL_NAMESPACE = 'personal';
 
 const AIR_PREFIX = 'urn:air:';
 const FQDN_RE = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
-const SEGMENT_RE = /^[A-Za-z0-9._~-]+$/;
+/** RFC 8141 NSS characters, minus ':' (our segment separator): unreserved,
+ *  sub-delims, '@', and percent-encoded octets. */
+const SEGMENT_RE = /^(?:[A-Za-z0-9._~!$&'()*+,;=@-]|%[0-9A-Fa-f]{2})+$/;
+const SEGMENT_LITERAL_RE = /^[a-z0-9._~!$&'()*+,;=@-]$/;
 
 export function isFqdn(value: string): boolean {
   return FQDN_RE.test(value.toLowerCase());
@@ -55,12 +60,28 @@ export function parseAirUrn(raw: string): ParsedAirUrn {
     throw new Error(`invalid identifier "${trimmed}": segment "${badSegment}" is empty or contains illegal characters`);
   }
 
+  const namespace = path.slice(0, -1);
+  const rawShortName = path[path.length - 1]!;
+  const shortName = isPersonalNamespace(publisherDomain, namespace)
+    ? normaliseEmailSegment(rawShortName)
+    : rawShortName;
+
   return {
-    urn: `${AIR_PREFIX}${publisherDomain}:${path.join(':')}`,
+    urn: `${AIR_PREFIX}${publisherDomain}:${[...namespace, shortName].join(':')}`,
     publisherDomain,
-    namespace: path.slice(0, -1),
-    shortName: path[path.length - 1]!,
+    namespace,
+    shortName,
   };
+}
+
+function isPersonalNamespace(publisherDomain: string, namespace: readonly string[]): boolean {
+  return publisherDomain === PERSONAL_CARD_HOST.domain && namespace.length === 1 && namespace[0] === PERSONAL_NAMESPACE;
+}
+
+/** Personal short-names are emails, matched case-insensitively like emailSegment()
+ *  stores them: lowercase text, upper-hex %-escapes ("A%2fB@X.com" → "a%2Fb@x.com"). */
+function normaliseEmailSegment(segment: string): string {
+  return segment.replace(/%[0-9A-Fa-f]{2}|[^%]+/g, (part) => (part.startsWith('%') ? part.toUpperCase() : part.toLowerCase()));
 }
 
 /** Builds a validated, normalised AIR URN from its parts. */
@@ -68,14 +89,23 @@ export function buildAirUrn(publisherDomain: string, namespace: readonly string[
   return parseAirUrn(`${AIR_PREFIX}${publisherDomain}:${[...namespace, shortName].join(':')}`).urn;
 }
 
-/** "john@hotmail.com" → "john-hotmail-com" (the paper's personal short-name form). */
-export function emailToSlug(email: string): string {
-  return email.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+/**
+ * An email as a personal short-name: trimmed and lowercased, kept verbatim
+ * where URN-safe ("john@hotmail.com"), with every other character
+ * percent-encoded as UTF-8 ("a#b@x.com" → "a%23b@x.com"). Reversible, so it
+ * is collision-free — unlike a slug, which maps many emails to one name.
+ */
+export function emailSegment(email: string): string {
+  return [...email.trim().toLowerCase()]
+    .map((ch) => SEGMENT_LITERAL_RE.test(ch)
+      ? ch
+      : [...Buffer.from(ch, 'utf8')].map((byte) => `%${byte.toString(16).toUpperCase().padStart(2, '0')}`).join(''))
+    .join('');
 }
 
 /** Card-host-anchored identifier for a domain-less individual. */
 export function personalAirUrn(email: string): string {
-  return buildAirUrn(PERSONAL_CARD_HOST.domain, [PERSONAL_NAMESPACE], emailToSlug(email));
+  return buildAirUrn(PERSONAL_CARD_HOST.domain, [PERSONAL_NAMESPACE], emailSegment(email));
 }
 
 /** Re-anchors an identifier to a new publisher domain, keeping its namespace path. */

@@ -51,6 +51,8 @@ export interface ArdSearchResultItem {
 }
 
 export interface ArdReferral {
+  /** urn:air: identifier of the referred-to finder; absent for the configured upstream. */
+  identifier?: string;
   displayName: string;
   searchUrl: string;
 }
@@ -125,7 +127,11 @@ export const ardSearchResponseSchema = {
       items: {
         type: 'object',
         required: ['displayName', 'searchUrl'],
-        properties: { displayName: { type: 'string' }, searchUrl: { type: 'string' } },
+        properties: {
+          identifier: { type: 'string' },
+          displayName: { type: 'string' },
+          searchUrl: { type: 'string' },
+        },
       },
     },
     pageToken: { type: ['string', 'null'] },

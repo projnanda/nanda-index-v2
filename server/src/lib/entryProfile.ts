@@ -72,6 +72,13 @@ export class EntryProfileError extends Error {
 /** Keys in the NANDA extension that only the server may set. */
 const SERVER_OWNED_KEYS: readonly string[] = ['resolutionRole', 'preferredDiscovery', 'authoritativeSystem', 'subjectAccount'];
 
+/** Operational fields the server adds to the NANDA extension on read
+ *  (GET /api/v1/index). Never stored — dropped if a client sends them back. */
+export const NANDA_OUTPUT_KEYS: readonly string[] = [
+  'orgId', 'status', 'ttlSeconds', 'emailVerified', 'domainVerified',
+  'createdAt', 'domain', 'representativeQueries',
+];
+
 interface PathRules {
   readonly mediaType: string;
   /** Server-owned NANDA extension fields. */
@@ -114,7 +121,9 @@ const PATH_RULES: Readonly<Record<HostingPath, PathRules>> = {
 function pickNanda(extensions: CatalogExtensions | undefined, owned: boolean): Record<string, unknown> {
   const nanda = extensions?.[NANDA_EXTENSION] ?? {};
   return Object.fromEntries(
-    Object.entries(nanda).filter(([key]) => SERVER_OWNED_KEYS.includes(key) === owned),
+    Object.entries(nanda)
+      .filter(([key]) => !NANDA_OUTPUT_KEYS.includes(key))
+      .filter(([key]) => SERVER_OWNED_KEYS.includes(key) === owned),
   );
 }
 

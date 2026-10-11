@@ -42,7 +42,7 @@ export const architectureLayers = [
   {
     layer: "Individual",
     function: "No domain needed; identifier anchored to the card host, email as subject account",
-    analogy: "urn:air:host39.org:personal:john-hotmail-com",
+    analogy: "urn:air:host39.org:personal:john@hotmail.com",
     hosted: "Primary resolver via NandaIndex",
   },
 ];

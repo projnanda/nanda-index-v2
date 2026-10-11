@@ -1,6 +1,7 @@
 import { getAuthToken } from "./auth";
 import type {
   IndexRecord,
+  IndexCatalogEntry,
   CatalogEntry,
   ResolveResponse,
   SearchResponse,
@@ -70,14 +71,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return parseApiResponse<T>(res);
 }
 
-/** GET /api/v1/index — list all active orgs. */
-export async function listIndexRecords(): Promise<IndexRecord[]> {
-  return request<IndexRecord[]>("/api/v1/index");
+/** GET /api/v1/index — list all active entries (AI Catalog entry shape). */
+export async function listIndexRecords(): Promise<IndexCatalogEntry[]> {
+  return request<IndexCatalogEntry[]>("/api/v1/index");
 }
 
-/** GET /api/v1/index/:org_id — single IndexRecord. */
-export async function getIndexRecord(orgId: string): Promise<IndexRecord> {
-  return request<IndexRecord>(`/api/v1/index/${encodeURIComponent(orgId)}`);
+/** GET /api/v1/index/:org_id — a single entry (AI Catalog entry shape). */
+export async function getIndexRecord(orgId: string): Promise<IndexCatalogEntry> {
+  return request<IndexCatalogEntry>(`/api/v1/index/${encodeURIComponent(orgId)}`);
 }
 
 /** GET /api/v1/search?q= — keyword search or URN lookup. Returns { query, count, results }. */

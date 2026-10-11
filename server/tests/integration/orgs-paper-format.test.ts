@@ -72,7 +72,7 @@ describe('Org registration — paper-format index records', () => {
 
     expect(res.statusCode).toBe(201);
     const body = res.json();
-    expect(body.identifier).toBe('urn:air:host39.org:personal:pf-john-hotmail-com');
+    expect(body.identifier).toBe('urn:air:host39.org:personal:pf-john@hotmail.com');
     expect(body.publisher).toEqual({ identifier: 'host39.org', displayName: 'Host39', identityType: 'dns' });
     expect(body.extensions[NANDA]).toMatchObject({
       resolutionRole: 'personal-agent-card', subjectAccount: 'pf-john@hotmail.com', agentCardHost: 'host39.org',
@@ -127,6 +127,36 @@ describe('Org registration — paper-format index records', () => {
     expect((await create({ ...payload, org_id: 'pf-orders-2' })).statusCode).toBe(409);
   });
 
+  describe('abandoned personal registrations do not hold an identifier hostage', () => {
+    const personal = (orgId: string, email: string) => create({
+      org_id: orgId, display_name: 'Personal', hosting_path: 'personal',
+      contact_email: email, registry_url: `https://agentcards.host39.org/personal/${email}/card.json`,
+    });
+
+    it('releases an unverified registration whose verification link has expired', async () => {
+      expect((await personal('pf-squatter', 'pf-victim@corp.example')).statusCode).toBe(201);
+      await getSql()`UPDATE organizations SET verify_token_expires_at = NOW() - INTERVAL '1 minute' WHERE org_id = 'pf-squatter'`;
+
+      const res = await personal('pf-owner', 'pf-victim@corp.example');
+
+      expect(res.statusCode).toBe(201);
+      expect(res.json().identifier).toBe('urn:air:host39.org:personal:pf-victim@corp.example');
+      const left = await getSql()`SELECT org_id FROM organizations WHERE org_id = 'pf-squatter'`;
+      expect(left).toHaveLength(0);
+    });
+
+    it('still blocks while the verification link is valid', async () => {
+      expect((await personal('pf-first', 'pf-pending@corp.example')).statusCode).toBe(201);
+      expect((await personal('pf-second', 'pf-pending@corp.example')).statusCode).toBe(409);
+    });
+
+    it('still blocks once the email has been verified', async () => {
+      expect((await personal('pf-verified', 'pf-done@corp.example')).statusCode).toBe(201);
+      await getSql()`UPDATE organizations SET email_verified = true, status = 'active', verify_token_expires_at = NOW() - INTERVAL '1 day' WHERE org_id = 'pf-verified'`;
+      expect((await personal('pf-late', 'pf-done@corp.example')).statusCode).toBe(409);
+    });
+  });
+
   it('PUT re-anchors identifier and publisher when the domain changes', async () => {
     await create({
       org_id: 'pf-move', display_name: 'Mover', hosting_path: 'smb', domain: 'pf-move-old.com',
@@ -160,6 +190,43 @@ describe('Org registration — paper-format index records', () => {
       method: 'GET', url: `/api/v1/resolve?locator=${encodeURIComponent('urn:air:pf-victim.com:agent:pf-swap')}`,
     });
     expect(resolved.statusCode).toBe(404);
+  });
+
+  it('PUT rejects fields that cannot be changed, naming them, and changes nothing', async () => {
+    await create({
+      org_id: 'pf-strict', display_name: 'Strict', hosting_path: 'smb', domain: 'pf-strict.com',
+      contact_email: 'x@pf-strict.com', registry_url: 'https://agentcards.host39.org/pf-strict/card.json',
+    });
+
+    const res = await update('pf-strict', {
+      description: 'new description',
+      contact_email: 'attacker@evil.com',
+      identifier: 'urn:air:pf-strict.com:agent:other',
+      descripton: 'typo',
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe('UNKNOWN_FIELDS');
+    expect(res.json().detail).toContain('contact_email');
+    expect(res.json().detail).toContain('identifier');
+    expect(res.json().detail).toContain('descripton');
+    const after = await fastify.inject({ method: 'GET', url: '/api/v1/orgs/pf-strict', headers: { authorization: `Bearer ${token}` } });
+    expect(after.json().description).not.toBe('new description');
+  });
+
+  it('PUT rejects unknown publisher keys — only displayName is editable', async () => {
+    await create({
+      org_id: 'pf-pub', display_name: 'Pub', hosting_path: 'smb', domain: 'pf-pub.com',
+      contact_email: 'x@pf-pub.com', registry_url: 'https://agentcards.host39.org/pf-pub/card.json',
+    });
+
+    const rejected = await update('pf-pub', { publisher: { identifier: 'evil.com', displayName: 'Pub' } });
+    expect(rejected.statusCode).toBe(400);
+    expect(rejected.json().detail).toContain('publisher.identifier');
+
+    const ok = await update('pf-pub', { publisher: { displayName: 'Pub Inc' } });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().publisher).toEqual({ identifier: 'pf-pub.com', displayName: 'Pub Inc', identityType: 'dns' });
   });
 
   it('PUT replaces client extensions but keeps the server-owned roles', async () => {

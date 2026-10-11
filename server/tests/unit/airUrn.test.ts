@@ -3,7 +3,7 @@ import {
   parseAirUrn,
   buildAirUrn,
   personalAirUrn,
-  emailToSlug,
+  emailSegment,
   reanchorAirUrn,
 } from '../../src/lib/airUrn.js';
 
@@ -31,10 +31,10 @@ describe('parseAirUrn — urn:air:<publisher-FQDN>:<namespace...>:<short-name>',
   });
 
   it('parses a host-anchored personal identifier', () => {
-    const parsed = parseAirUrn('urn:air:host39.org:personal:john-hotmail-com');
+    const parsed = parseAirUrn('urn:air:host39.org:personal:john@hotmail.com');
     expect(parsed.publisherDomain).toBe('host39.org');
     expect(parsed.namespace).toEqual(['personal']);
-    expect(parsed.shortName).toBe('john-hotmail-com');
+    expect(parsed.shortName).toBe('john@hotmail.com');
   });
 
   it('normalises the scheme, NID and publisher FQDN to lowercase and trims', () => {
@@ -65,7 +65,8 @@ describe('parseAirUrn — urn:air:<publisher-FQDN>:<namespace...>:<short-name>',
   it('rejects empty or illegal segments', () => {
     expect(() => parseAirUrn('urn:air:example.com::root')).toThrow('segment');
     expect(() => parseAirUrn('urn:air:example.com:agent:has space')).toThrow('segment');
-    expect(() => parseAirUrn('urn:air:example.com:agent:a@b')).toThrow('segment');
+    expect(() => parseAirUrn('urn:air:example.com:agent:a#b')).toThrow('segment');
+    expect(() => parseAirUrn('urn:air:example.com:agent:100%')).toThrow('segment');
   });
 });
 
@@ -80,14 +81,36 @@ describe('buildAirUrn', () => {
   });
 });
 
-describe('emailToSlug / personalAirUrn', () => {
-  it('slugifies an email the way the paper does', () => {
-    expect(emailToSlug('john@hotmail.com')).toBe('john-hotmail-com');
-    expect(emailToSlug('  Jane.Doe+agents@Example.co.uk ')).toBe('jane-doe-agents-example-co-uk');
+describe('emailSegment / personalAirUrn — the email itself is the short-name', () => {
+  it('uses the lowercased email as-is when it is URN-safe (RFC 8141 allows @ . + _ ~ -)', () => {
+    expect(emailSegment('john@hotmail.com')).toBe('john@hotmail.com');
+    expect(emailSegment('  Jane.Doe+agents@Example.co.uk ')).toBe('jane.doe+agents@example.co.uk');
+  });
+
+  it('percent-encodes characters a URN segment cannot hold, so the mapping stays reversible', () => {
+    expect(emailSegment('a#b@x.com')).toBe('a%23b@x.com');
+    expect(emailSegment('a%b@x.com')).toBe('a%25b@x.com');
+    expect(emailSegment('a/b?c@x.com')).toBe('a%2Fb%3Fc@x.com');
   });
 
   it('anchors personal identifiers to the card host', () => {
-    expect(personalAirUrn('john@hotmail.com')).toBe('urn:air:host39.org:personal:john-hotmail-com');
+    expect(personalAirUrn('john@hotmail.com')).toBe('urn:air:host39.org:personal:john@hotmail.com');
+    expect(parseAirUrn(personalAirUrn('a#b@x.com')).shortName).toBe('a%23b@x.com');
+  });
+
+  it('matches personal identifiers case-insensitively (emails are), normalising %-escapes to upper hex', () => {
+    expect(parseAirUrn('urn:air:host39.org:personal:John@Hotmail.COM').urn).toBe('urn:air:host39.org:personal:john@hotmail.com');
+    expect(parseAirUrn('urn:air:HOST39.org:personal:A%2fB@X.com').urn).toBe('urn:air:host39.org:personal:a%2Fb@x.com');
+  });
+
+  it('leaves non-personal short-names case-sensitive', () => {
+    expect(parseAirUrn('urn:air:skyblue.com:agent:Refunds').shortName).toBe('Refunds');
+    expect(parseAirUrn('urn:air:other.org:personal:John').shortName).toBe('John');
+  });
+
+  it('gives distinct emails distinct identifiers (no slug collisions)', () => {
+    const emails = ['alice.smith@gmail.com', 'alice@smith-gmail.com', 'alice-smith@gmail.com', 'alice+smith@gmail.com'];
+    expect(new Set(emails.map(personalAirUrn)).size).toBe(emails.length);
   });
 });
 

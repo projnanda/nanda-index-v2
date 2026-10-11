@@ -8,9 +8,9 @@ import { JsonPanel } from "@/components/JsonPanel";
 import { TableEmptyState } from "@/components/TableEmptyState";
 import { AgentCandidateCard } from "@/components/AgentCandidateCard";
 import { ApiError, getIndexRecord, searchIndexRecords, resolveAgent, fetchAgentRecord, agenticSearch } from "@/lib/nanda-api";
-import type { IndexRecord, SearchResponse, ResolveResponse, CatalogEntry, AgenticSearchResponse } from "@/lib/nanda-types";
+import type { IndexRecord, IndexCatalogEntry, SearchResponse, ResolveResponse, CatalogEntry, AgenticSearchResponse } from "@/lib/nanda-types";
+import { entryOps } from "@/lib/air";
 
-// Matches urn:<nid>:<domain>:<identifier>
 // urn:air:<publisher-FQDN>:<namespace...>:<short-name>
 const URN_RE = /^urn:air:[^:\s]+(:[^:\s]+){2,}$/i;
 
@@ -19,12 +19,34 @@ type ResultKind = "single" | "search" | "resolve" | "agentic";
 
 interface QueryResult {
   kind: ResultKind;
-  single?: IndexRecord;
+  single?: IndexCatalogEntry;
   search?: SearchResponse;
   resolve?: ResolveResponse;
   agent?: CatalogEntry | null;   // hop-2 agent record for URN queries
   agentError?: string;
   agentic?: AgenticSearchResponse;
+}
+
+/** A GET /api/v1/index/:org_id entry (paper AI Catalog shape). */
+function IndexEntryCard({ entry }: { entry: IndexCatalogEntry }) {
+  const ops = entryOps(entry);
+  return (
+    <div className="flex items-start justify-between rounded-2xl border border-black/10 bg-white p-4 shadow-sm">
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <p className="font-semibold text-slate-950">{entry.displayName}</p>
+          <StatusBadge status={ops.status} />
+        </div>
+        <p className="mt-0.5 break-all font-mono text-xs text-slate-500">{entry.identifier}</p>
+        {entry.publisher && <p className="mt-1 text-sm text-slate-600">{entry.publisher.identifier}</p>}
+        {entry.url && <p className="mt-0.5 truncate font-mono text-xs text-slate-400">{entry.url}</p>}
+      </div>
+      <div className="ml-4 shrink-0 text-right text-xs text-slate-400">
+        TTL {ops.ttlSeconds}s
+        {ops.domainVerified && <span className="ml-2 text-emerald-600">✓ verified</span>}
+      </div>
+    </div>
+  );
 }
 
 function IndexRecordCard({ org }: { org: IndexRecord }) {
@@ -196,7 +218,7 @@ export default function QueryPage() {
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
               Index record
             </p>
-            <IndexRecordCard org={result.single} />
+            <IndexEntryCard entry={result.single} />
             <JsonPanel data={result.single} />
           </>
         )}

@@ -63,7 +63,7 @@ describe('buildEntryProfile — paper §6 record shapes', () => {
     const profile = buildEntryProfile({
       ...base, path: 'personal', domain: null, contactEmail: 'John@Hotmail.com', displayName: "John's Personal Agent",
     });
-    expect(profile.identifier).toBe('urn:air:host39.org:personal:john-hotmail-com');
+    expect(profile.identifier).toBe('urn:air:host39.org:personal:john@hotmail.com');
     expect(profile.publisher).toEqual({ identifier: 'host39.org', displayName: 'Host39', identityType: 'dns' });
     expect(profile.extensions[NANDA_EXTENSION]).toEqual({
       resolutionRole: 'personal-agent-card',
@@ -146,6 +146,24 @@ describe('updateEntryProfile', () => {
     const next = updateEntryProfile(current, { publisherDisplayName: 'SkyBlue' });
     expect(next.publisher).toEqual({ identifier: 'skyblue.com', displayName: 'SkyBlue', identityType: 'dns' });
     expect(next.identifier).toBe(current.identifier);
+  });
+
+  it('drops output-only operational fields a client copied back from a GET', () => {
+    const next = updateEntryProfile(current, {
+      extensions: {
+        [NANDA_EXTENSION]: {
+          orgId: 'x', status: 'active', ttlSeconds: 1, emailVerified: true, domainVerified: true,
+          createdAt: '2026-01-01T00:00:00Z', domain: 'evil.com', representativeQueries: ['x'],
+          keep: 'me',
+        },
+      },
+    });
+    expect(next.extensions[NANDA_EXTENSION]).toEqual({
+      resolutionRole: 'dns-svcb-pointer',
+      preferredDiscovery: 'dns-svcb',
+      authoritativeSystem: 'skyblue.com DNS',
+      keep: 'me',
+    });
   });
 
   it('does not mutate the current profile', () => {

@@ -10,3 +10,8 @@ try {
 } catch {
   // .env is optional — env vars may come from the shell or CI
 }
+
+// Integration tests register registries on fake *.example.com hosts that have
+// no real DNS, so the agentic-search SSRF guard is off by default here. Tests
+// that exercise the guard set OUTBOUND_ALLOW_PRIVATE_HOSTS=false explicitly.
+process.env['OUTBOUND_ALLOW_PRIVATE_HOSTS'] ??= 'true';

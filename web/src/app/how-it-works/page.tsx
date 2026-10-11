@@ -64,13 +64,13 @@ const FLOWS: {
       id: "personal-agent",
       title: "Personal Agent",
       subtitle: "Individual",
-      identifier: "urn:air:host39.org:personal:john-hotmail-com",
+      identifier: "urn:air:host39.org:personal:john@hotmail.com",
       mediaType: "application/a2a-agent-card+json",
       who: "John has no domain. His runtime is on Azure; his agent card is with a third-party host. No personal controlled domain is required. The AIR identifier is anchored to the card host (host39.org) and the account email is carried as subjectAccount. NANDA Index enables identity-first discovery for individuals, when the underlying account identity is verifiably bound to the resolution record.",
       steps: [
         { label: "Create card", detail: "Build your personal agent card on host39.org." },
         { label: "Register org", detail: "Create an org in NANDA Index with your email address as the subject account." },
-        { label: "Verify & go live", detail: "Confirm your email. Your identifier: urn:air:host39.org:personal:you-example-com." },
+        { label: "Verify & go live", detail: "Confirm your email. Your identifier: urn:air:host39.org:personal:you@example.com." },
         { label: "Update via host39", detail: "Edit your card any time on host39.org. No index update needed." },
       ],
       resolution: "NANDA Index, Agent Card at host39.org, Azure runtime, user consent required for private actions.",
@@ -89,7 +89,7 @@ const STAGES = [
     label: "Resource Identifier / Lookup Key",
     definition:
       "a stable identifier used to initiate resolution, such as a domain, DID, or provider-verified account identifier. As an AI Catalog/ARD entry identifier it uses the domain-anchored form urn:air:<publisher-FQDN>:<namespace...>:<short-name>.",
-    input: "urn:air:example.com:catalog:root, urn:air:skyblue.com:agent:refunds, urn:air:moonbakery.com:agent:orders, or urn:air:host39.org:personal:john-hotmail-com",
+    input: "urn:air:example.com:catalog:root, urn:air:skyblue.com:agent:refunds, urn:air:moonbakery.com:agent:orders, or urn:air:host39.org:personal:john@hotmail.com",
   },
   {
     id: "resolution",

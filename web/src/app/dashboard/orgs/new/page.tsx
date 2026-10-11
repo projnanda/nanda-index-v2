@@ -470,7 +470,7 @@ export default function NewOrgPage() {
             {isPersonal && (
               <Field label="Email Identity" value={form.identity_email} onChange={(v) => patch("identity_email", v)}
                 onBlur={() => touch("identity_email")} type="email" placeholder="john@hotmail.com"
-                hint={`We email a verification link here. Your identifier: urn:air:${PERSONAL_CARD_HOST}:personal:john-hotmail-com`}
+                hint={`We email a verification link here. Your identifier: urn:air:${PERSONAL_CARD_HOST}:personal:john@hotmail.com`}
                 error={visible("identity_email")} />
             )}
 

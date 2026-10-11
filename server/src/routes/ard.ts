@@ -10,8 +10,9 @@ import {
   ardAgentsResponseSchema,
 } from '../types/api/ard.js';
 import { agenticSearch } from '../services/agenticSearch.js';
+import { allowAnyUrl, publicUrlGuard } from '../lib/outboundUrl.js';
 import { maybeFederateOut } from '../services/federation.js';
-import { buildDescriptor, agentCandidateToArdResult, organizationToArdResult } from '../services/ardRegistry.js';
+import { buildDescriptor, agentCandidateToArdResult, finderReferralToArd, organizationToArdResult } from '../services/ardRegistry.js';
 import { NANDA_TO_ARD_TYPE } from '../lib/ardMapping.js';
 import {
   listOrganizationsPaged,
@@ -82,7 +83,8 @@ export async function registerArdRoutes(fastify: FastifyInstance): Promise<void>
     const { text, filter } = request.body.query;
     const pageSize = request.body.pageSize ?? 30;
 
-    const searchResult = await agenticSearch(text, { limit: pageSize });
+    const urlGuard = config.outbound.allowPrivateHosts ? allowAnyUrl : publicUrlGuard;
+    const searchResult = await agenticSearch(text, { limit: pageSize, urlGuard });
     let candidates = searchResult.candidates;
     if (filter?.type && filter.type.length > 0) {
       candidates = candidates.filter((c) => filter.type!.includes(c.type));
@@ -91,7 +93,8 @@ export async function registerArdRoutes(fastify: FastifyInstance): Promise<void>
     const federated = await maybeFederateOut(text, candidates, config.federation);
     return reply.code(200).send({
       results: federated.candidates.map(agentCandidateToArdResult),
-      referrals: federated.referrals,
+      // Index-matched ARD finders first, then any configured upstream.
+      referrals: [...searchResult.referrals.map(finderReferralToArd), ...federated.referrals],
       pageToken: null,
     });
   });

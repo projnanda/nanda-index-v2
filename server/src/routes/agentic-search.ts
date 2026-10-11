@@ -2,6 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { apiErrorSchema } from '../types/api/common.js';
 import { agenticSearchQuerySchema, agenticSearchResponseSchema } from '../types/api/agentic-search.js';
 import { agenticSearch } from '../services/agenticSearch.js';
+import { buildConfig } from '../config/index.js';
+import { allowAnyUrl, publicUrlGuard } from '../lib/outboundUrl.js';
 
 interface AgenticSearchQuerystring {
   q: string;
@@ -25,7 +27,8 @@ export async function registerAgenticSearchRoutes(fastify: FastifyInstance): Pro
     },
   }, async (request, reply) => {
     const query = request.query.q.trim();
-    const result = await agenticSearch(query, { limit: request.query.limit });
+    const urlGuard = buildConfig().outbound.allowPrivateHosts ? allowAnyUrl : publicUrlGuard;
+    const result = await agenticSearch(query, { limit: request.query.limit, urlGuard });
     return reply.code(200).send(result);
   });
 }

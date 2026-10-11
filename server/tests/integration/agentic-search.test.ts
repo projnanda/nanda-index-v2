@@ -20,14 +20,15 @@ async function seedOrg(opts: SeedOrgOptions): Promise<void> {
   await sql`
     INSERT INTO organizations
       (org_id, display_name, domain, contact_email, registry_url, verify_token, email_verified, status,
-       identifier, media_type, description, tags)
+       identifier, media_type, description, tags, publisher)
     VALUES
       (${opts.orgId}, ${opts.displayName}, ${opts.domain}, ${`admin@${opts.domain}`},
        ${opts.registryUrl ?? `https://${opts.domain}/registry`}, ${verifyToken}, true, 'active',
        ${`urn:air:${opts.domain}:catalog:root`},
        ${opts.mediaType ?? 'application/ai-catalog+json'},
        ${opts.description ?? null},
-       ${sql.array(opts.tags ?? [])})
+       ${sql.array(opts.tags ?? [])},
+       ${sql.json({ identifier: opts.domain, displayName: opts.displayName, identityType: 'dns' })})
     ON CONFLICT (org_id) DO NOTHING
   `;
 }
@@ -112,9 +113,12 @@ describe('GET /api/v1/agentic-search', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     const ours = body.candidates.find((c: { provenance: { org_id: string } }) => c.provenance.org_id === 'ags-acme');
+    // A bare registry identifier is qualified to the paper's urn:air: form,
+    // anchored to the (verified) domain of the entry it was found through.
     expect(ours).toMatchObject({
-      identifier: 'send-email',
+      identifier: 'urn:air:ags-acme.example.com:agent:send-email',
       display_name: 'Send Email Agent',
+      publisher: { identifier: 'ags-acme.example.com', identityType: 'dns' },
       url: 'https://ags-acme-registry.example.com/agents/send-email',
       provenance: { org_id: 'ags-acme', basis: 'agent_search' },
     });
@@ -152,6 +156,60 @@ describe('GET /api/v1/agentic-search', () => {
     });
   });
 
+  it('keeps an already-qualified registry identifier as-is', async () => {
+    await seedOrg({
+      orgId: 'ags-urn',
+      domain: 'ags-urn.example.com',
+      displayName: 'Urn Corp',
+      description: 'Quantum widget polishing service',
+      tags: ['quantum', 'polishing'],
+      registryUrl: 'https://ags-urn-registry.example.com',
+    });
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (!url.startsWith('https://ags-urn-registry.example.com/agents/search')) {
+        return new Response('not found', { status: 404 });
+      }
+      return new Response(JSON.stringify({
+        specVersion: '1.0',
+        entries: [{
+          identifier: 'urn:air:ags-urn.example.com:agent:polisher',
+          displayName: 'Polisher', mediaType: 'application/a2a-agent-card+json',
+          url: 'https://ags-urn-registry.example.com/agents/polisher',
+        }],
+      }), { status: 200 });
+    }));
+
+    const res = await fastify.inject({ method: 'GET', url: '/api/v1/agentic-search?q=quantum+polishing' });
+    const ours = res.json().candidates.find((c: { provenance: { org_id: string } }) => c.provenance.org_id === 'ags-urn');
+    expect(ours.identifier).toBe('urn:air:ags-urn.example.com:agent:polisher');
+  });
+
+  it('refers to a matching ARD finder instead of returning it as an agent candidate', async () => {
+    await seedOrg({
+      orgId: 'ags-finder',
+      domain: 'ags-finder.example.com',
+      displayName: 'Finder Directory',
+      description: 'Federated directory of zeppelin charter agents',
+      tags: ['zeppelin', 'charter'],
+      mediaType: 'application/ai-registry+json',
+      registryUrl: 'https://directory.ags-finder.example.com/ard/',
+    });
+    const fetchMock = vi.fn(async (_url: string) => new Response('not found', { status: 404 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await fastify.inject({ method: 'GET', url: '/api/v1/agentic-search?q=zeppelin+charter' });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('ags-finder'))).toEqual([]);
+    expect(body.candidates.some((c: { provenance: { org_id: string } }) => c.provenance.org_id === 'ags-finder')).toBe(false);
+    expect(body.referrals).toContainEqual({
+      identifier: 'urn:air:ags-finder.example.com:catalog:root',
+      display_name: 'Finder Directory',
+      search_url: 'https://directory.ags-finder.example.com/ard/search',
+    });
+  });
+
   it('excludes unreachable enterprise registries from candidates but still reports orgs_unreachable', async () => {
     await seedOrg({
       orgId: 'ags-flaky',
@@ -171,6 +229,29 @@ describe('GET /api/v1/agentic-search', () => {
     expect(body.orgs_unreachable).toContain('ags-flaky');
   });
 
+  it('with the SSRF guard on, never fetches a registry pointing at an internal address', async () => {
+    await seedOrg({
+      orgId: 'ags-internal',
+      domain: 'ags-internal.example.com',
+      displayName: 'Internal Corp',
+      description: 'Quokka grooming appointments',
+      tags: ['quokka', 'grooming'],
+      registryUrl: 'http://127.0.0.1:6379',
+    });
+    const fetchMock = vi.fn(async (_url: string) => new Response('not found', { status: 404 }));
+    vi.stubGlobal('fetch', fetchMock);
+    process.env['OUTBOUND_ALLOW_PRIVATE_HOSTS'] = 'false';
+    try {
+      const res = await fastify.inject({ method: 'GET', url: '/api/v1/agentic-search?q=quokka+grooming' });
+
+      expect(res.statusCode).toBe(200);
+      expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('127.0.0.1'))).toEqual([]);
+      expect(res.json().orgs_unreachable).toContain('ags-internal');
+    } finally {
+      process.env['OUTBOUND_ALLOW_PRIVATE_HOSTS'] = 'true';
+    }
+  });
+
   it('response shape matches the agentic-search schema', async () => {
     const res = await fastify.inject({ method: 'GET', url: '/api/v1/agentic-search?q=anything' });
     expect(res.statusCode).toBe(200);
@@ -180,6 +261,7 @@ describe('GET /api/v1/agentic-search', () => {
     expect(Array.isArray(body.candidates)).toBe(true);
     expect(typeof body.orgs_queried).toBe('number');
     expect(Array.isArray(body.orgs_unreachable)).toBe(true);
+    expect(Array.isArray(body.referrals)).toBe(true);
     expect(typeof body.took_ms).toBe('number');
   });
 });
