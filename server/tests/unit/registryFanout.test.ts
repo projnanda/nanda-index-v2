@@ -183,6 +183,37 @@ describe('fanOutAgentSearch', () => {
     expect(result.finders.map((f) => f.orgId)).toEqual(['acme-ard']);
   });
 
+  it('skips a pointer-only registry (ANS) entirely — no fetch, no synthesized candidate', async () => {
+    const ansOrg = makeOrg({
+      orgId: 'godaddy-ans',
+      mediaType: 'application/vnd.ans-registry+json',
+      registryUrl: 'https://ans.godaddy.com',
+    });
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fanOutAgentSearch([ansOrg], 'query', { urlGuard: allowAnyUrl });
+
+    // The index points at ANS but never resolves into it: neither a fan-out
+    // call nor a single-agent synthesis — it contributes nothing.
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.candidates).toHaveLength(0);
+    expect(result.unreachable).toHaveLength(0);
+    expect(result.finders).toHaveLength(0);
+  });
+
+  it('serves a pointer-only ANS org alongside others without affecting them', async () => {
+    const ansOrg = makeOrg({ orgId: 'ans-x', mediaType: 'application/vnd.ans-registry+json', registryUrl: 'https://ans.example.com' });
+    const smbOrg = makeOrg({ orgId: 'smb-y', mediaType: 'application/a2a-agent-card+json', registryUrl: 'https://smb.example.com' });
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fanOutAgentSearch([ansOrg, smbOrg], 'query', { urlGuard: allowAnyUrl });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.candidates.map((c) => c.org.orgId)).toEqual(['smb-y']);
+  });
+
   it('never fetches a registry whose URL fails the SSRF guard — it is reported unreachable', async () => {
     const org = makeOrg({ orgId: 'ssrf', mediaType: 'application/ai-catalog+json', registryUrl: 'http://169.254.169.254' });
     const fetchMock = vi.fn();

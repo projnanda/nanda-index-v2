@@ -1,4 +1,5 @@
 import type { PublisherBlock } from '../types/api/index-record.js';
+import { NANDA_MEDIA_TYPE, NANDA_MEDIA_TYPES } from './mediaTypes.js';
 import {
   PERSONAL_CARD_HOST,
   buildAirUrn,
@@ -21,18 +22,8 @@ export const HOSTING_PATHS: readonly HostingPath[] = ['registry', 'dns-svcb', 's
 
 export const NANDA_EXTENSION = 'org.projectnanda';
 
-export const MEDIA_TYPES = {
-  aiCatalog: 'application/ai-catalog+json',
-  aiRegistry: 'application/ai-registry+json',
-  a2aAgentCard: 'application/a2a-agent-card+json',
-  mcpServerCard: 'application/mcp-server-card+json',
-  agentSkill: 'application/agentskill+zip',
-} as const;
-export const ALLOWED_MEDIA_TYPES: readonly string[] = Object.values(MEDIA_TYPES);
-
-/** Entry types that front many resources — an identifier under the same
- *  publisher can be resolved *into* them (paper §6.1, §7.3). */
-export const CATALOG_MEDIA_TYPES: readonly string[] = [MEDIA_TYPES.aiCatalog, MEDIA_TYPES.aiRegistry];
+/** Every registrable media type (see mediaTypes.ts, the single source). */
+export const ALLOWED_MEDIA_TYPES: readonly string[] = NANDA_MEDIA_TYPES;
 
 /** AI Catalog `extensions`: reverse-DNS namespace → that namespace's fields. */
 export type CatalogExtensions = Readonly<Record<string, Readonly<Record<string, unknown>>>>;
@@ -89,12 +80,12 @@ interface PathRules {
 
 const PATH_RULES: Readonly<Record<HostingPath, PathRules>> = {
   registry: {
-    mediaType: MEDIA_TYPES.aiCatalog,
+    mediaType: NANDA_MEDIA_TYPE.AI_CATALOG,
     owned: () => ({ resolutionRole: 'nested-ai-catalog', preferredDiscovery: 'ai-catalog' }),
     defaults: { nandaIndexRole: 'optional-fallback-entry' },
   },
   'dns-svcb': {
-    mediaType: MEDIA_TYPES.a2aAgentCard,
+    mediaType: NANDA_MEDIA_TYPE.A2A_CARD,
     owned: (domain) => ({
       resolutionRole: 'dns-svcb-pointer',
       preferredDiscovery: 'dns-svcb',
@@ -103,12 +94,12 @@ const PATH_RULES: Readonly<Record<HostingPath, PathRules>> = {
     defaults: { nandaIndexRole: 'federated-pointer' },
   },
   smb: {
-    mediaType: MEDIA_TYPES.a2aAgentCard,
+    mediaType: NANDA_MEDIA_TYPE.A2A_CARD,
     owned: () => ({ resolutionRole: 'smb-agent-card', preferredDiscovery: 'nandaindex' }),
     defaults: {},
   },
   personal: {
-    mediaType: MEDIA_TYPES.a2aAgentCard,
+    mediaType: NANDA_MEDIA_TYPE.A2A_CARD,
     owned: (_domain, email) => ({
       resolutionRole: 'personal-agent-card',
       preferredDiscovery: 'nandaindex',

@@ -3,6 +3,7 @@ import type { Organization } from '../db/queries/organizations.js';
 import type { AgentCandidate, FinderReferral } from '../types/api/agentic-search.js';
 import type { ArdReferral, ArdRegistryDescriptor, ArdSearchResultItem } from '../types/api/ard.js';
 import { NANDA_TO_ARD_TYPE, toArdType } from '../lib/ardMapping.js';
+import { ARD_MEDIA_TYPE } from '../lib/mediaTypes.js';
 
 function hostOf(baseUrl: string): string {
   try {
@@ -46,7 +47,7 @@ export function buildDescriptor(config: Config): ArdRegistryDescriptor {
 
   return {
     specVersion: '1.0',
-    type: 'application/ai-registry+json',
+    type: ARD_MEDIA_TYPE.AI_REGISTRY,
     identifier: `urn:air:${hostname}:registry:nanda-index`,
     registry: {
       displayName: 'NANDA Index',

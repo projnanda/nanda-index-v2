@@ -1,5 +1,5 @@
 import type { RankedOrganization } from '../db/queries/organizations.js';
-import { MEDIA_TYPES } from '../lib/entryProfile.js';
+import { ARD_FINDER_MEDIA_TYPE, ENTERPRISE_MEDIA_TYPE, POINTER_ONLY_MEDIA_TYPE } from '../lib/mediaTypes.js';
 import { publicUrlGuard, type UrlGuard } from '../lib/outboundUrl.js';
 
 /** Wire shape returned by a nanda-registry instance's CatalogEntry (camelCase). */
@@ -44,9 +44,6 @@ export interface FanoutOptions {
    *  allowing only publicly routable hosts. */
   urlGuard?: UrlGuard;
 }
-
-const ENTERPRISE_MEDIA_TYPE = MEDIA_TYPES.aiCatalog;
-const ARD_FINDER_MEDIA_TYPE = MEDIA_TYPES.aiRegistry;
 
 function isRemoteCatalogDocument(body: unknown): body is RemoteCatalogDocument {
   return (
@@ -133,7 +130,9 @@ async function runWithConcurrency<T>(
 /**
  * Expands ranked candidate orgs into agent-level candidates, branching by
  * media_type: enterprise orgs (backed by a nanda-registry instance) are
- * fanned out to live via GET <registry_url>/agents/search; ARD finders
+ * fanned out to live via GET <registry_url>/agents/search; pointer-only
+ * registries (POINTER_ONLY_MEDIA_TYPE, e.g. ANS) are skipped entirely — the
+ * index points at them but never resolves into them; ARD finders
  * (ai-registry, e.g. an AGNTCY ADS node) are returned as finders to refer
  * the requester to (paper §7.3–7.4: NandaIndex finds the right finder, the
  * finder does the search); every other type (SMB/personal A2A cards, DNS
@@ -155,6 +154,11 @@ export async function fanOutAgentSearch(
   const finders: RankedOrganization[] = [];
 
   const tasks = orgs.map((org) => async () => {
+    if (org.mediaType === POINTER_ONLY_MEDIA_TYPE) {
+      // Pointer-only registry (e.g. ANS): the index never resolves into it.
+      // No fan-out, no single-agent synthesis — it contributes nothing here.
+      return;
+    }
     if (org.mediaType === ARD_FINDER_MEDIA_TYPE) {
       finders.push(org);
       return;

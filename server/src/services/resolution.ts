@@ -1,6 +1,6 @@
 import { findByDomain, findByIdentifier, toIndexRecord, type Organization } from '../db/queries/organizations.js';
 import type { ParsedAirUrn } from '../lib/airUrn.js';
-import { CATALOG_MEDIA_TYPES } from '../lib/entryProfile.js';
+import { CATALOG_MEDIA_TYPES } from '../lib/mediaTypes.js';
 import type { ResolveMatch, ResolveResponse } from '../types/api/resolve.js';
 
 export class ResolutionError extends Error {
@@ -35,7 +35,7 @@ export async function findResolvedEntry(parsed: ParsedAirUrn): Promise<ResolvedE
   if (isLive(exact)) return { org: exact, match: 'exact' };
 
   const publisher = await findByDomain(parsed.publisherDomain);
-  if (isLive(publisher) && CATALOG_MEDIA_TYPES.includes(publisher.mediaType)) {
+  if (isLive(publisher) && (CATALOG_MEDIA_TYPES as readonly string[]).includes(publisher.mediaType)) {
     return { org: publisher, match: 'publisher' };
   }
   return null;

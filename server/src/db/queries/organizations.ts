@@ -1,5 +1,6 @@
 import type postgres from 'postgres';
 import { getSql } from '../client.js';
+import { DEFAULT_MEDIA_TYPE, POINTER_ONLY_MEDIA_TYPE } from '../../lib/mediaTypes.js';
 import type { IndexRecord, PublisherBlock, TrustManifest } from '../../types/api/index-record.js';
 import { NANDA_EXTENSION, type CatalogExtensions } from '../../lib/entryProfile.js';
 import type { IndexEntry } from '../../types/api/index-entry.js';
@@ -222,7 +223,7 @@ export async function insertOrganization(params: InsertOrgParams): Promise<Organ
        ${params.registryUrl ?? null}, ${params.verifyToken}, ${params.verifyTokenExpiresAt},
        ${params.ttlSeconds ?? 86400},
        ${params.identifier},
-       ${params.mediaType ?? 'application/ai-catalog+json'},
+       ${params.mediaType ?? DEFAULT_MEDIA_TYPE},
        ${params.description ?? null},
        ${sql.array(params.tags ?? [])},
        ${params.publisher ? sql.json(JSON.parse(JSON.stringify(params.publisher))) : null},
@@ -466,9 +467,11 @@ function toOrTsQuery(query: string): string | null {
  * Ranked full-text pre-filter for agentic search, scored against the
  * `search_vector` generated column (tags/display_name/description).
  * Only orgs with a registry_url are eligible — agentic search needs
- * somewhere to resolve a candidate to. Falls back to the existing
- * ILIKE searchOrganizations() when the tsquery matches nothing (e.g. a
- * query that's all stopwords/punctuation), so agentic search never
+ * somewhere to resolve a candidate to. Pointer-only registries (e.g. ANS)
+ * are excluded here: the fan-out never resolves into them, so ranking one
+ * would only occupy a candidate slot it can never fill. Falls back to the
+ * existing ILIKE searchOrganizations() when the tsquery matches nothing
+ * (e.g. a query that's all stopwords/punctuation), so agentic search never
  * regresses below today's keyword search.
  */
 export async function rankOrganizationsForQuery(
@@ -484,6 +487,7 @@ export async function rankOrganizationsForQuery(
       FROM organizations o
       WHERE status = 'active'
         AND registry_url IS NOT NULL
+        AND media_type <> ${POINTER_ONLY_MEDIA_TYPE}
         AND search_vector @@ to_tsquery('english', ${orQuery})
       ORDER BY rank DESC
       LIMIT ${limit}
@@ -493,7 +497,7 @@ export async function rankOrganizationsForQuery(
 
   const fallback = await searchOrganizations(query);
   return fallback
-    .filter((o) => o.registryUrl != null)
+    .filter((o) => o.registryUrl != null && o.mediaType !== POINTER_ONLY_MEDIA_TYPE)
     .slice(0, limit)
     .map((o) => ({ ...o, rank: 0 }));
 }
