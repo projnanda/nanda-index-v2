@@ -17,6 +17,11 @@
 
 ALTER TABLE organizations RENAME COLUMN catalog_metadata TO extensions;
 
+-- 0. A blank domain means "no domain" (older API versions stored '' for
+--    personal registrations). Normalise it so those rows take the host39 path
+--    below instead of getting an empty publisher anchor (urn:air::...).
+UPDATE organizations SET domain = NULL WHERE btrim(domain) = '';
+
 -- 1. Flat org.projectnanda.* keys → nested extension namespace.
 --    ('org.projectnanda.' is 17 characters, so the bare key starts at 18.)
 UPDATE organizations o
@@ -142,3 +147,15 @@ ALTER TABLE organizations ALTER COLUMN identifier SET NOT NULL;
 ALTER TABLE organizations ALTER COLUMN extensions SET DEFAULT '{"org.projectnanda": {}}'::jsonb;
 ALTER TABLE organizations ALTER COLUMN extensions SET NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_organizations_identifier ON organizations(identifier);
+
+-- 7. Every entry belongs to exactly one anchor: its own domain (enterprise /
+--    SMB / DNS-SVCB) or, with no domain, the host39 card host. Nothing may be
+--    stored with a blank domain or an identifier anchored anywhere else.
+ALTER TABLE organizations
+  ADD CONSTRAINT organizations_domain_not_blank
+    CHECK (domain IS NULL OR btrim(domain) <> ''),
+  ADD CONSTRAINT organizations_identifier_anchored
+    CHECK (
+      (domain IS NULL     AND identifier LIKE 'urn:air:host39.org:%')
+   OR (domain IS NOT NULL AND identifier LIKE 'urn:air:' || lower(domain) || ':%')
+    );

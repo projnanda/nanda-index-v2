@@ -141,6 +141,15 @@ interface ApiError {
 const validationError = (detail: string): ApiError => ({ status: 400, body: { error: 'VALIDATION', detail } });
 const conflictError = (detail: string): ApiError => ({ status: 409, body: { error: 'CONFLICT', detail } });
 
+/**
+ * A blank domain means "no domain": the entry is then anchored to host39 (personal)
+ * or rejected (domain paths). Storing '' would yield an identifier with an empty
+ * publisher anchor (urn:air::...), which belongs to no enterprise, SMB or host39.
+ */
+function withBlankDomainAsNull(body: CreateOrgBody): CreateOrgBody {
+  return body.domain?.trim() ? body : { ...body, domain: null };
+}
+
 /** Checks the create body's hosting-path invariants; returns the first problem or null. */
 function validateCreateBody(body: CreateOrgBody, path: HostingPath): ApiError | null {
   if (path === 'personal' && body.domain) {
@@ -309,7 +318,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
     },
   }, async (request, reply) => {
     const user = request.user as JwtPayload;
-    const body = request.body;
+    const body = withBlankDomainAsNull(request.body);
     const path = body.hosting_path ?? 'registry';
 
     const invalid = validateCreateBody(body, path);

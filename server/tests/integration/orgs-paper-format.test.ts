@@ -79,6 +79,28 @@ describe('Org registration — paper-format index records', () => {
     });
   });
 
+  it('personal path: a blank domain is stored as no domain, never as an empty anchor', async () => {
+    const res = await create({
+      org_id: 'pf-blank', display_name: 'Blank Domain Agent', hosting_path: 'personal', domain: '',
+      contact_email: 'pf-blank@gmail.com',
+      registry_url: 'https://agentcards.host39.org/personal/pf-blank@gmail.com/card.json',
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json().identifier).toBe('urn:air:host39.org:personal:pf-blank@gmail.com');
+    const [row] = await getSql()<{ domain: string | null }[]>`SELECT domain FROM organizations WHERE org_id = 'pf-blank'`;
+    expect(row?.domain).toBeNull();
+  });
+
+  it('smb path: a blank domain is rejected rather than stored', async () => {
+    const res = await create({
+      org_id: 'pf-blank-smb', display_name: 'Blank SMB', hosting_path: 'smb', domain: '',
+      contact_email: 'owner@pf-blank-smb.com', registry_url: 'https://agentcards.host39.org/pf-blank-smb/card.json',
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
   it('dns-svcb path: A2A card entry whose server-owned roles cannot be spoofed', async () => {
     const res = await create({
       org_id: 'pf-refunds', display_name: 'SkyBlue Refunds Agent', hosting_path: 'dns-svcb',
