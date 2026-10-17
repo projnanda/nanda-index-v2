@@ -172,6 +172,8 @@ export interface OrgMembership {
   display_name: string;
   role: string;
   status: OrgStatus;
+  /** Null for a personal entry, which is proven by email rather than DNS. */
+  domain: string | null;
   email_verified: boolean;
   domain_verified: boolean;
 }

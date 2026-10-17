@@ -26,12 +26,14 @@ export async function registerMeRoute(fastify: FastifyInstance): Promise<void> {
               type: 'array',
               items: {
                 type: 'object',
-                required: ['org_id', 'display_name', 'role', 'status', 'email_verified', 'domain_verified'],
+                required: ['org_id', 'display_name', 'role', 'status', 'domain', 'email_verified', 'domain_verified'],
                 properties: {
                   org_id:          { type: 'string' },
                   display_name:    { type: 'string' },
                   role:            { type: 'string' },
                   status:          { type: 'string', enum: ['pending', 'active', 'suspended'] },
+                  // Null for a personal entry, whose ownership proof is its email, not DNS.
+                  domain:          { type: ['string', 'null'] },
                   email_verified:  { type: 'boolean' },
                   domain_verified: { type: 'boolean' },
                 },
@@ -64,6 +66,7 @@ export async function registerMeRoute(fastify: FastifyInstance): Promise<void> {
         display_name:    m.displayName,
         role:            m.role,
         status:          m.status,
+        domain:          m.domain,
         email_verified:  m.emailVerified,
         domain_verified: m.domainVerified,
       })),

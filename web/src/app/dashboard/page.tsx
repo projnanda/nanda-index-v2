@@ -9,10 +9,16 @@ import { VerifyEmailBanner } from "@/components/VerifyEmailBanner";
 import { ApiError, getMe } from "@/lib/nanda-api";
 import { clearAuthToken } from "@/lib/auth";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
-import type { User } from "@/lib/nanda-types";
+import type { OrgMembership, User } from "@/lib/nanda-types";
 
 const cardClass =
   "bg-surface-light rounded-card border border-line shadow-card";
+
+/** The ownership proof an org still owes: DNS for a domain, email for a personal entry. */
+function pendingProof(org: OrgMembership): string | null {
+  if (org.domain) return org.domain_verified ? null : "verify domain";
+  return org.email_verified ? null : "verify email";
+}
 
 export default function DashboardPage() {
   useRequireAuth();
@@ -125,9 +131,9 @@ export default function DashboardPage() {
                   <div className="flex items-center gap-3">
                     <span className="text-xs capitalize text-ink-weak">{org.role}</span>
                     <StatusBadge status={org.status} />
-                    {!org.domain_verified && (
+                    {pendingProof(org) && (
                       <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-amber-600">
-                        verify domain
+                        {pendingProof(org)}
                       </span>
                     )}
                   </div>
