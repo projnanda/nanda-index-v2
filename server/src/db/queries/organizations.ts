@@ -270,33 +270,40 @@ export async function findByUserId(userId: string): Promise<Organization[]> {
   `;
 }
 
-export interface ListedPage {
-  rows: Organization[];
-  /** Listed entries in total, independent of limit/offset. */
-  total: number;
-}
-
 /**
  * One page of listed entries — active and not moderated (every listing and
  * search below applies the same `moderation = 'none'` filter; hidden and
  * taken-down entries never appear in one). Ordered by creation date, with
  * org_id as a tie-breaker so offsets page deterministically.
+ *
+ * The page's org_ids are picked first from idx_organizations_listed_order
+ * (an index-only scan: the rows an OFFSET skips are not read from the table,
+ * except on pages changed since the last vacuum), then only those rows are
+ * fetched. The web app pages through the whole index, so deep offsets are a
+ * normal request, not an edge case.
  */
-export async function listListedEntries(limit: number, offset: number): Promise<ListedPage> {
+export async function listListedEntries(limit: number, offset: number): Promise<Organization[]> {
   const sql = getSql();
-  const [rows, counted] = await Promise.all([
-    sql<Organization[]>`
-      SELECT * FROM organizations
+  return sql<Organization[]>`
+    SELECT o.* FROM organizations o
+    JOIN (
+      SELECT org_id FROM organizations
       WHERE status = 'active' AND moderation = 'none'
       ORDER BY created_at ASC, org_id ASC
       LIMIT ${limit} OFFSET ${offset}
-    `,
-    sql<{ total: string }[]>`
-      SELECT COUNT(*)::text AS total FROM organizations
-      WHERE status = 'active' AND moderation = 'none'
-    `,
-  ]);
-  return { rows, total: Number(counted[0]?.total ?? 0) };
+    ) page USING (org_id)
+    ORDER BY o.created_at ASC, o.org_id ASC
+  `;
+}
+
+/** Listed entries in total (see listListedEntries); an index-only scan. */
+export async function countListedEntries(): Promise<number> {
+  const sql = getSql();
+  const [counted] = await sql<{ total: string }[]>`
+    SELECT COUNT(*)::text AS total FROM organizations
+    WHERE status = 'active' AND moderation = 'none'
+  `;
+  return Number(counted?.total ?? 0);
 }
 
 /**
@@ -624,33 +631,47 @@ function escapeLike(text: string): string {
   return text.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
+/** Keyword search query; see searchOrganizations for why it is not prepared. */
+const SEARCH_ORGANIZATIONS_SQL = `
+  SELECT * FROM organizations
+  WHERE status = 'active' AND moderation = 'none'
+    AND (
+      LOWER(org_id)                       LIKE $1 ESCAPE '\\'
+      OR LOWER(COALESCE(domain, ''))      LIKE $1 ESCAPE '\\'
+      OR LOWER(display_name)              LIKE $1 ESCAPE '\\'
+      OR LOWER(COALESCE(identifier, ''))  LIKE $1 ESCAPE '\\'
+      OR search_vector @@ websearch_to_tsquery('english', $3)
+    )
+  ORDER BY
+    (LOWER(org_id) = $2 OR LOWER(COALESCE(identifier, '')) = $2) DESC,
+    ts_rank(search_vector, websearch_to_tsquery('english', $3)) DESC,
+    org_id ASC
+  LIMIT 50
+`;
+
 /**
  * Keyword search over active organizations: a substring match on org_id,
  * domain, display_name and identifier, plus a full-text match on what the
  * entry describes (tags, description, representative queries — the
  * search_vector column). Exact org_id/identifier matches rank first, then by
  * full-text relevance.
+ *
+ * Each LOWER(...) LIKE in SEARCH_ORGANIZATIONS_SQL is served by a trigram
+ * index from migration 018 built on that exact expression; change one and its
+ * index stops being used.
+ *
+ * Planned afresh on every call (an unnamed statement, not a prepared one).
+ * Which plan is fastest depends on the term: a rare one wants the trigram
+ * indexes (<1 ms at 50k entries), while one that matches most entries (`ai`
+ * is in every urn:air: identifier) wants a sequential scan. A prepared
+ * statement soon settles on one generic plan per connection, and that plan
+ * took ~240 ms for `ai` against ~115 ms planned for the term.
  */
 export async function searchOrganizations(query: string): Promise<Organization[]> {
   const sql = getSql();
   const lowered = query.toLowerCase();
   const pattern = `%${escapeLike(lowered)}%`;
-  return sql<Organization[]>`
-    SELECT * FROM organizations
-    WHERE status = 'active' AND moderation = 'none'
-      AND (
-        LOWER(org_id)                       LIKE ${pattern} ESCAPE '\\'
-        OR LOWER(COALESCE(domain, ''))      LIKE ${pattern} ESCAPE '\\'
-        OR LOWER(display_name)              LIKE ${pattern} ESCAPE '\\'
-        OR LOWER(COALESCE(identifier, ''))  LIKE ${pattern} ESCAPE '\\'
-        OR search_vector @@ websearch_to_tsquery('english', ${query})
-      )
-    ORDER BY
-      (LOWER(org_id) = ${lowered} OR LOWER(COALESCE(identifier, '')) = ${lowered}) DESC,
-      ts_rank(search_vector, websearch_to_tsquery('english', ${query})) DESC,
-      org_id ASC
-    LIMIT 50
-  `;
+  return sql.unsafe<Organization[]>(SEARCH_ORGANIZATIONS_SQL, [pattern, lowered, query], { prepare: false });
 }
 
 export interface RankedOrganization extends Organization {
@@ -817,13 +838,14 @@ export async function listOrganizationsPaged(
 }
 
 export interface FacetBucket {
-  value: string;
-  count: number;
+  readonly value: string;
+  readonly count: number;
 }
 
 /** Facet counts by media_type, over active organizations only — backs
- *  POST /api/ard/explore (org-level scope, see plan's Open Tradeoffs #1/#2). */
-export async function countOrgsByMediaType(): Promise<FacetBucket[]> {
+ *  POST /api/ard/explore (org-level scope, see plan's Open Tradeoffs #1/#2).
+ *  Frozen: the route caches one result and hands it to every caller. */
+export async function countOrgsByMediaType(): Promise<readonly FacetBucket[]> {
   const sql = getSql();
   const rows = await sql<{ value: string; count: string }[]>`
     SELECT media_type AS value, COUNT(*)::text AS count
@@ -832,11 +854,11 @@ export async function countOrgsByMediaType(): Promise<FacetBucket[]> {
     GROUP BY media_type
     ORDER BY count DESC
   `;
-  return rows.map((r) => ({ value: r.value, count: Number(r.count) }));
+  return Object.freeze(rows.map((r) => Object.freeze({ value: r.value, count: Number(r.count) })));
 }
 
-/** Facet counts by individual tag, over active organizations only. */
-export async function countOrgsByTag(): Promise<FacetBucket[]> {
+/** Facet counts by individual tag, over active organizations only (frozen, as above). */
+export async function countOrgsByTag(): Promise<readonly FacetBucket[]> {
   const sql = getSql();
   const rows = await sql<{ value: string; count: string }[]>`
     SELECT t AS value, COUNT(*)::text AS count
@@ -845,5 +867,5 @@ export async function countOrgsByTag(): Promise<FacetBucket[]> {
     GROUP BY t
     ORDER BY count DESC
   `;
-  return rows.map((r) => ({ value: r.value, count: Number(r.count) }));
+  return Object.freeze(rows.map((r) => Object.freeze({ value: r.value, count: Number(r.count) })));
 }

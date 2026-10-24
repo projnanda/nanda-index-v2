@@ -15,10 +15,12 @@ import { publicReadRateLimit, searchRateLimit } from '../plugins/rateLimit.js';
 import { maybeFederateOut } from '../services/federation.js';
 import { buildDescriptor, agentCandidateToArdResult, finderReferralToArd, organizationToArdResult } from '../services/ardRegistry.js';
 import { NANDA_TO_ARD_TYPE } from '../lib/ardMapping.js';
+import { cacheFor } from '../lib/ttlCache.js';
 import {
   listOrganizationsPaged,
   countOrgsByMediaType,
   countOrgsByTag,
+  type FacetBucket,
   type OrgsPageFilter,
 } from '../db/queries/organizations.js';
 
@@ -68,6 +70,12 @@ function parseAgentsFilter(raw: string | undefined): OrgsPageFilter | undefined 
  * not a second implementation.
  */
 export async function registerArdRoutes(fastify: FastifyInstance): Promise<void> {
+  // Facet counts aggregate every listed entry (no index helps), so they are
+  // reused for INDEX_STATS_CACHE_SECONDS rather than recounted per request.
+  const statsTtlMs = buildConfig().indexStatsCacheSeconds * 1000;
+  const mediaTypeFacets = cacheFor(statsTtlMs, countOrgsByMediaType);
+  const tagFacets = cacheFor(statsTtlMs, countOrgsByTag);
+
   fastify.get('/api/ard', async (_request, reply) => {
     const config = buildConfig();
     return reply.code(200).send(buildDescriptor(config));
@@ -109,11 +117,11 @@ export async function registerArdRoutes(fastify: FastifyInstance): Promise<void>
       response: { 200: ardExploreResponseSchema, 400: apiErrorSchema },
     },
   }, async (request, reply) => {
-    const facets: Record<string, { buckets: Array<{ value: string; count: number }> }> = {};
+    const facets: Record<string, { buckets: readonly FacetBucket[] }> = {};
 
     for (const { field } of request.body.resultType.facets) {
       if (field === 'type') {
-        const raw = await countOrgsByMediaType();
+        const raw = await mediaTypeFacets();
         const merged = new Map<string, number>();
         for (const b of raw) {
           const ardType = NANDA_TO_ARD_TYPE[b.value] ?? b.value;
@@ -125,7 +133,7 @@ export async function registerArdRoutes(fastify: FastifyInstance): Promise<void>
             .sort((a, b) => b.count - a.count),
         };
       } else if (field === 'tags') {
-        facets['tags'] = { buckets: await countOrgsByTag() };
+        facets['tags'] = { buckets: await tagFacets() };
       }
     }
 

@@ -1,0 +1,115 @@
+# NANDA Index — load-test stack
+#
+# A separate Compose project (its own containers, network and volume), so it
+# never touches the dev database from ../docker-compose.yml. Driven by
+# ./run.sh; see README.md.
+#
+# Only the API path is under test: Postgres + the Fastify server, plus a stub
+# remote registry for agentic-search fan-out. Web, demo and Caddy are left out.
+#
+# Resource caps stand in for the production Droplet. Node runs JavaScript on
+# one core no matter what, so LT_SERVER_CPUS above 1 changes little; on a
+# 1-vCPU Droplet the server and Postgres share that one core (see README).
+
+name: nanda-loadtest
+
+services:
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: nanda_index
+      POSTGRES_USER: nanda
+      POSTGRES_PASSWORD: ${LT_POSTGRES_PASSWORD:-loadtest}
+    # pg_stat_statements: per-query timings, read back by run.sh after each run.
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.track=top
+    cpus: ${LT_DB_CPUS:-1}
+    mem_limit: ${LT_DB_MEM:-1g}
+    volumes:
+      - lt_db_data:/var/lib/postgresql/data
+      - ./seed:/seed:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nanda -d nanda_index"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  server:
+    build:
+      context: ../server
+      dockerfile: Dockerfile
+    environment:
+      # Production mode: same log level and code paths as the Droplet.
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://nanda:${LT_POSTGRES_PASSWORD:-loadtest}@db:5432/nanda_index
+      DB_MAX_CONNECTIONS: ${LT_DB_MAX_CONNECTIONS:-10}
+      # Throwaway values for this local stack only (production refuses the dev
+      # defaults, so these must be set). Never reuse them anywhere real.
+      JWT_SECRET: ${LT_JWT_SECRET:-loadtest-only-jwt-secret-0123456789abcdef}
+      COOKIE_SECRET: ${LT_COOKIE_SECRET:-loadtest-only-cookie-secret-0123456789}
+      # Every k6 virtual user arrives from one IP, so production limits would
+      # answer 429 within seconds. Raised so the test measures the app, not
+      # the limiter.
+      AUTH_RATE_LIMIT_MAX: ${LT_RATE_LIMIT_MAX:-1000000}
+      PUBLIC_RATE_LIMIT_MAX: ${LT_RATE_LIMIT_MAX:-1000000}
+      SEARCH_RATE_LIMIT_MAX: ${LT_RATE_LIMIT_MAX:-1000000}
+      ORG_WRITE_RATE_LIMIT_MAX: ${LT_RATE_LIMIT_MAX:-1000000}
+      AUTH_MAX_LOGIN_ATTEMPTS: ${LT_RATE_LIMIT_MAX:-1000000}
+      # The server defaults this to (CPU count - 1), but inside a container it
+      # sees the host's cores, not the cap above. 1 is what a 1-vCPU Droplet
+      # gets by default; raise it with LT_SERVER_CPUS.
+      AUTH_MAX_CONCURRENT_HASHES: ${LT_MAX_CONCURRENT_HASHES:-1}
+      # Fan-out goes to the stub registry on this private network, and
+      # federation stays off so no search is forwarded to a real upstream.
+      OUTBOUND_ALLOW_PRIVATE_HOSTS: "true"
+      FEDERATION_MODE: none
+      # No outside side effects: emails are logged, enrichment is off.
+      SMTP_URL: log
+      OPENAI_API_KEY: ""
+      FRONTEND_URL: http://localhost:3000
+      API_BASE_URL: http://localhost:${LT_API_PORT:-3101}
+    cpus: ${LT_SERVER_CPUS:-1}
+    mem_limit: ${LT_SERVER_MEM:-512m}
+    ports:
+      - "127.0.0.1:${LT_API_PORT:-3101}:3001"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Answers GET /<domain>/agents/search like a nanda-registry instance, after
+  # a configurable delay, so agentic search has real outbound calls to make.
+  stub-registry:
+    image: node:20-alpine
+    command: ["node", "/stub/server.mjs"]
+    environment:
+      STUB_PORT: 8090
+      STUB_LATENCY_MS: ${LT_STUB_LATENCY_MS:-150}
+      STUB_ENTRIES: ${LT_STUB_ENTRIES:-5}
+    cpus: 0.5
+    mem_limit: 128m
+    volumes:
+      - ./stub-registry:/stub:ro
+
+  # The load generator. Runs on demand (`docker compose run k6 ...`), outside
+  # the capped containers, so it never competes with the server for CPU.
+  k6:
+    image: grafana/k6:${LT_K6_VERSION:-1.0.0}
+    profiles: ["tools"]
+    environment:
+      BASE_URL: http://server:3001
+      K6_WEB_DASHBOARD: "true"
+      K6_WEB_DASHBOARD_PORT: "-1"
+    volumes:
+      - ./k6:/scripts:ro
+      - ./results:/results
+    depends_on:
+      - server
+
+volumes:
+  lt_db_data:

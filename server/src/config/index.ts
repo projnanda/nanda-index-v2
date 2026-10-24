@@ -1,3 +1,5 @@
+import { availableParallelism } from 'node:os';
+
 /**
  * Reads a required env var.
  * Prints FATAL to stderr and exits with code 1 if the variable is
@@ -75,6 +77,12 @@ export interface AuthConfig {
   readonly lockoutMinutes: number;
   /** Lifetime of a password-reset token. */
   readonly resetTokenTtlMinutes: number;
+  /**
+   * Password hashes allowed to run at once (see lib/password.ts). Defaults to
+   * one less than the CPU count, leaving a core for the event loop. Set it
+   * under a container CPU cap, which os.availableParallelism() cannot see.
+   */
+  readonly maxConcurrentHashes: number;
 }
 
 export interface ClaimsConfig {
@@ -143,6 +151,12 @@ export interface Config {
    *  (1 behind Caddy in production). 0 = reached directly; the header is then
    *  ignored, since any client could forge it to dodge per-IP rate limits. */
   readonly trustProxyHops: number;
+  /** How long the public index total (X-Total-Count) and ARD facet counts
+   *  are reused before being counted again. They read every listed entry
+   *  however small the page, so their cost grows with the index. Moderation
+   *  and new entries show in them only after this long. 0 = count on every
+   *  request. */
+  readonly indexStatsCacheSeconds: number;
   readonly frontendUrl: string;
   readonly signing: SigningConfig;
   /** Public base URL this API is reachable at — used to build absolute
@@ -227,6 +241,10 @@ export function buildConfig(): Config {
       resetTokenTtlMinutes: parsePositiveInt(
         'AUTH_RESET_TOKEN_TTL_MINUTES', optionalEnv('AUTH_RESET_TOKEN_TTL_MINUTES', '60'),
       ),
+      maxConcurrentHashes: parsePositiveInt(
+        'AUTH_MAX_CONCURRENT_HASHES',
+        optionalEnv('AUTH_MAX_CONCURRENT_HASHES', String(Math.max(1, availableParallelism() - 1))),
+      ),
     },
     claims: {
       writeRateLimitMax: parsePositiveInt(
@@ -247,6 +265,9 @@ export function buildConfig(): Config {
     },
     adminEmails: parseAdminEmails(optionalEnv('ADMIN_EMAILS', '')),
     trustProxyHops: parseNonNegativeInt('TRUST_PROXY_HOPS', optionalEnv('TRUST_PROXY_HOPS', '0')),
+    indexStatsCacheSeconds: parseNonNegativeInt(
+      'INDEX_STATS_CACHE_SECONDS', optionalEnv('INDEX_STATS_CACHE_SECONDS', '60'),
+    ),
     frontendUrl: optionalEnv('FRONTEND_URL', 'http://localhost:3000'),
     signing: {
       privateKey: rawSigningKey ? rawSigningKey.replace(/\\n/g, '\n') : undefined,

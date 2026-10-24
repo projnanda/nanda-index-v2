@@ -121,6 +121,32 @@ describe('Public limits, reserved ids and unverified trust data', () => {
       expect(ids).toEqual(['lim-a', 'lim-b']);
     });
 
+    it('serves a page from the middle of the index in creation order', async () => {
+      await seedOrg('lim-a');
+      await seedOrg('lim-b');
+      await seedOrg('lim-c');
+      const orgIdsOf = (body: unknown) => (body as Array<{ extensions: Record<string, { orgId: string }> }>)
+        .map((e) => e.extensions['org.projectnanda']!.orgId);
+
+      const listAll = async () =>
+        orgIdsOf((await fastify.inject({ method: 'GET', url: '/api/v1/index?limit=500' })).json());
+
+      // Other suites add and remove entries in parallel, which shifts every
+      // offset; compare only against a listing that held still around the page.
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const before = await listAll();
+        const offset = before.indexOf('lim-b');
+        expect(offset).toBeGreaterThanOrEqual(0);
+        const page = await fastify.inject({ method: 'GET', url: `/api/v1/index?limit=2&offset=${offset}` });
+        const after = await listAll();
+        if (after.join() !== before.join()) continue;
+
+        expect(orgIdsOf(page.json())).toEqual(['lim-b', 'lim-c']);
+        return;
+      }
+      throw new Error('the index kept changing under the test; no stable listing to compare against');
+    });
+
     it.each(['limit=0', 'limit=501', 'offset=-1', 'limit=abc'])('rejects %s', async (qs) => {
       const res = await fastify.inject({ method: 'GET', url: `/api/v1/index?${qs}` });
       expect(res.statusCode).toBe(400);

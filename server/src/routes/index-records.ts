@@ -1,11 +1,14 @@
 import type { FastifyInstance } from 'fastify';
-import { findByOrgId, listListedEntries, markEmailVerifiedByToken, toIndexEntry, toIndexRecord } from '../db/queries/organizations.js';
+import {
+  countListedEntries, findByOrgId, listListedEntries, markEmailVerifiedByToken, toIndexEntry, toIndexRecord,
+} from '../db/queries/organizations.js';
 import { INDEX_RECORD_SCHEMA } from '../types/api/index-record.js';
 import { INDEX_ENTRY_SCHEMA } from '../types/api/index-entry.js';
 import { apiErrorSchema } from '../types/api/common.js';
 import { isLive } from '../services/resolution.js';
 import { buildConfig } from '../config/index.js';
 import { publicReadRateLimit } from '../plugins/rateLimit.js';
+import { cacheFor } from '../lib/ttlCache.js';
 
 /** Page size when ?limit is omitted, and the most one request may ask for. */
 const DEFAULT_INDEX_PAGE_SIZE = 100;
@@ -30,9 +33,13 @@ interface IndexListQuerystring {
  *                                still need domain verification separately)
  */
 export async function registerIndexRecordRoutes(fastify: FastifyInstance): Promise<void> {
+  // Counting every listed entry costs the same on every page, so the total is
+  // reused for INDEX_STATS_CACHE_SECONDS; the page itself is always live.
+  const listedTotal = cacheFor(buildConfig().indexStatsCacheSeconds * 1000, countListedEntries);
+
   // List index entries. Paged so one request cannot pull the whole index; the
   // body stays a bare array (existing clients keep working) and the total
-  // rides in X-Total-Count.
+  // rides in X-Total-Count (cached, so it may lag new entries briefly).
   fastify.get<{ Querystring: IndexListQuerystring }>('/api/v1/index', {
     config: publicReadRateLimit(),
     schema: {
@@ -52,10 +59,10 @@ export async function registerIndexRecordRoutes(fastify: FastifyInstance): Promi
       },
     },
   }, async (request, reply) => {
-    const { rows, total } = await listListedEntries(
-      request.query.limit ?? DEFAULT_INDEX_PAGE_SIZE,
-      request.query.offset ?? 0,
-    );
+    const [rows, total] = await Promise.all([
+      listListedEntries(request.query.limit ?? DEFAULT_INDEX_PAGE_SIZE, request.query.offset ?? 0),
+      listedTotal(),
+    ]);
     return reply.header('X-Total-Count', String(total)).send(rows.map(toIndexEntry));
   });
 

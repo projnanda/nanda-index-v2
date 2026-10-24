@@ -26,3 +26,9 @@ process.env['ORG_WRITE_RATE_LIMIT_MAX'] ??= '10000';
 // lowers it explicitly to exercise the 429.
 process.env['PUBLIC_RATE_LIMIT_MAX'] ??= '100000';
 process.env['SEARCH_RATE_LIMIT_MAX'] ??= '100000';
+
+// Suites insert entries and read the index total and ARD facets straight
+// back; a cached count would hide their rows. Assigned, not defaulted, so a
+// value in .env cannot turn the cache on; index-stats-cache.test.ts turns it
+// on itself to test it.
+process.env['INDEX_STATS_CACHE_SECONDS'] = '0';

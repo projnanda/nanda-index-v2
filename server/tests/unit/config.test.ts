@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
+import { availableParallelism } from 'node:os';
 import {
   requireEnv,
   optionalEnv,
@@ -158,6 +159,17 @@ describe('buildConfig', () => {
     expect(cfg.auth.resetTokenTtlMinutes).toBe(60);
   });
 
+  it('caps concurrent password hashes at CPU count minus one (min 1), overridable from env', () => {
+    process.env.DATABASE_URL = 'x';
+    delete process.env.AUTH_MAX_CONCURRENT_HASHES;
+    // availableParallelism() sees the host's cores, not a container's CPU cap,
+    // which is why the env override exists.
+    expect(buildConfig().auth.maxConcurrentHashes).toBe(Math.max(1, availableParallelism() - 1));
+
+    process.env.AUTH_MAX_CONCURRENT_HASHES = '3';
+    expect(buildConfig().auth.maxConcurrentHashes).toBe(3);
+  });
+
   it('defaults JWT lifetime to 1 day', () => {
     process.env.DATABASE_URL = 'x';
     delete process.env.JWT_EXPIRES_IN;
@@ -172,6 +184,23 @@ describe('buildConfig', () => {
 
     process.env.TRUST_PROXY_HOPS = '1';
     expect(buildConfig().trustProxyHops).toBe(1);
+  });
+
+  it('caches index counts and facets for 60 seconds unless INDEX_STATS_CACHE_SECONDS says otherwise', () => {
+    process.env.DATABASE_URL = 'x';
+    delete process.env.INDEX_STATS_CACHE_SECONDS;
+    expect(buildConfig().indexStatsCacheSeconds).toBe(60);
+
+    process.env.INDEX_STATS_CACHE_SECONDS = '0';
+    expect(buildConfig().indexStatsCacheSeconds).toBe(0);
+  });
+
+  it('exits on a negative INDEX_STATS_CACHE_SECONDS', () => {
+    process.env.DATABASE_URL = 'x';
+    process.env.INDEX_STATS_CACHE_SECONDS = '-5';
+    const exitSpy = mockExit();
+    expect(() => buildConfig()).toThrow('__mock_exit__');
+    expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
   it('exits on a non-integer TRUST_PROXY_HOPS', () => {

@@ -62,6 +62,9 @@ services:
       # Per-IP limits on public reads; agentic/ARD search fan out, so tighter.
       PUBLIC_RATE_LIMIT_MAX: ${PUBLIC_RATE_LIMIT_MAX:-120}
       SEARCH_RATE_LIMIT_MAX: ${SEARCH_RATE_LIMIT_MAX:-30}
+      # Seconds the index total (X-Total-Count) and ARD facet counts are reused
+      # before recounting every listed entry; 0 = recount on every request.
+      INDEX_STATS_CACHE_SECONDS: ${INDEX_STATS_CACHE_SECONDS:-60}
     depends_on:
       db:
         condition: service_healthy
