@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
+import { availableParallelism } from 'node:os';
 import {
   requireEnv,
   optionalEnv,
@@ -156,6 +157,17 @@ describe('buildConfig', () => {
     expect(cfg.auth.maxLoginAttempts).toBe(5);
     expect(cfg.auth.lockoutMinutes).toBe(15);
     expect(cfg.auth.resetTokenTtlMinutes).toBe(60);
+  });
+
+  it('caps concurrent password hashes at CPU count minus one (min 1), overridable from env', () => {
+    process.env.DATABASE_URL = 'x';
+    delete process.env.AUTH_MAX_CONCURRENT_HASHES;
+    // availableParallelism() sees the host's cores, not a container's CPU cap,
+    // which is why the env override exists.
+    expect(buildConfig().auth.maxConcurrentHashes).toBe(Math.max(1, availableParallelism() - 1));
+
+    process.env.AUTH_MAX_CONCURRENT_HASHES = '3';
+    expect(buildConfig().auth.maxConcurrentHashes).toBe(3);
   });
 
   it('defaults JWT lifetime to 1 day', () => {

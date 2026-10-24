@@ -1,5 +1,4 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import bcrypt from 'bcryptjs';
 import {
   upsertUser,
   findUserByEmail,
@@ -22,14 +21,8 @@ import {
 import { issueAccountVerifyToken } from '../db/queries/accountVerification.js';
 import { sendPasswordResetEmail, sendAccountVerificationEmail } from '../services/email.js';
 import { buildConfig } from '../config/index.js';
+import { createPasswordHasher } from '../lib/password.js';
 import { apiErrorSchema } from '../types/api/common.js';
-
-const BCRYPT_ROUNDS = 10;
-
-// Unknown emails (and OAuth-only accounts) are compared against this hash so
-// a failed login costs one bcrypt compare either way — response time must not
-// reveal whether an account exists.
-const DUMMY_PASSWORD_HASH = bcrypt.hashSync('nanda-index-dummy-password', BCRYPT_ROUNDS);
 
 const INVALID_CREDENTIALS = { error: 'UNAUTHORIZED', detail: 'invalid email or password' } as const;
 
@@ -93,6 +86,7 @@ function oauthErrorCode(err: unknown): string {
 
 export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void> {
   const config = buildConfig();
+  const passwords = createPasswordHasher(config.auth.maxConcurrentHashes);
 
   // Per-route throttle for auth mutations (login/register/forgot/reset).
   // The rate-limit plugin runs in opt-in mode (global: false), so only routes
@@ -206,7 +200,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
         return reply.code(409).send({ error: 'CONFLICT', detail: 'email already registered' });
       }
 
-      const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+      const passwordHash = await passwords.hash(password);
       const user = await createUserWithPassword(email, passwordHash, display_name ?? null);
 
       // The session is returned even though the email is unverified, so the
@@ -262,9 +256,11 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
         });
       }
 
+      // Unknown emails and OAuth-only accounts still pay for one compare, so
+      // response time does not reveal whether an account exists.
       const user = await findUserByEmail(email);
-      const valid = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_PASSWORD_HASH);
-      if (!user || !user.passwordHash || !valid) {
+      const valid = await passwords.verify(password, user?.passwordHash);
+      if (!user || !valid) {
         await recordLoginFailure(email, ip, {
           maxAttempts:    config.auth.maxLoginAttempts,
           lockoutMinutes: config.auth.lockoutMinutes,
@@ -356,7 +352,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
         return reply.code(400).send({ error: 'INVALID_TOKEN', detail: 'reset token is invalid or expired' });
       }
 
-      const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+      const passwordHash = await passwords.hash(password);
       const user = await updateUserPassword(resetToken.userId, passwordHash);
       await markResetTokenUsed(resetToken.id);
       // Clear lockouts from every IP so the user can sign in immediately.

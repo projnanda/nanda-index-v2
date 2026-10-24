@@ -1,3 +1,5 @@
+import { availableParallelism } from 'node:os';
+
 /**
  * Reads a required env var.
  * Prints FATAL to stderr and exits with code 1 if the variable is
@@ -75,6 +77,12 @@ export interface AuthConfig {
   readonly lockoutMinutes: number;
   /** Lifetime of a password-reset token. */
   readonly resetTokenTtlMinutes: number;
+  /**
+   * Password hashes allowed to run at once (see lib/password.ts). Defaults to
+   * one less than the CPU count, leaving a core for the event loop. Set it
+   * under a container CPU cap, which os.availableParallelism() cannot see.
+   */
+  readonly maxConcurrentHashes: number;
 }
 
 export interface ClaimsConfig {
@@ -226,6 +234,10 @@ export function buildConfig(): Config {
       ),
       resetTokenTtlMinutes: parsePositiveInt(
         'AUTH_RESET_TOKEN_TTL_MINUTES', optionalEnv('AUTH_RESET_TOKEN_TTL_MINUTES', '60'),
+      ),
+      maxConcurrentHashes: parsePositiveInt(
+        'AUTH_MAX_CONCURRENT_HASHES',
+        optionalEnv('AUTH_MAX_CONCURRENT_HASHES', String(Math.max(1, availableParallelism() - 1))),
       ),
     },
     claims: {

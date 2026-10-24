@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import bcrypt from 'bcryptjs';
+import { createPasswordHasher } from '../../src/lib/password.js';
 import { buildServer } from '../../src/server.js';
 import { getSql, closeSql } from '../../src/db/client.js';
 import { createUserWithPassword } from '../../src/db/queries/users.js';
@@ -15,7 +15,7 @@ async function resetUser(email: string) {
   const sql = getSql();
   await sql`DELETE FROM users WHERE email = ${email}`;
   await sql`DELETE FROM login_failures WHERE email = ${email}`;
-  const hash = await bcrypt.hash(PW, 10);
+  const hash = await createPasswordHasher(1).hash(PW);
   return createUserWithPassword(email, hash, 'Security Test');
 }
 
