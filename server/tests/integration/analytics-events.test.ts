@@ -76,6 +76,7 @@ describe('Analytics events from account and entry routes', () => {
       avatarUrl: null,
       provider: 'github' as const,
       providerId: 'analytics-events-oauth',
+      emailVerified: true,
     };
 
     expect(wasJustCreated(await upsertUser(params))).toBe(true);
@@ -100,7 +101,7 @@ describe('Analytics events from account and entry routes', () => {
   it('counts an entry through registration, both verifications and deletion', async () => {
     const owner = await upsertUser({
       email: `${EMAIL_PREFIX}owner@example.com`, displayName: null, avatarUrl: null,
-      provider: 'google', providerId: 'analytics-events-owner',
+      provider: 'google', providerId: 'analytics-events-owner', emailVerified: true,
     });
     const headers = { authorization: `Bearer ${fastify.jwt.sign({ userId: owner.id, email: owner.email, displayName: null })}` };
     const sql = getSql();

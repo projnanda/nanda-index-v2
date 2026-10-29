@@ -41,6 +41,7 @@ describe('account flows', () => {
     await fastify.ready();
     const user = await upsertUser({
       email: 'af-owner@example.com', displayName: 'Owner', avatarUrl: null, provider: 'google', providerId: 'af-owner',
+      emailVerified: true,
     });
     token = fastify.jwt.sign({ userId: user.id, email: user.email, displayName: null });
   });
