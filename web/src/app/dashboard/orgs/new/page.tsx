@@ -352,7 +352,7 @@ function RegistrationWizard() {
   const [taken, setTaken] = useState<Record<string, string>>({});
   const [apiError, setApiError] = useState<string | null>(null);
   const [needsAccountVerification, setNeedsAccountVerification] = useState(false);
-  const [created, setCreated] = useState<{ record: IndexRecord } | null>(null);
+  const [created, setCreated] = useState<{ record: IndexRecord; orgId: string; path: HostingPath } | null>(null);
 
   const patch = (key: keyof FormState, val: string) => {
     setForm((f) => ({ ...f, [key]: val }));
@@ -442,7 +442,7 @@ function RegistrationWizard() {
         version: form.version || undefined,
         extensions,
       });
-      setCreated({ record });
+      setCreated({ record, orgId: form.org_id, path: form.hosting_path });
     } catch (err) {
       setNeedsAccountVerification(isAccountNotVerified(err));
       setApiError(err instanceof ApiError ? err.message : "Registration failed.");
@@ -453,9 +453,9 @@ function RegistrationWizard() {
 
   if (created) {
     return (
-      <RegistrationBoundary savedOrgId={form.org_id}>
+      <RegistrationBoundary savedOrgId={created.orgId}>
         <PageShell title="Registered" description="">
-          <SuccessScreen record={created.record} path={form.hosting_path} />
+          <SuccessScreen record={created.record} path={created.path} />
         </PageShell>
       </RegistrationBoundary>
     );

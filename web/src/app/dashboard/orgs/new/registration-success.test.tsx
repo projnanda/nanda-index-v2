@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import NewOrgPage from "./page";
 
@@ -55,6 +55,20 @@ describe("registration completion", () => {
     expect(await screen.findByRole("link", { name: "Open your entry" })).toHaveProperty("pathname", "/dashboard/orgs/test-agent");
     expect(screen.getByText(/registration was saved/i)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Register" })).toBeNull();
+  });
+
+  it("keeps the submitted identity when the form changes before the response arrives", async () => {
+    let complete!: (response: Response) => void;
+    vi.stubGlobal("fetch", (url: string) => url.includes("availability")
+      ? Promise.resolve(new Response(JSON.stringify({ org_id_available: true, domain_available: true })))
+      : new Promise<Response>((resolve) => { complete = resolve; }));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await register("registry");
+    await userEvent.click(screen.getByRole("button", { name: "← Back" }));
+    await userEvent.click(screen.getByRole("button", { name: "← Back" }));
+    fireEvent.change(screen.getByLabelText(/^(Org ID|Handle)/), { target: { value: "different-entry" } });
+    await act(async () => { complete(new Response(JSON.stringify({ ...record, identifier: {} }), { status: 201 })); });
+    expect(await screen.findByRole("link", { name: "Open your entry" })).toHaveProperty("pathname", "/dashboard/orgs/test-agent");
   });
 
   it("does not invite a duplicate submission after a 201 with an empty response", async () => {
