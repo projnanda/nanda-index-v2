@@ -13,7 +13,7 @@ const payload = { org_id: 'card-check', display_name: 'Card check', hosting_path
 beforeAll(async () => {
   fastify = (await buildServer({ logger: false })).fastify;
   await fastify.ready();
-  const user = await upsertUser({ email: 'card-owner@example.org', displayName: 'Owner', avatarUrl: null, provider: 'google', providerId: 'card-owner' });
+  const user = await upsertUser({ email: 'card-owner@example.org', displayName: 'Owner', avatarUrl: null, provider: 'google', providerId: 'card-owner', emailVerified: true });
   token = fastify.jwt.sign({ userId: user.id, email: user.email, displayName: null });
 });
 afterEach(async () => { vi.unstubAllGlobals(); vi.clearAllMocks(); await getSql()`DELETE FROM organizations WHERE org_id = 'card-check'`; });

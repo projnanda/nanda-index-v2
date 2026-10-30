@@ -40,6 +40,7 @@ describe('Org create/update — LLM enrichment wiring', () => {
       avatarUrl: null,
       provider: 'google',
       providerId: 'enrichment-test-provider-id',
+      emailVerified: true,
     });
     userId = user.id;
     token = await makeToken(fastify, userId, user.email);

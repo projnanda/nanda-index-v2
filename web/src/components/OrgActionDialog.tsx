@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 export type OrgAction = "suspend" | "reactivate" | "delete";
 const LABELS: Record<OrgAction, string> = { suspend: "Suspend", reactivate: "Reactivate", delete: "Delete" };
@@ -11,23 +11,38 @@ export function OrgActionDialog({ action, orgId, domain, busy, error, onConfirm,
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const cancel = useRef<HTMLButtonElement>(null);
+  const mounted = useRef(false);
   const id = useId();
   const [confirmation, setConfirmation] = useState("");
   const canConfirm = !busy && (action !== "delete" || confirmation === orgId);
   useEffect(() => {
     const previousFocus = document.activeElement;
     const node = dialog.current!;
+    mounted.current = true;
     node.showModal();
     cancel.current?.focus();
     return () => {
+      mounted.current = false;
       node.close();
       if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
     };
   }, []);
+  useLayoutEffect(() => {
+    // Native close may precede the busy render, or its queued close event may
+    // arrive after a failure. Reopen before a queued event can hide that error.
+    if ((busy || error) && dialog.current && !dialog.current.open) dialog.current.showModal();
+  }, [busy, error]);
 
   return (
     <dialog ref={dialog} aria-labelledby={`${id}-title`} aria-describedby={`${id}-description`}
       onCancel={(event) => { event.preventDefault(); if (!busy) onCancel(); }}
+      onClose={(event) => {
+        const node = event.currentTarget;
+        // Ignore cleanup and queued close events from an earlier modal opening.
+        if (!mounted.current || node.open) return;
+        if (busy) node.showModal();
+        else onCancel();
+      }}
       className="m-auto w-[calc(100%-2rem)] max-w-md rounded-3xl border border-black/10 bg-white p-6 shadow-xl backdrop:bg-black/40">
       <form onSubmit={(event) => { event.preventDefault(); if (canConfirm) onConfirm(); }} className="space-y-4">
         <h2 id={`${id}-title`} className="text-lg font-semibold text-slate-950">{LABELS[action]} entry</h2>

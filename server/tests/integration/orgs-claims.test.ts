@@ -82,7 +82,7 @@ describe('Org claims — proof before publication, no squatting', () => {
     for (const who of ['alice', 'bob', 'carol']) {
       const user = await upsertUser({
         email: `${PREFIX}${who}@example.com`, displayName: who, avatarUrl: null,
-        provider: 'google', providerId: `${PREFIX}${who}`,
+        provider: 'google', providerId: `${PREFIX}${who}`, emailVerified: true,
       });
       tokens[who] = fastify.jwt.sign({ userId: user.id, email: user.email, displayName: null });
     }

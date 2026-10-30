@@ -168,6 +168,7 @@ describe('account settings authorization and profile', () => {
       avatarUrl: 'https://example.com/avatar',
       provider: 'google',
       providerId: owner.row.providerId,
+      emailVerified: true,
     });
     expect(refreshed.displayName).toBe('My chosen name');
     expect(refreshed.avatarUrl).toBe('https://example.com/avatar');
@@ -459,6 +460,7 @@ describe('OAuth deletion proofs', () => {
       avatarUrl: null,
       provider: 'google',
       providerId: owner.row.providerId,
+      emailVerified: true,
     });
     expect((await remove(owner.token, { deletion_code: code })).statusCode).toBe(403);
     expect(await findUserById(owner.row.id)).not.toBeNull();

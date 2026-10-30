@@ -118,6 +118,24 @@ function pickNanda(extensions: CatalogExtensions | undefined, owned: boolean): R
   );
 }
 
+/** Validate the known URL hint without restricting other extension metadata. */
+function validateRuntimeUrl(extensions: CatalogExtensions | undefined): void {
+  const url = extensions?.[NANDA_EXTENSION]?.['runtime.url'];
+  if (url === undefined) return;
+
+  // URL parsing alone repairs missing authority slashes, backslashes and
+  // control characters. Require an explicit HTTP(S) authority before parsing.
+  if (typeof url === 'string' && /^https?:\/\/[^/\\\s]/i.test(url) && !/[\\\s\u0000-\u001f\u007f]/.test(url)) {
+    try {
+      const parsed = new URL(url);
+      if (parsed.hostname && (parsed.protocol === 'http:' || parsed.protocol === 'https:')) return;
+    } catch {
+      // Report malformed URLs through the same validation error as bad types.
+    }
+  }
+  throw new EntryProfileError('extensions.org.projectnanda.runtime.url must be an absolute HTTP(S) URL');
+}
+
 function mergeNandaExtension(
   client: CatalogExtensions | undefined,
   defaults: Record<string, unknown>,
@@ -157,6 +175,7 @@ function resolveIdentifier(input: EntryProfileInput, domain: string | null, emai
 }
 
 export function buildEntryProfile(input: EntryProfileInput): EntryProfile {
+  validateRuntimeUrl(input.extensions);
   const rules = PATH_RULES[input.path];
   const isPersonal = input.path === 'personal';
   if (!isPersonal && !input.domain) {
@@ -192,6 +211,8 @@ export function buildEntryProfile(input: EntryProfileInput): EntryProfile {
  * extensions replace the stored ones, minus the server-owned keys.
  */
 export function updateEntryProfile(current: EntryProfile, patch: EntryProfileUpdate): EntryProfile {
+  // An unrelated edit must not revalidate legacy metadata that was not supplied.
+  validateRuntimeUrl(patch.extensions);
   const newDomain = patch.domain?.toLowerCase();
   const domainChanged = newDomain !== undefined && newDomain !== current.publisher.identifier;
 

@@ -645,11 +645,17 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       return reply.code(400).send({ error: 'VALIDATION', detail: 'registry_url must start with https://' });
     }
 
-    const next = updateEntryProfile(profileOf(current), {
-      domain: body.domain,
-      publisherDisplayName: body.publisher?.displayName,
-      extensions: body.extensions,
-    });
+    let next: EntryProfile;
+    try {
+      next = updateEntryProfile(profileOf(current), {
+        domain: body.domain,
+        publisherDisplayName: body.publisher?.displayName,
+        extensions: body.extensions,
+      });
+    } catch (err) {
+      if (err instanceof EntryProfileError) return reply.code(400).send(validationError(err.message).body);
+      throw err;
+    }
     const conflict = await findConflict(next.identifier, body.domain?.toLowerCase() ?? null, current.orgId);
     if (conflict) return reply.code(conflict.status).send(conflict.body);
 

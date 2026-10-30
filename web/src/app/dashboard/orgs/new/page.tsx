@@ -9,6 +9,7 @@ import { FieldLabel } from "@/components/FieldLabel";
 import { cardManagement } from "@/lib/cardManagement";
 import { PageShell } from "@/components/PageShell";
 import { orgFormError, validateOrgFields } from "@/lib/org-validation";
+import { RUNTIME_PROVIDERS } from "@/lib/org-runtime-settings";
 import { ORG_FIELD_HELP } from "@/lib/org-field-help";
 import { ApiError, checkAvailability, createOrg, isAccountNotVerified } from "@/lib/nanda-api";
 import { cn } from "@/lib/utils";
@@ -70,7 +71,6 @@ const TTL_OPTIONS = [
   { label: "7 days", value: "604800" },
 ];
 
-const RUNTIME_PROVIDERS = ["AWS", "Azure", "GCP", "Railway", "GoDaddy", "Vercel", "Other"];
 
 const PATH_LABEL: Record<HostingPath, string> = {
   registry: "Enterprise AI Catalog",
@@ -81,21 +81,13 @@ const PATH_LABEL: Record<HostingPath, string> = {
 
 const SHORT_NAME_RE = /^[A-Za-z0-9._~-]+$/;
 
-const ORG_ID_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$|^[a-z0-9]$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // ── Validation ────────────────────────────────────────────────────────────────
 
 function validateStep1(form: FormState): Record<string, string> {
-  const e: Record<string, string> = {};
-  if (!form.org_id) {
-    e.org_id = "Required.";
-  } else if (!ORG_ID_RE.test(form.org_id)) {
-    e.org_id = "Lowercase letters, numbers, hyphens only. Cannot start or end with a hyphen.";
-  } else if (form.org_id.length > 64) {
-    e.org_id = "Max 64 characters.";
-  }
-  Object.assign(e, validateOrgFields({ display_name: form.display_name, ...(form.hosting_path !== "personal" ? { domain: form.domain } : {}) }));
+  const e: Record<string, string> = validateOrgFields({ org_id: form.org_id, display_name: form.display_name,
+    ...(form.hosting_path !== "personal" ? { domain: form.domain } : {}) });
 
   if (form.hosting_path === "personal") {
     if (!form.identity_email) {
@@ -345,7 +337,9 @@ function RegistrationWizard() {
   useRequireAuth();
   const router = useRouter();
   const [form, setForm] = useState<FormState>(EMPTY);
+  // One generation guards availability requests; field revisions identify which submitted values changed.
   const formRevision = useRef(0);
+  const fieldRevisions = useRef<Partial<Record<keyof FormState, number>>>({});
   const [step, setStep] = useState<Step>(1);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -355,12 +349,10 @@ function RegistrationWizard() {
   const [taken, setTaken] = useState<Record<string, string>>({});
   const [apiError, setApiError] = useState<string | null>(null);
   const [needsAccountVerification, setNeedsAccountVerification] = useState(false);
-  const availabilityVersion = useRef(0);
   const [created, setCreated] = useState<{ record: IndexRecord; orgId: string; path: HostingPath } | null>(null);
 
   const patch = (key: keyof FormState, val: string) => {
-    availabilityVersion.current += 1;
-    formRevision.current += 1;
+    fieldRevisions.current[key] = ++formRevision.current;
     setForm((f) => ({ ...f, [key]: val }));
     // Editing a field invalidates its "already taken" result.
     setTaken((t) => (key in t ? Object.fromEntries(Object.entries(t).filter(([k]) => k !== key)) : t));
@@ -384,19 +376,28 @@ function RegistrationWizard() {
   });
 
   function patchPath(v: HostingPath) {
-    availabilityVersion.current += 1;
-    formRevision.current += 1;
+    const revision = ++formRevision.current;
+    fieldRevisions.current.hosting_path = revision;
+    fieldRevisions.current.identifier = revision;
     setTaken({});
     // An identifier override is anchored to the old path's shape — drop it.
     setForm((f) => ({ ...f, hosting_path: v, identifier: "" }));
   }
 
+  function applyAvailability(conflicts: Record<string, string>) {
+    // Availability checks do not validate the other fields in the form.
+    setTaken((current) => ({
+      ...Object.fromEntries(Object.entries(current).filter(([field]) => field !== "org_id" && field !== "domain")),
+      ...conflicts,
+    }));
+  }
+
   async function checkOnBlur(field: "org_id" | "domain") {
     touch(field);
     if (s1Errors[field]) return;
-    const version = ++availabilityVersion.current;
+    const version = ++formRevision.current;
     const conflicts = await findTakenFields(form);
-    if (version === availabilityVersion.current) setTaken(conflicts);
+    if (version === formRevision.current) applyAvailability(conflicts);
   }
 
   async function advanceTo2() {
@@ -407,11 +408,11 @@ function RegistrationWizard() {
     if (fields.some((f) => s1Errors[f])) return;
 
     setChecking(true);
-    const version = ++availabilityVersion.current;
+    const version = ++formRevision.current;
     const conflicts = await findTakenFields(form);
     setChecking(false);
-    if (version !== availabilityVersion.current) return;
-    setTaken(conflicts);
+    if (version !== formRevision.current) return;
+    applyAvailability(conflicts);
     if (Object.keys(conflicts).length === 0) setStep(2);
   }
 
@@ -425,7 +426,9 @@ function RegistrationWizard() {
     touch("contact_email", "ttl_seconds");
     if (Object.keys(s3Errors).length) return;
 
-    const submittedRevision = formRevision.current;
+    const submittedRevision = ++formRevision.current;
+    const unchanged = (field: keyof FormState) => (fieldRevisions.current[field] ?? 0) <= submittedRevision;
+    setNeedsAccountVerification(false);
     setSaving(true);
     setApiError(null);
     try {
@@ -437,7 +440,7 @@ function RegistrationWizard() {
         ? {
           agentCardHost: new URL(form.registry_url).hostname,
           ...(form.runtime_provider ? { "runtime.provider": form.runtime_provider } : {}),
-          ...(form.runtime_url ? { "runtime.url": form.runtime_url.trim() } : {}),
+          ...(form.runtime_url.trim() ? { "runtime.url": form.runtime_url.trim() } : {}),
           ...(form.auth_metadata ? { "auth.metadata": form.auth_metadata } : {}),
           ...(form.auth_execution ? { "auth.execution": form.auth_execution } : {}),
         }
@@ -464,29 +467,44 @@ function RegistrationWizard() {
       });
       setCreated({ record, orgId: form.org_id, path: form.hosting_path });
     } catch (err) {
-      // Errors describe submitted values, which may have changed while saving.
-      if (formRevision.current !== submittedRevision) return;
-      const field = err instanceof ApiError && err.status === 409 && err.payload && typeof err.payload === "object"
+      // A create response is authoritative over any pending availability lookup.
+      formRevision.current += 1;
+      setNeedsAccountVerification(isAccountNotVerified(err));
+      const conflict = err instanceof ApiError && err.status === 409 && err.payload && typeof err.payload === "object"
         ? (err.payload as { field?: unknown }).field : null;
-      if (field === "org_id" || field === "domain" || field === "identifier") {
-        const input = field === "identifier" && isPersonal ? "identity_email" : field;
-        const message = field === "org_id" ? "This handle is already taken. Choose another one."
-          : field === "domain" ? "This domain is already registered. Use another domain or a subdomain."
-          : "This identifier is already registered. Choose another identity or identifier.";
-        setTaken({ [input]: message });
-        touch(input);
-        setStep(input === "identifier" ? 2 : 1);
-        if (input === "identifier") setShowAdvanced(true);
+      if (conflict === "org_id" || conflict === "domain" || conflict === "identifier") {
+        const input = conflict === "identifier" && isPersonal ? "identity_email" : conflict;
+        const identifierDependencies: (keyof FormState)[] = isPersonal ? ["hosting_path", "identity_email"]
+          : form.identifier || form.hosting_path === "registry" ? ["hosting_path", "identifier", "domain"]
+          : ["hosting_path", "identifier", "domain", "agent_id", ...(form.agent_id ? [] : ["org_id" as const])];
+        const dependencies: (keyof FormState)[] = conflict === "identifier" ? identifierDependencies
+          : conflict === "domain" ? ["domain", "hosting_path"] : ["org_id"];
+        if (dependencies.every(unchanged)) {
+          const message = conflict === "org_id" ? "This handle is already taken. Choose another one."
+            : conflict === "domain" ? "This domain is already registered. Use another domain or a subdomain."
+            : "This identifier is already registered. Choose another identity or identifier.";
+          setTaken((current) => ({ ...current, [input]: message }));
+          touch(input);
+          setStep(input === "identifier" ? 2 : 1);
+          if (input === "identifier") setShowAdvanced(true);
+        } else {
+          setApiError("Registration was not saved. Review your changes and try again.");
+        }
         return;
       }
-      setNeedsAccountVerification(isAccountNotVerified(err));
       const failure = orgFormError(err);
-      const fields = Object.keys(failure.fields);
+      // Preserve failures for unchanged fields and all non-field failures.
+      // Editing one field must not hide a network, account or unrelated validation error.
+      const currentFields = Object.fromEntries(Object.entries(failure.fields).filter(([field]) =>
+        unchanged(field as keyof FormState) && (!(field === "domain" || field === "runtime_url") || unchanged("hosting_path"))));
+      const fields = Object.keys(currentFields);
       if (fields.length) {
-        setTaken(failure.fields as Record<string, string>);
+        setTaken((current) => ({ ...current, ...currentFields }));
         touch(...fields);
-        setStep(fields.some((field) => field === "domain" || field === "display_name") ? 1 : fields.includes("ttl_seconds") ? 3 : 2);
-      } else setApiError(isAccountNotVerified(err) ? (err as ApiError).message : failure.message);
+        setStep(fields.some((field) => ["org_id", "domain", "display_name"].includes(field)) ? 1 : fields.includes("ttl_seconds") ? 3 : 2);
+      } else {
+        setApiError(failure.message ?? "Registration was not saved. Review your changes and try again.");
+      }
     } finally {
       setSaving(false);
     }
@@ -505,6 +523,20 @@ function RegistrationWizard() {
   return (
     <PageShell title="Register" description={isPersonal ? "Add your personal agent to the NANDA Index." : "Add your organization to the NANDA Index."}>
       <StepIndicator current={step} />
+
+      {apiError && (
+        <div role="alert" className="mx-auto mb-5 max-w-lg rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {apiError}
+          {needsAccountVerification && (
+            <>
+              {" "}
+              <Link href="/dashboard" className="font-medium underline">
+                Go to your dashboard
+              </Link>
+            </>
+          )}
+        </div>
+      )}
 
       {/* ── Step 1: Identity ──────────────────────────────────────────────── */}
       {step === 1 && (
@@ -776,13 +808,13 @@ function RegistrationWizard() {
             <details open={!!visible("ttl_seconds") || undefined} className="space-y-3">
               <summary className="cursor-pointer text-xs font-medium text-slate-600">Advanced cache settings</summary>
               <div>
-              <FieldLabel htmlFor="cache-ttl" label="Cache TTL" info={ORG_FIELD_HELP.ttl_seconds} />
-              <select id="cache-ttl" aria-invalid={!!visible("ttl_seconds")} aria-describedby={visible("ttl_seconds") ? "cache-ttl-error" : undefined} value={form.ttl_seconds} onChange={(e) => patch("ttl_seconds", e.target.value)}
-                className="w-full rounded-2xl border border-black/10 bg-white px-4 py-2.5 text-sm font-mono outline-none focus:ring-2 focus:ring-slate-300">
-                {TTL_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-              </select>
-              {visible("ttl_seconds") && <p id="cache-ttl-error" className="mt-1 text-xs text-rose-700">{visible("ttl_seconds")}</p>}
-              <p className="mt-1 text-[11px] text-slate-400">How long resolvers should cache your index record. The default is 24 hours.</p>
+                <FieldLabel htmlFor="cache-ttl" label="Cache TTL" info={ORG_FIELD_HELP.ttl_seconds} />
+                <select id="cache-ttl" aria-invalid={!!visible("ttl_seconds")} aria-describedby={visible("ttl_seconds") ? "cache-ttl-error" : undefined} value={form.ttl_seconds} onChange={(e) => patch("ttl_seconds", e.target.value)}
+                  className="w-full rounded-2xl border border-black/10 bg-white px-4 py-2.5 text-sm font-mono outline-none focus:ring-2 focus:ring-slate-300">
+                  {TTL_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                </select>
+                {visible("ttl_seconds") && <p id="cache-ttl-error" className="mt-1 text-xs text-rose-700">{visible("ttl_seconds")}</p>}
+                <p className="mt-1 text-[11px] text-slate-400">How long resolvers should cache your index record. The default is 24 hours.</p>
               </div>
             </details>
 
@@ -818,19 +850,7 @@ function RegistrationWizard() {
             </div>
           </div>
 
-          {apiError && (
-            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-              {apiError}
-              {needsAccountVerification && (
-                <>
-                  {" "}
-                  <Link href="/dashboard" className="font-medium underline">
-                    Go to your dashboard
-                  </Link>
-                </>
-              )}
-            </div>
-          )}
+
 
           <div className="flex gap-3">
             <button onClick={submit} disabled={saving}
