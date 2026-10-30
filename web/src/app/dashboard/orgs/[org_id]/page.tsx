@@ -9,6 +9,7 @@ import { JsonPanel } from "@/components/JsonPanel";
 import { DomainVerification } from "@/components/DomainVerification";
 import { ApiError, getOrgAsOwner, updateOrg, suspendOrg, reactivateOrg, deleteOrg, resendVerification } from "@/lib/nanda-api";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { applyRuntimeSettings, readRuntimeSettings, RUNTIME_FIELDS } from "@/lib/org-runtime-settings";
 import { ORG_FIELD_HELP } from "@/lib/org-field-help";
 import type { IndexRecord, Moderation } from "@/lib/nanda-types";
 
@@ -52,6 +53,8 @@ export default function OrgDetailPage() {
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState("");
   const [version, setVersion] = useState("");
+  const [ttlSeconds, setTtlSeconds] = useState("86400");
+  const [runtime, setRuntime] = useState(() => readRuntimeSettings({}));
 
   useEffect(() => {
     let cancelled = false;
@@ -66,6 +69,8 @@ export default function OrgDetailPage() {
         setDescription(data.description ?? "");
         setTags((data.tags ?? []).join(", "));
         setVersion(data.version ?? "");
+        setTtlSeconds(String(data.ttl_seconds));
+        setRuntime(readRuntimeSettings(data.extensions));
       })
       .catch((err) => {
         if (cancelled) return;
@@ -91,6 +96,11 @@ export default function OrgDetailPage() {
 
   async function onSave() {
     setError(null);
+    const ttl = Number(ttlSeconds);
+    if (!Number.isInteger(ttl) || ttl < 3600 || ttl > 604800) {
+      setError("Cache TTL must be a whole number from 3600 to 604800 seconds.");
+      return;
+    }
     setSaving(true);
     try {
       const tagList = tags.split(",").map((t) => t.trim()).filter(Boolean);
@@ -103,6 +113,8 @@ export default function OrgDetailPage() {
         description: description || undefined,
         tags: tagList.length ? tagList : [],
         version: version || undefined,
+        ttl_seconds: ttl,
+        extensions: applyRuntimeSettings(org!.extensions, runtime),
       });
       setOrg(updated);
       setEditing(false);
@@ -159,6 +171,20 @@ export default function OrgDetailPage() {
     } finally {
       setDeleting(false);
     }
+  }
+
+  function beginEditing() {
+    if (!org) return;
+    setDisplayName(org.display_name);
+    setRegistryUrl(org.registry_url ?? "");
+    setDomain(org.domain ?? "");
+    setDescription(org.description ?? "");
+    setTags((org.tags ?? []).join(", "));
+    setVersion(org.version ?? "");
+    setTtlSeconds(String(org.ttl_seconds));
+    setRuntime(readRuntimeSettings(org.extensions));
+    setError(null);
+    setEditing(true);
   }
 
   const inputCls = "w-full rounded-2xl border border-black/10 px-4 py-2.5 text-sm font-mono outline-none focus:ring-2 focus:ring-slate-300";
@@ -250,6 +276,23 @@ export default function OrgDetailPage() {
               <input id={`${fid}-version`} value={version} onChange={(e) => setVersion(e.target.value)} className={inputCls} placeholder="v1.0.0" />
               <p className="mt-1 text-[11px] text-slate-400">SemVer of this artifact (shown on the card).</p>
             </div>
+            <details className="space-y-4 rounded-2xl border border-black/10 p-4">
+              <summary className="cursor-pointer text-sm font-medium text-slate-700">Advanced settings</summary>
+              <div>
+                <FieldLabel htmlFor={`${fid}-ttl`} label="Cache TTL" info={ORG_FIELD_HELP.ttl_seconds} />
+                <input id={`${fid}-ttl`} type="number" min={3600} max={604800} step={1} value={ttlSeconds}
+                  onChange={(e) => setTtlSeconds(e.target.value)} className={inputCls} />
+                <p className="mt-1 text-xs text-slate-500">Seconds, from 3600 (1 hour) to 604800 (7 days).</p>
+              </div>
+              <p className="text-xs text-slate-500">Runtime and authentication fields are public hints. Do not enter passwords, tokens or other credentials.</p>
+              {RUNTIME_FIELDS.map(({ key, label, help }) => (
+                <div key={key}>
+                  <FieldLabel htmlFor={`${fid}-${key}`} label={label} info={ORG_FIELD_HELP[help]} optional />
+                  <input id={`${fid}-${key}`} value={runtime[key]} className={inputCls}
+                    onChange={(e) => setRuntime((current) => ({ ...current, [key]: e.target.value }))} />
+                </div>
+              ))}
+            </details>
             <div className="flex gap-3">
               <button onClick={onSave} disabled={saving} className="rounded-2xl bg-slate-950 px-6 py-2.5 text-sm font-medium text-white disabled:opacity-60">
                 {saving ? "Saving…" : "Save"}
@@ -263,7 +306,7 @@ export default function OrgDetailPage() {
           <div className="rounded-3xl border border-black/10 bg-white p-5 shadow-sm space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">{org.display_name}</h2>
-              <button onClick={() => setEditing(true)} className="rounded-2xl border border-black/10 px-4 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+              <button onClick={beginEditing} className="rounded-2xl border border-black/10 px-4 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
                 Edit
               </button>
             </div>
