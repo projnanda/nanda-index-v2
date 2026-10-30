@@ -345,6 +345,7 @@ function RegistrationWizard() {
   useRequireAuth();
   const router = useRouter();
   const [form, setForm] = useState<FormState>(EMPTY);
+  const formRevision = useRef(0);
   const [step, setStep] = useState<Step>(1);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -359,6 +360,7 @@ function RegistrationWizard() {
 
   const patch = (key: keyof FormState, val: string) => {
     availabilityVersion.current += 1;
+    formRevision.current += 1;
     setForm((f) => ({ ...f, [key]: val }));
     // Editing a field invalidates its "already taken" result.
     setTaken((t) => (key in t ? Object.fromEntries(Object.entries(t).filter(([k]) => k !== key)) : t));
@@ -383,6 +385,7 @@ function RegistrationWizard() {
 
   function patchPath(v: HostingPath) {
     availabilityVersion.current += 1;
+    formRevision.current += 1;
     setTaken({});
     // An identifier override is anchored to the old path's shape — drop it.
     setForm((f) => ({ ...f, hosting_path: v, identifier: "" }));
@@ -422,7 +425,7 @@ function RegistrationWizard() {
     touch("contact_email", "ttl_seconds");
     if (Object.keys(s3Errors).length) return;
 
-    const submittedVersion = availabilityVersion.current;
+    const submittedRevision = formRevision.current;
     setSaving(true);
     setApiError(null);
     try {
@@ -461,10 +464,11 @@ function RegistrationWizard() {
       });
       setCreated({ record, orgId: form.org_id, path: form.hosting_path });
     } catch (err) {
+      // Errors describe submitted values, which may have changed while saving.
+      if (formRevision.current !== submittedRevision) return;
       const field = err instanceof ApiError && err.status === 409 && err.payload && typeof err.payload === "object"
         ? (err.payload as { field?: unknown }).field : null;
       if (field === "org_id" || field === "domain" || field === "identifier") {
-        if (submittedVersion !== availabilityVersion.current) return;
         const input = field === "identifier" && isPersonal ? "identity_email" : field;
         const message = field === "org_id" ? "This handle is already taken. Choose another one."
           : field === "domain" ? "This domain is already registered. Use another domain or a subdomain."
