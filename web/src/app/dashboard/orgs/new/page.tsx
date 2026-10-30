@@ -4,6 +4,7 @@ import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { FieldLabel } from "@/components/FieldLabel";
+import { cardManagement } from "@/lib/cardManagement";
 import { PageShell } from "@/components/PageShell";
 import { ORG_FIELD_HELP } from "@/lib/org-field-help";
 import { ApiError, checkAvailability, createOrg, isAccountNotVerified } from "@/lib/nanda-api";
@@ -264,6 +265,7 @@ function StepIndicator({ current }: { current: Step }) {
 
 function SuccessScreen({ record, path }: { record: IndexRecord; path: HostingPath }) {
   const isPersonal = path === "personal";
+  const management = cardManagement(record.registry_url);
   return (
     <div className="mx-auto max-w-lg space-y-4">
       <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-7 text-center">
@@ -275,6 +277,9 @@ function SuccessScreen({ record, path }: { record: IndexRecord; path: HostingPat
         <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400">Identifier</p>
         <p className="mt-1 break-all font-mono text-sm text-slate-950">{record.identifier}</p>
       </div>
+      {isPersonal && (
+        <p className="text-xs text-slate-500">Host39 is the naming authority for your personal identifier. Your card can be hosted at any public URL.</p>
+      )}
       {isPersonal ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
           <p className="text-sm font-semibold text-amber-800">Confirm your email to go live</p>
@@ -304,11 +309,11 @@ function SuccessScreen({ record, path }: { record: IndexRecord; path: HostingPat
             <span className="mt-0.5 text-xs text-slate-500">Open Registry Manager to register your first agent.</span>
           </Link>
         )}
-        {(path === "smb" || path === "personal") && (
-          <a href="https://host39.org" target="_blank" rel="noopener noreferrer"
+        {(path === "smb" || path === "personal") && management && (
+          <a href={management.url} target="_blank" rel="noopener noreferrer"
             className="flex flex-col rounded-2xl border border-black/10 bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-sm">
-            <span className="text-sm font-semibold text-slate-950">Manage on host39.org →</span>
-            <span className="mt-0.5 text-xs text-slate-500">Update your agent card on host39.org.</span>
+            <span className="text-sm font-semibold text-slate-950">{management.hostedByHost39 ? "Manage on host39.org →" : "Open your agent card →"}</span>
+            <span className="mt-0.5 text-xs text-slate-500">{management.hostedByHost39 ? "Update your agent card on host39.org." : "Manage this card through your hosting provider."}</span>
           </a>
         )}
         {isPersonal && (
@@ -482,7 +487,7 @@ export default function NewOrgPage() {
                 description="Your agent is discoverable via DNS service binding (SVCB, RFC 9460). NandaIndex acts as a federated pointer." />
               <PathCard value="smb" selected={form.hosting_path} onSelect={patchPath}
                 title="SMB Agent Card" subtitle="Small Business"
-                description="You own a domain but don't run infrastructure. Host your agent card on host39.org." />
+                description="You own a domain and host an agent card at a public URL." />
               <PathCard value="personal" selected={form.hosting_path} onSelect={patchPath}
                 title="Personal Agent" subtitle="Individual"
                 description="No personally controlled domain is required. The account identity must be verifiably bound to the resolution record." />
@@ -589,9 +594,9 @@ export default function NewOrgPage() {
                 <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3">
                   <p className="text-xs font-semibold text-sky-800">Before you continue</p>
                   <p className="mt-0.5 text-xs text-sky-700">
-                    Create your agent card on{" "}
+                    Host your agent card at a public URL, using your own provider or{" "}
                     <a href="https://host39.org" target="_blank" rel="noopener noreferrer" className="underline">host39.org</a>
-                    {" "}first, then paste the card URL below.
+                    {" "}, then paste the card URL below.
                   </p>
                 </div>
 

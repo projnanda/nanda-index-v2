@@ -172,6 +172,8 @@ export function buildEntryProfile(input: EntryProfileInput): EntryProfile {
 
   const email = input.contactEmail.trim().toLowerCase();
   const domain = isPersonal ? null : input.domain!.toLowerCase();
+  // For personal entries, the publisher block identifies the URN naming
+  // authority. It does not identify the card's author, owner, or hosting provider.
   const publisher: PublisherBlock = isPersonal
     ? { identifier: PERSONAL_CARD_HOST.domain, displayName: PERSONAL_CARD_HOST.displayName, identityType: 'dns' }
     : { identifier: domain!, displayName: input.publisherDisplayName ?? input.displayName, identityType: 'dns' };
