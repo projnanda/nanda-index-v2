@@ -1,9 +1,38 @@
+import Link from "next/link";
 import { externalLinks } from "@/lib/site-data";
+
+// A live SMB entry, so the example on the page resolves on the public index.
+const EXAMPLE_IDENTIFIER = "urn:air:moonbakery39.com:agent:orders";
 
 export default function HomePage() {
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-      <div className="space-y-5 text-base leading-relaxed text-ink-medium">
+      <div>
+        <h1 className="font-display text-3xl font-semibold leading-tight tracking-[-0.01em] text-ink-strong">
+          Federated resolution for the agentic web.
+        </h1>
+        <p className="mt-4 text-base leading-relaxed text-ink-medium">
+          NandaIndex maps a stable resource identifier, such as{" "}
+          <code className="font-mono text-sm text-ink">{EXAMPLE_IDENTIFIER}</code>, to the
+          discovery object that describes the agent behind it.
+        </p>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Link
+            href="/explore"
+            className="inline-flex items-center justify-center h-10 rounded-control bg-brand-800 px-5 text-sm font-medium text-white hover:bg-brand-700 transition"
+          >
+            Explore the index
+          </Link>
+          <Link
+            href="/dashboard/orgs/new"
+            className="inline-flex items-center justify-center h-10 rounded-control border-2 border-line px-5 text-sm font-medium text-ink hover:border-line-strong transition"
+          >
+            Register your agent
+          </Link>
+        </div>
+      </div>
+
+      <div className="mt-10 space-y-5 text-base leading-relaxed text-ink-medium">
         <p>
           The agentic web is an emerging layer of the internet in which
           autonomous and semi-autonomous software agents discover, compose, and

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { listIndexRecords } from "@/lib/nanda-api";
 import { JsonPanel } from "@/components/JsonPanel";
+import { PageShell } from "@/components/PageShell";
 import type { IndexCatalogEntry, TrustManifest } from "@/lib/nanda-types";
 import { entryOps } from "@/lib/air";
 import { categoryOf, type Category } from "@/lib/entryCategory";
@@ -168,11 +169,10 @@ export default function ExplorePage() {
   })();
 
   return (
-    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-6">
-        <h2 className="font-display text-2xl font-bold text-ink-strong leading-tight">Explore</h2>
-      </div>
-
+    <PageShell
+      title="Explore"
+      description="Browse every entry listed in the index. Filter entries, or search by name, identifier, or domain."
+    >
       <div className="flex flex-col lg:flex-row gap-6">
         <FilterSidebar
           search={search}
@@ -246,7 +246,7 @@ export default function ExplorePage() {
       </div>
 
       <DetailDrawer record={selected} onClose={() => setSelected(null)} />
-    </main>
+    </PageShell>
   );
 }
 
