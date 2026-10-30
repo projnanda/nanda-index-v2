@@ -26,10 +26,10 @@ export interface UpsertUserParams {
   avatarUrl: string | null;
   provider: 'google' | 'github';
   providerId: string;
-  /** Whether the provider vouches for the email. Defaults to true: Google and
-   *  GitHub only hand us addresses they verified, except the GitHub fallback
-   *  case the callback flags explicitly. */
-  emailVerified?: boolean;
+  /** Whether the provider vouches for the email. Required, with no default:
+   *  each callback must read the provider's own verified flag, so a caller
+   *  that forgets it fails to compile instead of trusting the address. */
+  emailVerified: boolean;
 }
 
 /**
@@ -71,10 +71,9 @@ export async function findUserById(id: string): Promise<User | null> {
  */
 export async function upsertUser(params: UpsertUserParams): Promise<User> {
   const sql = getSql();
-  const emailVerified = params.emailVerified ?? true;
   const rows = await sql<User[]>`
     INSERT INTO users (email, display_name, avatar_url, provider, provider_id, email_verified)
-    VALUES (${normalizeEmail(params.email)}, ${params.displayName}, ${params.avatarUrl}, ${params.provider}, ${params.providerId}, ${emailVerified})
+    VALUES (${normalizeEmail(params.email)}, ${params.displayName}, ${params.avatarUrl}, ${params.provider}, ${params.providerId}, ${params.emailVerified})
     ON CONFLICT (provider, provider_id)
       DO UPDATE SET
         email          = EXCLUDED.email,

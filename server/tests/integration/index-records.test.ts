@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createHash } from 'node:crypto';
 import { buildServer } from '../../src/server.js';
 import { getSql } from '../../src/db/client.js';
 
@@ -21,7 +21,7 @@ async function seedOrg(
        verify_token, verify_token_expires_at, email_verified, status, identifier, domain_verified)
     VALUES
       (${orgId}, ${displayName}, ${domain}, ${contactEmail},
-       ${registryUrl}, ${token}, NOW() + INTERVAL '24 hours',
+       ${registryUrl}, ${createHash('sha256').update(token).digest('hex')}, NOW() + INTERVAL '24 hours',
        ${opts.emailVerified ?? true}, ${opts.status ?? 'active'}, ${identifier},
        ${opts.domainVerified ?? false})
     ON CONFLICT (org_id) DO NOTHING
