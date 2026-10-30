@@ -67,7 +67,7 @@ const SERVER_OWNED_KEYS: readonly string[] = ['resolutionRole', 'preferredDiscov
  *  (GET /api/v1/index). Never stored — dropped if a client sends them back. */
 export const NANDA_OUTPUT_KEYS: readonly string[] = [
   'orgId', 'status', 'ttlSeconds', 'emailVerified', 'domainVerified',
-  'createdAt', 'domain', 'representativeQueries',
+  'createdAt', 'domain', 'representativeQueries', 'emailVerifiedAt', 'domainVerifiedAt', 'cardValidation',
 ];
 
 interface PathRules {

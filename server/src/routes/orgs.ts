@@ -1,3 +1,5 @@
+import { validateRegistrationCard } from '../services/cardValidation.js';
+import { allowAnyUrl, publicUrlGuard } from '../lib/outboundUrl.js';
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { findByOrgId, findProvenByDomain, findProvenByIdentifier, countUnprovenOrgsForUser, insertOrganization, updateOrganization, suspendOrganization, reactivateOrganization, deleteOrganization, issueDomainChallenge, markDomainVerified, renewVerifyToken, toIndexRecord, type Organization } from '../db/queries/organizations.js';
@@ -415,6 +417,9 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       buildConfig().llmEnrichment,
     );
 
+    const cardValidation = await validateRegistrationCard(body.registry_url, profile.mediaType, {
+      guard: buildConfig().outbound.allowPrivateHosts ? allowAnyUrl : publicUrlGuard,
+    });
     let org: Organization;
     try {
       org = await insertOrganization({
@@ -436,6 +441,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
         version:              body.version,
         trustManifest:        body.trust_manifest,
         representativeQueries,
+        cardValidation,
       });
     } catch (err) {
       if (isUniqueViolation(err)) {
@@ -658,6 +664,11 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
           )
         : undefined;
 
+    const cardValidation = body.registry_url !== undefined
+      ? await validateRegistrationCard(body.registry_url, current.mediaType, {
+          guard: buildConfig().outbound.allowPrivateHosts ? allowAnyUrl : publicUrlGuard,
+        })
+      : undefined;
     let updated: Organization | null;
     try {
       updated = await updateOrganization(request.params.org_id, {
@@ -675,6 +686,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
         // No ?? null here: undefined (omitted) must stay distinct from null (clear).
         trustManifest:   body.trust_manifest,
         representativeQueries,
+        cardValidation,
       });
     } catch (err) {
       if (isUniqueViolation(err)) {
