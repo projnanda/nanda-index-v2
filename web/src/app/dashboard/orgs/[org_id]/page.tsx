@@ -1,5 +1,7 @@
 "use client";
 
+import { formatTimestamp } from "@/lib/formatTimestamp";
+
 import { useEffect, useId, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { OrgActionDialog, type OrgAction } from "@/components/OrgActionDialog";
@@ -251,9 +253,9 @@ export default function OrgDetailPage() {
               <p className="mt-1 text-[11px] text-slate-400">Separate tags with commas.</p>
             </div>
             <div>
-              <FieldLabel htmlFor={`${fid}-version`} label="Version" info={ORG_FIELD_HELP.version} optional />
+              <FieldLabel htmlFor={`${fid}-version`} label="Version label" info={ORG_FIELD_HELP.version} optional />
               <input id={`${fid}-version`} value={version} onChange={(e) => setVersion(e.target.value)} className={inputCls} placeholder="v1.0.0" />
-              <p className="mt-1 text-[11px] text-slate-400">SemVer of this artifact (shown on the card).</p>
+              <p className="mt-1 text-[11px] text-slate-400">Optional version label, up to 64 characters (for example, v1.0.0 or 2026-10).</p>
             </div>
             <div className="flex gap-3">
               <button onClick={onSave} disabled={saving} className="rounded-2xl bg-slate-950 px-6 py-2.5 text-sm font-medium text-white disabled:opacity-60">
@@ -296,7 +298,7 @@ export default function OrgDetailPage() {
                 </div>
               )}
               <div><span className="font-medium">TTL:</span> {org.ttl_seconds}s</div>
-              <div><span className="font-medium">Created:</span> {new Date(org.created_at).toLocaleString()}</div>
+              <div><span className="font-medium">Created:</span> {formatTimestamp(org.created_at)}</div>
             </div>
           </div>
         )}
