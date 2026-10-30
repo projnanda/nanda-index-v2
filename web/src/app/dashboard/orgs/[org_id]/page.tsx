@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { formatTimestamp } from "@/lib/formatTimestamp";
 import { useRouter, useParams } from "next/navigation";
 import { FieldLabel } from "@/components/FieldLabel";
 import { PageShell } from "@/components/PageShell";
@@ -283,9 +284,9 @@ export default function OrgDetailPage() {
               <p className="mt-1 text-[11px] text-slate-400">Separate tags with commas.</p>
             </div>
             <div>
-              <FieldLabel htmlFor={`${fid}-version`} label="Version" info={ORG_FIELD_HELP.version} optional />
+              <FieldLabel htmlFor={`${fid}-version`} label="Version label" info={ORG_FIELD_HELP.version} optional />
               <input id={`${fid}-version`} value={version} onChange={(e) => setVersion(e.target.value)} className={inputCls} placeholder="v1.0.0" />
-              <p className="mt-1 text-[11px] text-slate-400">SemVer of this artifact (shown on the card).</p>
+              <p className="mt-1 text-[11px] text-slate-400">Optional version label, up to 64 characters (for example, v1.0.0 or 2026-10).</p>
             </div>
             <details ref={advancedRef} className="space-y-4 rounded-2xl border border-black/10 p-4">
               <summary className="cursor-pointer text-sm font-medium text-slate-700">Advanced settings</summary>
@@ -360,7 +361,7 @@ export default function OrgDetailPage() {
                 </div>
               )}
               <div><span className="font-medium">TTL:</span> {org.ttl_seconds}s</div>
-              <div><span className="font-medium">Created:</span> {new Date(org.created_at).toLocaleString()}</div>
+              <div><span className="font-medium">Created:</span> {formatTimestamp(org.created_at)}</div>
             </div>
           </div>
         )}

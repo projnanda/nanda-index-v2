@@ -71,6 +71,10 @@ for (const [network, prefix] of [
 for (const [network, prefix] of [
   ['::', 128],           // unspecified
   ['::1', 128],          // loopback
+  ['64:ff9b::', 96],
+  ['64:ff9b:1::', 48],
+  ['2002::', 16],
+  ['2001::', 32],
   ['fc00::', 7],         // unique-local
   ['fe80::', 10],        // link-local
   ['ff00::', 8],         // multicast

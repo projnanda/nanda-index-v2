@@ -1,9 +1,11 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { RegistrationBoundary } from "@/components/RegistrationBoundary";
 import { FieldLabel } from "@/components/FieldLabel";
+import { cardManagement } from "@/lib/cardManagement";
 import { PageShell } from "@/components/PageShell";
 import { RUNTIME_PROVIDERS } from "@/lib/org-runtime-settings";
 import { ORG_FIELD_HELP } from "@/lib/org-field-help";
@@ -11,7 +13,7 @@ import { ApiError, checkAvailability, createOrg, isAccountNotVerified } from "@/
 import { cn } from "@/lib/utils";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import type { CatalogExtensions, HostingPath, IndexRecord } from "@/lib/nanda-types";
-import { NANDA_EXTENSION, PERSONAL_CARD_HOST, isAnchoredTo, previewIdentifier } from "@/lib/air";
+import { NANDA_EXTENSION, isAnchoredTo, previewIdentifier } from "@/lib/air";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,7 +36,7 @@ interface FormState {
   auth_execution: string;       // smb / personal optional
   description: string;
   tags: string;
-  version: string;              // optional SemVer of the artifact
+  version: string;              // optional version label of the artifact
   // Step 3 — contact
   contact_email: string;
   ttl_seconds: string;
@@ -179,14 +181,14 @@ function Field({
     <div>
       <FieldLabel htmlFor={id} label={label} info={info} optional={optional} />
       {textarea ? (
-        <textarea id={id} value={value} onChange={(e) => onChange(e.target.value)} onBlur={onBlur}
+        <textarea id={id} aria-invalid={!!error} aria-describedby={error || hint ? `${id}-help` : undefined} value={value} onChange={(e) => onChange(e.target.value)} onBlur={onBlur}
           placeholder={placeholder} rows={3} className={cn(cls, "resize-none")} />
       ) : (
-        <input id={id} type={type} value={value} onChange={(e) => onChange(e.target.value)}
+        <input id={id} aria-invalid={!!error} aria-describedby={error || hint ? `${id}-help` : undefined} type={type} value={value} onChange={(e) => onChange(e.target.value)}
           onBlur={onBlur} placeholder={placeholder} className={cls} />
       )}
-      {error ? <p className="mt-1 text-[11px] text-rose-500">{error}</p>
-        : hint ? <p className="mt-1 text-[11px] text-slate-400">{hint}</p>
+      {error ? <p id={`${id}-help`} className="mt-1 text-[11px] text-rose-500">{error}</p>
+        : hint ? <p id={`${id}-help`} className="mt-1 text-[11px] text-slate-400">{hint}</p>
           : null}
     </div>
   );
@@ -200,28 +202,27 @@ function PathCard({ value, selected, onSelect, title, subtitle, description }: {
 }) {
   const active = value === selected;
   return (
-    <button type="button" onClick={() => onSelect(value)}
+    <label
       className={cn(
-        "flex items-start gap-3 rounded-2xl border px-4 py-3.5 text-left transition w-full",
+        "flex items-start gap-3 rounded-2xl border px-4 py-3.5 text-left transition w-full cursor-pointer focus-within:ring-2 focus-within:ring-slate-400 focus-within:ring-offset-2",
         active ? "border-slate-950 bg-slate-950 text-white" : "border-black/10 bg-white hover:border-slate-400",
       )}
     >
-      <span className={cn("mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2",
-        active ? "border-white bg-white" : "border-slate-400")}>
-        {active && <span className="h-2 w-2 rounded-full bg-slate-950" />}
-      </span>
-      <div>
-        <p className={cn("text-sm font-semibold leading-tight", active ? "text-white" : "text-slate-950")}>
+      <input type="radio" name="hosting-path" value={value} checked={active}
+        onChange={() => onSelect(value)}
+        className="mt-0.5 h-4 w-4 shrink-0 accent-slate-950 focus-visible:outline-2 focus-visible:outline-offset-4" />
+      <span>
+        <span className={cn("block text-sm font-semibold leading-tight", active ? "text-white" : "text-slate-950")}>
           {title}
           <span className={cn("ml-2 text-xs font-normal", active ? "text-slate-300" : "text-slate-400")}>
             {subtitle}
           </span>
-        </p>
-        <p className={cn("mt-0.5 text-xs", active ? "text-slate-300" : "text-slate-500")}>
+        </span>
+        <span className={cn("mt-0.5 block text-xs", active ? "text-slate-300" : "text-slate-500")}>
           {description}
-        </p>
-      </div>
-    </button>
+        </span>
+      </span>
+    </label>
   );
 }
 
@@ -264,6 +265,7 @@ function StepIndicator({ current }: { current: Step }) {
 
 function SuccessScreen({ record, path }: { record: IndexRecord; path: HostingPath }) {
   const isPersonal = path === "personal";
+  const management = cardManagement(record.registry_url);
   return (
     <div className="mx-auto max-w-lg space-y-4">
       <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-7 text-center">
@@ -275,12 +277,16 @@ function SuccessScreen({ record, path }: { record: IndexRecord; path: HostingPat
         <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400">Identifier</p>
         <p className="mt-1 break-all font-mono text-sm text-slate-950">{record.identifier}</p>
       </div>
+      {isPersonal && (
+        <p className="text-xs text-slate-500">Host39 is the naming authority for your personal identifier. Your card can be hosted at any public URL.</p>
+      )}
       {isPersonal ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
           <p className="text-sm font-semibold text-amber-800">Confirm your email to go live</p>
           <p className="mt-0.5 text-xs text-amber-700">
-            Your record is <span className="font-semibold">pending</span> and hidden from the public index until you confirm your contact address. We&apos;ve emailed a verification link — no domain ownership needed for personal agents.
+            Your record is <span className="font-semibold">pending</span> and hidden from the public index until you confirm your contact address. We&apos;ve emailed a verification link. No domain ownership is needed for personal agents.
           </p>
+          <p className="mt-2 text-xs text-amber-700">Your account email confirms your sign-in address. This separate verification confirms the address published by this entry, even when both addresses are the same.</p>
         </div>
       ) : (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
@@ -304,17 +310,17 @@ function SuccessScreen({ record, path }: { record: IndexRecord; path: HostingPat
             <span className="mt-0.5 text-xs text-slate-500">Open Registry Manager to register your first agent.</span>
           </Link>
         )}
-        {(path === "smb" || path === "personal") && (
-          <a href="https://host39.org" target="_blank" rel="noopener noreferrer"
+        {(path === "smb" || path === "personal") && management && (
+          <a href={management.url} target="_blank" rel="noopener noreferrer"
             className="flex flex-col rounded-2xl border border-black/10 bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-sm">
-            <span className="text-sm font-semibold text-slate-950">Manage on host39.org →</span>
-            <span className="mt-0.5 text-xs text-slate-500">Update your agent card on host39.org.</span>
+            <span className="text-sm font-semibold text-slate-950">{management.hostedByHost39 ? "Manage on host39.org →" : "Open your agent card →"}</span>
+            <span className="mt-0.5 text-xs text-slate-500">{management.hostedByHost39 ? "Update your agent card on host39.org." : "Manage this card through your hosting provider."}</span>
           </a>
         )}
         {isPersonal && (
           <Link href={`/dashboard/orgs/${record.org_id}`}
             className="flex flex-col rounded-2xl border border-black/10 bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-sm">
-            <span className="text-sm font-semibold text-slate-950">View your org →</span>
+            <span className="text-sm font-semibold text-slate-950">View your entry →</span>
             <span className="mt-0.5 text-xs text-slate-500">Check status and edit details.</span>
           </Link>
         )}
@@ -335,6 +341,10 @@ function SuccessScreen({ record, path }: { record: IndexRecord; path: HostingPat
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function NewOrgPage() {
+  return <RegistrationBoundary><RegistrationWizard /></RegistrationBoundary>;
+}
+
+function RegistrationWizard() {
   useRequireAuth();
   const router = useRouter();
   const [form, setForm] = useState<FormState>(EMPTY);
@@ -347,9 +357,11 @@ export default function NewOrgPage() {
   const [taken, setTaken] = useState<Record<string, string>>({});
   const [apiError, setApiError] = useState<string | null>(null);
   const [needsAccountVerification, setNeedsAccountVerification] = useState(false);
-  const [created, setCreated] = useState<IndexRecord | null>(null);
+  const availabilityVersion = useRef(0);
+  const [created, setCreated] = useState<{ record: IndexRecord; orgId: string; path: HostingPath } | null>(null);
 
   const patch = (key: keyof FormState, val: string) => {
+    availabilityVersion.current += 1;
     setForm((f) => ({ ...f, [key]: val }));
     // Editing a field invalidates its "already taken" result.
     setTaken((t) => (key in t ? Object.fromEntries(Object.entries(t).filter(([k]) => k !== key)) : t));
@@ -373,8 +385,18 @@ export default function NewOrgPage() {
   });
 
   function patchPath(v: HostingPath) {
+    availabilityVersion.current += 1;
+    setTaken({});
     // An identifier override is anchored to the old path's shape — drop it.
     setForm((f) => ({ ...f, hosting_path: v, identifier: "" }));
+  }
+
+  async function checkOnBlur(field: "org_id" | "domain") {
+    touch(field);
+    if (s1Errors[field]) return;
+    const version = ++availabilityVersion.current;
+    const conflicts = await findTakenFields(form);
+    if (version === availabilityVersion.current) setTaken(conflicts);
   }
 
   async function advanceTo2() {
@@ -385,8 +407,10 @@ export default function NewOrgPage() {
     if (fields.some((f) => s1Errors[f])) return;
 
     setChecking(true);
+    const version = ++availabilityVersion.current;
     const conflicts = await findTakenFields(form);
     setChecking(false);
+    if (version !== availabilityVersion.current) return;
     setTaken(conflicts);
     if (Object.keys(conflicts).length === 0) setStep(2);
   }
@@ -401,6 +425,7 @@ export default function NewOrgPage() {
     touch("contact_email");
     if (s3Errors.contact_email) return;
 
+    const submittedVersion = availabilityVersion.current;
     setSaving(true);
     setApiError(null);
     try {
@@ -437,8 +462,22 @@ export default function NewOrgPage() {
         version: form.version || undefined,
         extensions,
       });
-      setCreated(record);
+      setCreated({ record, orgId: form.org_id, path: form.hosting_path });
     } catch (err) {
+      const field = err instanceof ApiError && err.status === 409 && err.payload && typeof err.payload === "object"
+        ? (err.payload as { field?: unknown }).field : null;
+      if (field === "org_id" || field === "domain" || field === "identifier") {
+        if (submittedVersion !== availabilityVersion.current) return;
+        const input = field === "identifier" && isPersonal ? "identity_email" : field;
+        const message = field === "org_id" ? "This handle is already taken. Choose another one."
+          : field === "domain" ? "This domain is already registered. Use another domain or a subdomain."
+          : "This identifier is already registered. Choose another identity or identifier.";
+        setTaken({ [input]: message });
+        touch(input);
+        setStep(input === "identifier" ? 2 : 1);
+        if (input === "identifier") setShowAdvanced(true);
+        return;
+      }
       setNeedsAccountVerification(isAccountNotVerified(err));
       setApiError(err instanceof ApiError ? err.message : "Registration failed.");
     } finally {
@@ -448,14 +487,16 @@ export default function NewOrgPage() {
 
   if (created) {
     return (
-      <PageShell title="Registered" description="">
-        <SuccessScreen record={created} path={form.hosting_path} />
-      </PageShell>
+      <RegistrationBoundary savedOrgId={created.orgId}>
+        <PageShell title="Registered" description="">
+          <SuccessScreen record={created.record} path={created.path} />
+        </PageShell>
+      </RegistrationBoundary>
     );
   }
 
   return (
-    <PageShell title="Register" description="Add your organization to the NANDA Index.">
+    <PageShell title="Register" description={isPersonal ? "Add your personal agent to the NANDA Index." : "Add your organization to the NANDA Index."}>
       <StepIndicator current={step} />
 
       {/* ── Step 1: Identity ──────────────────────────────────────────────── */}
@@ -470,10 +511,10 @@ export default function NewOrgPage() {
             </div>
 
             {/* Path choice first so domain/email fields adapt immediately */}
-            <div className="space-y-2">
-              <span className="block text-xs font-medium uppercase tracking-[0.16em] text-slate-500">
+            <fieldset className="space-y-2">
+              <legend className="mb-2 block text-xs font-medium uppercase tracking-[0.16em] text-slate-500">
                 What best describes you?
-              </span>
+              </legend>
               <PathCard value="registry" selected={form.hosting_path} onSelect={patchPath}
                 title="Enterprise AI Catalog" subtitle="Teams / Orgs"
                 description="Publish an AI Catalog at a well-known endpoint under your domain." />
@@ -482,14 +523,14 @@ export default function NewOrgPage() {
                 description="Your agent is discoverable via DNS service binding (SVCB, RFC 9460). NandaIndex acts as a federated pointer." />
               <PathCard value="smb" selected={form.hosting_path} onSelect={patchPath}
                 title="SMB Agent Card" subtitle="Small Business"
-                description="You own a domain but don't run infrastructure. Host your agent card on host39.org." />
+                description="You own a domain and host an agent card at a public URL." />
               <PathCard value="personal" selected={form.hosting_path} onSelect={patchPath}
                 title="Personal Agent" subtitle="Individual"
                 description="No personally controlled domain is required. The account identity must be verifiably bound to the resolution record." />
-            </div>
+            </fieldset>
 
-            <Field label="Org ID" value={form.org_id} onChange={(v) => patch("org_id", v)}
-              onBlur={() => touch("org_id")} placeholder="moon-bakery"
+            <Field label={isPersonal ? "Handle" : "Org ID"} value={form.org_id} onChange={(v) => patch("org_id", v)}
+              onBlur={() => checkOnBlur("org_id")} placeholder={isPersonal ? "lee-agent" : "moon-bakery"}
               hint="Lowercase letters, numbers, hyphens. Permanent — cannot be changed later."
               info={ORG_FIELD_HELP.org_id} error={visible("org_id")} />
 
@@ -500,7 +541,7 @@ export default function NewOrgPage() {
             {/* Domain (all except personal) */}
             {!isPersonal && (
               <Field label="Domain" value={form.domain} onChange={(v) => patch("domain", v)}
-                onBlur={() => touch("domain")} placeholder="moonbakery.com"
+                onBlur={() => checkOnBlur("domain")} placeholder="moonbakery.com"
                 hint="Agents will be addressable under this domain."
                 info={ORG_FIELD_HELP.domain} error={visible("domain")} />
             )}
@@ -509,9 +550,11 @@ export default function NewOrgPage() {
             {isPersonal && (
               <Field label="Email Identity" value={form.identity_email} onChange={(v) => patch("identity_email", v)}
                 onBlur={() => touch("identity_email")} type="email" placeholder="john@hotmail.com"
-                hint={`We email a verification link here. Your identifier: urn:air:${PERSONAL_CARD_HOST}:personal:john@hotmail.com`}
+                hint="We email a link here to confirm this entry’s address."
                 info={ORG_FIELD_HELP.identity_email} error={visible("identity_email")} />
             )}
+
+            {isPersonal && <p className="text-sm text-amber-800">This email address will be publicly visible in your identifier.</p>}
 
             {/* Locator preview */}
             {((isPersonal && form.identity_email && !s1Errors.identity_email) ||
@@ -589,9 +632,9 @@ export default function NewOrgPage() {
                 <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3">
                   <p className="text-xs font-semibold text-sky-800">Before you continue</p>
                   <p className="mt-0.5 text-xs text-sky-700">
-                    Create your agent card on{" "}
+                    Host your agent card at a public URL, using your own provider or{" "}
                     <a href="https://host39.org" target="_blank" rel="noopener noreferrer" className="underline">host39.org</a>
-                    {" "}first, then paste the card URL below.
+                    {" "}, then paste the card URL below.
                   </p>
                 </div>
 
@@ -618,8 +661,8 @@ export default function NewOrgPage() {
 
             {/* Runtime info — SMB + Personal */}
             {isAgentCard && (
-              <div className="space-y-3 border-t border-black/5 pt-3">
-                <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">Runtime & auth <span className="font-normal normal-case tracking-normal text-slate-400">(optional)</span></p>
+              <details className="space-y-3 border-t border-black/5 pt-3">
+                <summary className="cursor-pointer text-xs font-medium text-slate-600">Advanced runtime and authentication</summary>
 
                 <div>
                   <FieldLabel htmlFor="runtime-provider" label="Runtime provider"
@@ -648,7 +691,7 @@ export default function NewOrgPage() {
                   placeholder="payment_or_session_token_required"
                   hint='What callers need to invoke this agent. E.g. "user_consent_required".'
                   info={ORG_FIELD_HELP.auth_execution} optional />
-              </div>
+              </details>
             )}
 
             <Field label="Description" value={form.description} onChange={(v) => patch("description", v)}
@@ -659,9 +702,9 @@ export default function NewOrgPage() {
               placeholder="smb, bakery, orders, a2a-agent-card"
               hint="Comma-separated labels." info={ORG_FIELD_HELP.tags} optional />
 
-            <Field label="Version" value={form.version} onChange={(v) => patch("version", v)}
+            <Field label="Version label" value={form.version} onChange={(v) => patch("version", v)}
               placeholder="v1.0.0"
-              hint="SemVer of this artifact (shown on the card)." info={ORG_FIELD_HELP.version} optional />
+              hint="Optional version label, up to 64 characters (for example, v1.0.0 or 2026-10)." info={ORG_FIELD_HELP.version} optional />
 
             {/* Advanced: identifier override */}
             <div className="border-t border-black/5 pt-3">
@@ -713,6 +756,7 @@ export default function NewOrgPage() {
                 <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400">Verification email</p>
                 <p className="mt-1 font-mono text-sm text-slate-950 break-all">{form.identity_email}</p>
                 <p className="mt-1 text-[11px] text-slate-400">Confirming this address binds it to your identifier and activates the record.</p>
+                <p className="mt-2 text-xs text-amber-800">This email address will be publicly visible in your identifier.</p>
               </div>
             ) : (
               <Field label="Contact Email" value={form.contact_email}
@@ -722,21 +766,24 @@ export default function NewOrgPage() {
                 info={ORG_FIELD_HELP.contact_email} error={visible("contact_email")} />
             )}
 
-            <div>
+            <details className="space-y-3">
+              <summary className="cursor-pointer text-xs font-medium text-slate-600">Advanced cache settings</summary>
+              <div>
               <FieldLabel htmlFor="cache-ttl" label="Cache TTL" info={ORG_FIELD_HELP.ttl_seconds} />
               <select id="cache-ttl" value={form.ttl_seconds} onChange={(e) => patch("ttl_seconds", e.target.value)}
                 className="w-full rounded-2xl border border-black/10 bg-white px-4 py-2.5 text-sm font-mono outline-none focus:ring-2 focus:ring-slate-300">
                 {TTL_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
               </select>
-              <p className="mt-1 text-[11px] text-slate-400">How long resolvers should cache your index record.</p>
-            </div>
+              <p className="mt-1 text-[11px] text-slate-400">How long resolvers should cache your index record. The default is 24 hours.</p>
+              </div>
+            </details>
 
             {/* Summary */}
             <div className="border-t border-black/5 pt-3">
               <p className="mb-2 text-xs font-medium uppercase tracking-[0.14em] text-slate-400">Summary</p>
               <dl className="divide-y divide-black/5">
                 {[
-                  { label: "Org ID", value: form.org_id },
+                  { label: isPersonal ? "Handle" : "Org ID", value: form.org_id },
                   { label: "Display Name", value: form.display_name },
                   { label: "Path", value: PATH_LABEL[form.hosting_path] },
                   { label: "Identifier", value: form.identifier || derivedIdentifier },

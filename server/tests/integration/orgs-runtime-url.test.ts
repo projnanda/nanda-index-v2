@@ -62,7 +62,7 @@ describe('Organization runtime URL validation', () => {
     await fastify.ready();
     const user = await upsertUser({
       email: 'runtime-url-test@example.com', displayName: null, avatarUrl: null,
-      provider: 'google', providerId: 'runtime-url-test-provider',
+      provider: 'google', providerId: 'runtime-url-test-provider', emailVerified: true,
     });
     token = fastify.jwt.sign({ userId: user.id, email: user.email, displayName: null });
   });
