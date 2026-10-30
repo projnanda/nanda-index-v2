@@ -6,6 +6,7 @@ import { ApiError, resolveAgent, fetchRegistryHop, fetchFactsUrl } from "@/lib/n
 import { CatalogEntryNotFound, planRegistryHop } from "@/lib/catalogHop";
 import type { ResolveResponse, CatalogEntry } from "@/lib/nanda-types";
 import { cn } from "@/lib/utils";
+import { noUrlExplanation } from "@/lib/svcbPointer";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -127,7 +128,7 @@ export default function ResolvePage() {
 
     // ── Hop 2: Registry ───────────────────────────────────────────────────
     if (!indexData.entry.url) {
-      setHop2({ status: "skipped", url: "No URL to follow — inline data or custom discovery path." });
+      setHop2({ status: "skipped", url: noUrlExplanation(indexData.entry) });
       setResolving(false);
       setLatency(Math.round(performance.now() - t0));
       return;
