@@ -2,11 +2,11 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import QueryPage from "./page";
-import { getIndexRecord, resolveAgent, searchIndexRecords } from "@/lib/nanda-api";
+import { agenticSearch, getIndexRecord, resolveAgent, searchIndexRecords } from "@/lib/nanda-api";
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("@/lib/nanda-api", async () => {
   const original = await vi.importActual<typeof import("@/lib/nanda-api")>("@/lib/nanda-api");
-  return { ...original, searchIndexRecords: vi.fn(), getIndexRecord: vi.fn(), resolveAgent: vi.fn(), fetchAgentRecord: vi.fn(), agenticSearch: vi.fn() };
+  return { ...original, searchIndexRecords: vi.fn(), getIndexRecord: vi.fn(), resolveAgent: vi.fn(), fetchRegistryHop: vi.fn(), agenticSearch: vi.fn() };
 });
 beforeEach(() => { vi.resetAllMocks(); window.history.replaceState(null, "", "/discover"); vi.mocked(searchIndexRecords).mockResolvedValue({ query: "cake", count: 0, results: [] }); });
 afterEach(cleanup);
@@ -46,4 +46,12 @@ it("can rerun the same shared query when the URL omitted its default mode", asyn
   await screen.findByText('No active organizations match "cake".');
   fireEvent.click(screen.getByRole("button", { name: "Run" }));
   await waitFor(() => expect(searchIndexRecords).toHaveBeenCalledTimes(2));
+});
+
+it("does not restore hidden agentic mode from a shared URL", async () => {
+  window.history.replaceState(null, "", "/discover?q=cake&mode=agentic");
+  render(<QueryPage />);
+  await screen.findByText('No active organizations match "cake".');
+  expect(agenticSearch).not.toHaveBeenCalled();
+  expect(screen.queryByRole("button", { name: "Agentic Search" })).toBeNull();
 });

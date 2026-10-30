@@ -2,12 +2,14 @@
 
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { PageShell } from "@/components/PageShell";
-import { ApiError, resolveAgent, fetchAgentRecord, fetchFactsUrl } from "@/lib/nanda-api";
+import { ApiError, resolveAgent, fetchRegistryHop, fetchFactsUrl } from "@/lib/nanda-api";
+import { CatalogEntryNotFound, planRegistryHop } from "@/lib/catalogHop";
 import type { ResolveResponse, CatalogEntry } from "@/lib/nanda-types";
 import { resolutionSummary, type HopStatus } from "@/lib/resolutionStatus";
 import { resolveExamples, type ExampleKind } from "@/lib/resolveExamples";
 import { isPersonalValue, LINK_PRIVACY_NOTE, navigateDiscovery, useDiscoveryLocation } from "@/lib/discoveryLocation";
 import { cn } from "@/lib/utils";
+import { noUrlExplanation } from "@/lib/svcbPointer";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -94,7 +96,7 @@ function HopCard({
 class InvalidDiscoveryResponse extends Error {}
 
 function hopError(error: unknown): string {
-  if (error instanceof InvalidDiscoveryResponse) return error.message;
+  if (error instanceof InvalidDiscoveryResponse || error instanceof CatalogEntryNotFound) return error.message;
   if (error instanceof ApiError) return `HTTP ${error.status}: ${error.message}`;
   if (error instanceof SyntaxError) return "The host returned a response that is not valid JSON.";
   return "The browser could not complete the request. Network, TLS, and cross-origin failures are not distinguishable here.";
@@ -176,35 +178,39 @@ function ResolveTrace({ initialLocator, initialExample }: { initialLocator: stri
 
     // ── Hop 2: Registry ───────────────────────────────────────────────────
     const { url: entryUrl, type: entryType } = indexData.entry;
-
     if (!entryUrl) {
-      setHop2({ status: "skipped", url: "No URL to follow — inline data or custom discovery path." });
+      setHop2({ status: "skipped", url: noUrlExplanation(indexData.entry) });
       setHop3({ status: "skipped" }); setHop4({ status: "skipped" });
       setResolving(false);
       setLatency(Math.round(performance.now() - t0));
       return;
     }
-
     const isDirectCard = entryType === "application/a2a-agent-card+json" ||
-      entryType === "application/mcp-server-card+json" ||
-      entryType === "application/agentskill+zip";
-    const h2url = isDirectCard
-      ? entryUrl
-      : `${entryUrl.replace(/\/+$/, "")}/agents/${indexData.identifier}`;
-
-    if (from <= 2) setHop2({ status: "loading", url: `GET ${h2url}` });
-
+      entryType === "application/mcp-server-card+json" || entryType === "application/agentskill+zip";
+    let h2url = entryUrl;
     let catalogEntry = hop2.data as CatalogEntry;
     if (from <= 2) try {
-      catalogEntry = await fetchAgentRecord(entryUrl, indexData.identifier, entryType);
+      h2url = planRegistryHop(indexData).steps[0]!.url;
+      setHop2({ status: "loading", url: `GET ${h2url}` });
+      const hop = await fetchRegistryHop(indexData);
       if (!current()) return;
+      if (hop.kind === "catalog") {
+        const count = hop.document.entries.length;
+        setHop2({ status: "ok", url: `GET ${hop.url}`, data: hop.document });
+        setHop3({ status: "skipped", url: `This identifier names a catalog of ${count} entr${count === 1 ? "y" : "ies"}. Resolve one of their identifiers to continue.` });
+        setHop4({ status: "skipped" });
+        setResolving(false);
+        setLatency(Math.round(performance.now() - t0));
+        return;
+      }
+      catalogEntry = hop.entry;
       if (!catalogEntry || typeof catalogEntry !== "object" || Array.isArray(catalogEntry)) {
         throw new InvalidDiscoveryResponse("The source response must be a JSON object containing a catalog entry or card.");
       }
       if (catalogEntry.url !== undefined && typeof catalogEntry.url !== "string") {
         throw new InvalidDiscoveryResponse("The source response contains an invalid card URL.");
       }
-      setHop2({ status: "ok", url: `GET ${h2url}`, data: catalogEntry });
+      setHop2({ status: "ok", url: `GET ${hop.url}`, data: catalogEntry });
     } catch (err) {
       if (!current()) return;
       setHop2({ status: "error", url: h2url, error: hopError(err) });
