@@ -257,7 +257,7 @@ export default function OrgDetailPage() {
         {org.domain && <DomainVerification key={org.domain} org={org} onVerified={setOrg} />}
 
         {editing ? (
-          <div className="rounded-3xl border border-black/10 bg-white p-5 shadow-sm space-y-4">
+          <fieldset disabled={saving} className="min-w-0 rounded-3xl border border-black/10 bg-white p-5 shadow-sm space-y-4">
             <div>
               <FieldLabel htmlFor={`${fid}-display-name`} label="Display Name" info={ORG_FIELD_HELP.display_name} />
               <input id={`${fid}-display-name`} {...fieldProps("display_name")} value={displayName} onChange={(e) => { setDisplayName(e.target.value); clearFieldError("display_name"); }} className={inputCls} />
@@ -319,7 +319,7 @@ export default function OrgDetailPage() {
                 Cancel
               </button>
             </div>
-          </div>
+          </fieldset>
         ) : (
           <div className="rounded-3xl border border-black/10 bg-white p-5 shadow-sm space-y-3">
             <div className="flex items-center justify-between">
