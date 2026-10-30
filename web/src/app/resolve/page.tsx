@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { PageShell } from "@/components/PageShell";
-import { ApiError, resolveAgent, fetchAgentRecord, fetchFactsUrl } from "@/lib/nanda-api";
+import { ApiError, resolveAgent, fetchRegistryHop, fetchFactsUrl } from "@/lib/nanda-api";
+import { CatalogEntryNotFound, planRegistryHop } from "@/lib/catalogHop";
 import type { ResolveResponse, CatalogEntry } from "@/lib/nanda-types";
 import { cn } from "@/lib/utils";
 
@@ -125,30 +126,34 @@ export default function ResolvePage() {
     }
 
     // ── Hop 2: Registry ───────────────────────────────────────────────────
-    const { url: entryUrl, type: entryType } = indexData.entry;
-
-    if (!entryUrl) {
+    if (!indexData.entry.url) {
       setHop2({ status: "skipped", url: "No URL to follow — inline data or custom discovery path." });
       setResolving(false);
       setLatency(Math.round(performance.now() - t0));
       return;
     }
 
-    const isDirectCard = entryType === "application/a2a-agent-card+json" ||
-      entryType === "application/mcp-server-card+json" ||
-      entryType === "application/agentskill+zip";
-    const h2url = isDirectCard
-      ? entryUrl
-      : `${entryUrl.replace(/\/+$/, "")}/agents/${indexData.identifier}`;
-
+    const h2url = planRegistryHop(indexData).steps[0]!.url;
     setHop2({ status: "loading", url: `GET ${h2url}` });
 
     let catalogEntry: CatalogEntry;
     try {
-      catalogEntry = await fetchAgentRecord(entryUrl, indexData.identifier, entryType);
-      setHop2({ status: "ok", url: `GET ${h2url}`, data: catalogEntry });
+      const hop = await fetchRegistryHop(indexData);
+      if (hop.kind === "catalog") {
+        // The identifier names the catalog itself: its entries are the result.
+        const count = hop.document.entries.length;
+        setHop2({ status: "ok", url: `GET ${hop.url}`, data: hop.document });
+        setHop3({ status: "skipped",
+          url: `This identifier names a catalog of ${count} entr${count === 1 ? "y" : "ies"}. Resolve one of their identifiers to continue.` });
+        setResolving(false);
+        setLatency(Math.round(performance.now() - t0));
+        return;
+      }
+      catalogEntry = hop.entry;
+      setHop2({ status: "ok", url: `GET ${hop.url}`, data: catalogEntry });
     } catch (err) {
-      setHop2({ status: "error", url: h2url, error: err instanceof ApiError ? err.message : "Registry unreachable." });
+      setHop2({ status: "error", url: h2url,
+        error: err instanceof ApiError || err instanceof CatalogEntryNotFound ? err.message : "Registry unreachable." });
       setResolving(false);
       setLatency(Math.round(performance.now() - t0));
       return;
