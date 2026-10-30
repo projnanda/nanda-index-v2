@@ -81,7 +81,7 @@ export TOKEN="eyJ..."`,
   },
   {
     title: "Register an entry",
-    body: "Required: org_id, display_name, contact_email and registry_url (https). hosting_path is registry (default), dns-svcb, smb or personal; every path except personal needs a domain, and personal must not send one. The server derives the identifier, media type and publisher from the path and domain. The entry starts as pending.",
+    body: "Required: org_id, display_name, contact_email and registry_url (HTTP or HTTPS; use HTTPS). hosting_path is registry (default), dns-svcb, smb or personal; every path except personal needs a domain, and personal must not send one. The server derives the identifier, media type and publisher from the path and domain. A personal entry has no domain: its identifier is urn:air:host39.org:personal:<contact email, lowercased>, so that email is public once the entry is live. The entry starts as pending.",
     command: (api: string) => `curl -X POST "${api}/api/v1/orgs" -H "Authorization: Bearer $TOKEN" \\
   -H "Content-Type: application/json" -d '{
     "org_id": "acme", "display_name": "Acme Corp", "hosting_path": "registry",
@@ -127,7 +127,7 @@ const RATE_LIMITS = [
   { routes: "Public reads: /api/v1/index, /api/v1/index/:org_id, /api/v1/search, /api/v1/resolve, ARD listings", limit: "120 requests per minute per IP address" },
   { routes: "Agentic search: /api/v1/agentic-search, /api/ard/search", limit: "30 requests per minute per IP address" },
   { routes: "Account routes: /auth/register, /auth/login, password reset, account verification, resend", limit: "10 requests per minute per IP address; sign-in locks for 15 minutes after 5 failed attempts for one email from one network, doubling on further failures" },
-  { routes: "Entry writes: POST /api/v1/orgs, PUT /api/v1/orgs/:org_id, POST /api/v1/orgs/:org_id/claim", limit: "30 requests per hour per IP address" },
+  { routes: "Entry writes: POST /api/v1/orgs, PUT /api/v1/orgs/:org_id, POST /api/v1/orgs/:org_id/claim", limit: "30 requests per hour per IP address; claim also has a 30 per hour budget per account across all IP addresses" },
 ];
 
 const ERROR_CODES = [
@@ -144,10 +144,10 @@ const ERROR_CODES = [
   { status: 401, code: "UNAUTHORIZED", meaning: "No valid session token, or the session was revoked; sign in again." },
   { status: 403, code: "ACCOUNT_NOT_VERIFIED", meaning: "Confirm your account email before writing to the index." },
   { status: 403, code: "FORBIDDEN", meaning: "You are not an admin of that entry." },
-  { status: 403, code: "MODERATED", meaning: "An index operator took the entry down; it cannot be changed by its owner." },
+  { status: 403, code: "MODERATED", meaning: "An index operator took the entry down; it cannot be suspended or reactivated by its owner (edits and deletion still work)." },
   { status: 404, code: "NOT_FOUND", meaning: "No such entry, or it is not live (index reads), or the token was not found (verify-email)." },
   { status: 404, code: "not_found", meaning: "Resolve found no live entry for the locator." },
-  { status: 409, code: "CONFLICT", meaning: "The email, org_id, domain or identity is already taken by a verified registration." },
+  { status: 409, code: "CONFLICT", meaning: "Already taken: the account email, an org_id held by another registration (an unverified holder releases it after 48 hours), or a domain or personal identity that another registration has already proven." },
   { status: 409, code: "ALREADY_VERIFIED", meaning: "The contact email is already verified." },
   { status: 409, code: "NOT_SUSPENDED", meaning: "Only a suspended entry can be reactivated." },
   { status: 422, code: "query_too_short", meaning: "Search needs at least 2 non-space characters." },
@@ -228,9 +228,12 @@ export default function DevelopersPage() {
         <section aria-labelledby="dev-limits" className="space-y-3">
           <h2 id="dev-limits" className={h2Class}>Rate limits</h2>
           <p>
-            Defaults for this index; an operator can change them. Over the limit, the API answers 429 with a
-            Retry-After header and X-RateLimit-Limit, X-RateLimit-Remaining and X-RateLimit-Reset headers; the
-            body&apos;s error text says how many seconds to wait. Request bodies are capped at 64 KB (413).
+            Defaults for this index; an operator can change them. Over a route limit, the API answers 429 with a
+            Retry-After header (seconds) and X-RateLimit-Limit, X-RateLimit-Remaining and X-RateLimit-Reset
+            headers; the body&apos;s error text says how long to wait, for example &quot;retry in 1 minute&quot;.
+            The 429 codes below that the application raises itself (TOO_MANY_ATTEMPTS, TOO_MANY_UNVERIFIED,
+            RESEND_COOLDOWN) carry no Retry-After header; the claim route&apos;s per-account limit does. Request
+            bodies are capped at 64 KB (413).
           </p>
           <table className="w-full border-collapse text-left">
             <thead>
