@@ -10,6 +10,9 @@ Requester → NANDA Index → Registry / Agent Card Host → Agent Runtime
 
 NANDA Index does not host agents. It tells you where to find them.
 
+The proposed [ownership and signed resolution contract](server/TRUST_CONTRACT.md)
+defines proof freshness, pointer validity, and acceptance tests for #61 and #92.
+
 A worked example of the whole chain lives in [`demo/`](demo/): an agent that
 searches the index for two organisations, follows each to the agent it needs by a
 different route, books a restaurant, and leaves a signed record. MIT-licensed,
