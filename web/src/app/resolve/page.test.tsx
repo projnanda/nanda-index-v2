@@ -11,7 +11,7 @@ vi.mock("@/lib/nanda-api", async () => {
 const identifier = "urn:air:example.org:agent:demo";
 const index = { locator: identifier, publisher: "example.org", namespace: ["agent"], identifier: "demo", match: "publisher" as const, entry: { identifier, displayName: "Example", type: "application/ai-catalog+json", url: "https://example.org", tags: [], updatedAt: "2026-01-01", extensions: {} } };
 beforeEach(() => { vi.resetAllMocks(); vi.mocked(resolveAgent).mockResolvedValue(index); vi.mocked(fetchAgentRecord).mockResolvedValue({ identifier, displayName: "Example", mediaType: "application/a2a-agent-card+json", url: "https://example.org/card.json" }); });
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 async function submit() {
   render(<ResolvePage />);
   fireEvent.change(screen.getByPlaceholderText("urn:air:regentix.ai:agent:regentix-ceo"), { target: { value: identifier } });
@@ -51,4 +51,18 @@ it("retries the index for the original identifier even after editing the input",
   fireEvent.click(retry);
   await screen.findByText(/Index, source and card fetched/);
   expect(resolveAgent).toHaveBeenNthCalledWith(2, identifier);
+});
+it("keeps a non-JSON HTTP runtime error classified by its HTTP status", async () => {
+  vi.mocked(fetchFactsUrl).mockResolvedValue({ url: "https://example.org/runtime" });
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("maintenance", { status: 503 })));
+  await submit();
+  fireEvent.click(await screen.findByRole("button", { name: "Send" }));
+  expect(await screen.findByText(/HTTP 503/)).toBeTruthy();
+  vi.unstubAllGlobals();
+});
+it("reports malformed source data and offers a retry instead of leaving the trace stuck", async () => {
+  vi.mocked(fetchAgentRecord).mockResolvedValue(null as never);
+  await submit();
+  expect(await screen.findByText(/source response must be a JSON object/)).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Retry Agent Source" }).hasAttribute("disabled")).toBe(false);
 });

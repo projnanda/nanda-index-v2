@@ -89,7 +89,10 @@ function HopCard({
   );
 }
 
+class InvalidDiscoveryResponse extends Error {}
+
 function hopError(error: unknown): string {
+  if (error instanceof InvalidDiscoveryResponse) return error.message;
   if (error instanceof ApiError) return `HTTP ${error.status}: ${error.message}`;
   if (error instanceof SyntaxError) return "The host returned a response that is not valid JSON.";
   return "The browser could not complete the request. Network, TLS, and cross-origin failures are not distinguishable here.";
@@ -177,6 +180,12 @@ export default function ResolvePage() {
     if (from <= 2) try {
       catalogEntry = await fetchAgentRecord(entryUrl, indexData.identifier, entryType);
       if (!current()) return;
+      if (!catalogEntry || typeof catalogEntry !== "object" || Array.isArray(catalogEntry)) {
+        throw new InvalidDiscoveryResponse("The source response must be a JSON object containing a catalog entry or card.");
+      }
+      if (catalogEntry.url !== undefined && typeof catalogEntry.url !== "string") {
+        throw new InvalidDiscoveryResponse("The source response contains an invalid card URL.");
+      }
       setHop2({ status: "ok", url: `GET ${h2url}`, data: catalogEntry });
     } catch (err) {
       if (!current()) return;
@@ -245,8 +254,8 @@ export default function ResolvePage() {
           message: { role: "user", parts: [{ text: taskInput }] },
         }),
       });
+      if (!res.ok) throw new ApiError(`Agent returned ${res.status}`, res.status);
       const data = await res.json();
-      if (!res.ok) throw new ApiError(`Agent returned ${res.status}`, res.status, data);
       if (run !== generation.current) return;
       setHop4({ status: "ok", url: `POST ${agentRunUrl}`, data });
     } catch (err) {
