@@ -38,30 +38,44 @@ const RESOLUTION_FLOW_STEPS = [
   "Standard discovery, verification, and invocation proceed.",
 ];
 
+// "goLive" states what the index requires before an entry is published. It
+// follows the server: an entry with a domain is hidden until the domain is
+// proven with a DNS TXT record (email confirmation alone does not publish
+// it); a personal entry has no domain and is published once its email is
+// confirmed. See isProven in server/src/db/queries/organizations.ts and the
+// verify-domain and verify-email handlers.
 const CONTEXTS = [
   {
     id: "enterprise-ai-catalog",
     title: "Enterprise AI Catalog",
     description:
       "For enterprises that publish AI Catalog at a well-known endpoint and own the domain, direct resolution already works. NandaIndex is not in the critical path. A NandaIndex entry remains useful for fallback, federation visibility, migration, and anti-squatting.",
+    goLive:
+      "Prove you control the domain by adding the DNS TXT record shown on your org page. Until that record is found, the entry stays pending and hidden from the public index. Confirm your contact email too, so the index can reach you.",
   },
   {
     id: "dns-svcb",
     title: "Enterprise DNS-based service discovery",
     description:
       "SkyBlue uses DNS-based service discovery via SVCB. NandaIndex makes this DNS-based discovery path reachable from the global switchboard while representing the target using a recognized A2A Agent Card type.",
+    goLive:
+      "Prove you control the domain by adding the ownership DNS TXT record shown on your org page; it is separate from the SVCB records that point resolvers at your agent. Until it is found, the entry stays pending and hidden from the public index. Confirm your contact email too, so the index can reach you.",
   },
   {
     id: "smb-agent-card",
     title: "SMB: Moon Bakery",
     description:
       "Moon Bakery owns moonbakery.com but runs no enterprise infrastructure. Its runtime, agent card, and domain are with three separate providers. Moon Bakery needs only a stable resource identifier and a delegated path. NandaIndex can provide a resolution entry point for SMBs.",
+    goLive:
+      "Prove you control the domain by adding the DNS TXT record shown on your org page. No agent-discovery DNS records, gateway, or catalog server are needed, but this one ownership record is: until it is found, the entry stays pending and hidden from the public index. Confirm your contact email too, so the index can reach you.",
   },
   {
     id: "personal-agent",
     title: "Individual: john@hotmail.com",
     description:
       "John has no domain. His runtime is on Azure; his agent card is with a third-party host. No personally controlled domain is required. NandaIndex enables identity-first discovery for individuals, when the underlying account identity is verifiably bound to the resolution record.",
+    goLive:
+      "Confirm the email address the entry is registered with. No domain and no DNS record are needed.",
   },
 ];
 
@@ -130,6 +144,10 @@ export default function HowItWorksPage() {
           <section key={context.id} id={context.id} className="scroll-mt-24">
             <h3 className="mt-6 font-semibold text-ink-strong">{context.title}</h3>
             <p className="mt-1 text-sm leading-relaxed text-ink-medium">{context.description}</p>
+            <p className="mt-2 text-sm leading-relaxed text-ink-medium">
+              <span className="font-semibold text-ink-strong">To go live: </span>
+              {context.goLive}
+            </p>
           </section>
         ))}
       </section>
