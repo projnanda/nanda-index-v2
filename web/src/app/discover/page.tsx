@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageShell } from "@/components/PageShell";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -9,6 +9,7 @@ import { TableEmptyState } from "@/components/TableEmptyState";
 import { AgentCandidateCard } from "@/components/AgentCandidateCard";
 import { ApiError, getIndexRecord, searchIndexRecords, resolveAgent, fetchAgentRecord, agenticSearch } from "@/lib/nanda-api";
 import type { IndexRecord, IndexCatalogEntry, SearchResponse, ResolveResponse, CatalogEntry, AgenticSearchResponse } from "@/lib/nanda-types";
+import { isPersonalValue, LINK_PRIVACY_NOTE, navigateDiscovery, useDiscoveryLocation } from "@/lib/discoveryLocation";
 import { entryOps } from "@/lib/air";
 
 // urn:air:<publisher-FQDN>:<namespace...>:<short-name>
@@ -77,66 +78,70 @@ function IndexRecordCard({ org }: { org: IndexRecord }) {
   );
 }
 
+async function executeQuery(q: string, mode: Mode, current: () => boolean): Promise<QueryResult | null> {
+  if (URN_RE.test(q)) {
+    const indexData = await resolveAgent(q);
+    if (!current()) return null;
+    let agent = null;
+    let agentError: string | undefined;
+    if (!indexData.entry.url) {
+      agentError = "This entry has no URL to follow (inline data or custom discovery).";
+    } else {
+      try {
+        agent = await fetchAgentRecord(indexData.entry.url, indexData.identifier, indexData.entry.type);
+      } catch (err) {
+        agentError = err instanceof ApiError ? `Registry returned ${err.status}: ${err.message}` : "Could not reach the registry server.";
+      }
+    }
+    return { kind: "resolve", resolve: indexData, agent, agentError };
+  }
+  if (mode === "org_id") return { kind: "single", single: await getIndexRecord(q) };
+  if (mode === "agentic") return { kind: "agentic", agentic: await agenticSearch(q) };
+  return { kind: "search", search: await searchIndexRecords(q) };
+}
+
 export default function QueryPage() {
-  const [mode, setMode] = useState<Mode>("agentic");
-  const [query, setQuery] = useState("");
+  const { state } = useDiscoveryLocation();
+  const query = (state.locator ?? state.q ?? "").trim();
+  const mode: Mode = state.mode === "org_id" || state.mode === "agentic" ? state.mode : "search";
+  // A history navigation gets fresh local form/result state. The old request's
+  // effect cleanup prevents its response from appearing in the new view.
+  return <QueryView key={JSON.stringify([query, mode])} initialQuery={query} initialMode={mode} />;
+}
+
+function QueryView({ initialQuery, initialMode }: { initialQuery: string; initialMode: Mode }) {
+  const [mode, setMode] = useState<Mode>(initialMode);
+  const [query, setQuery] = useState(initialQuery);
   const [result, setResult] = useState<QueryResult | null>(null);
   const [latency, setLatency] = useState<number | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(!!initialQuery);
   const [error, setError] = useState<string | null>(null);
-
-  // Detect whether input looks like a URN, which affects the placeholder and routing
+  const [attempt, setAttempt] = useState(0);
   const isUrn = URN_RE.test(query.trim());
 
-  async function runQuery(e: React.FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    if (!initialQuery) return;
+    let active = true;
+    const started = performance.now();
+    executeQuery(initialQuery, initialMode, () => active)
+      .then((value) => { if (active) setResult(value); })
+      .catch((err: unknown) => {
+        if (active) setError(err instanceof ApiError ? `${err.status}: ${err.message}` : "Query failed. Check your input and try again.");
+      })
+      .finally(() => {
+        if (active) { setLatency(Math.round(performance.now() - started)); setLoading(false); }
+      });
+    return () => { active = false; };
+  }, [initialQuery, initialMode, attempt]);
+
+  function runQuery(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const q = query.trim();
     if (!q) return;
-
-    setLoading(true);
-    setError(null);
-    setResult(null);
-    const t0 = performance.now();
-
-    try {
-      // URN input: hop 1 resolves via NANDA Index, hop 2 fetches the agent from the registry
-      if (URN_RE.test(q)) {
-        const indexData = await resolveAgent(q);
-        let agent = null;
-        let agentError: string | undefined;
-        if (!indexData.entry.url) {
-          agentError = "This entry has no URL to follow (inline data or custom discovery).";
-        } else {
-          try {
-            agent = await fetchAgentRecord(
-              indexData.entry.url,
-              indexData.identifier,
-              indexData.entry.type,
-            );
-          } catch (err) {
-            agentError = err instanceof ApiError
-              ? `Registry returned ${err.status}: ${err.message}`
-              : "Could not reach the registry server.";
-          }
-        }
-        setResult({ kind: "resolve", resolve: indexData, agent, agentError });
-      } else if (mode === "org_id") {
-        const data = await getIndexRecord(q);
-        setResult({ kind: "single", single: data });
-      } else if (mode === "agentic") {
-        const data = await agenticSearch(q);
-        setResult({ kind: "agentic", agentic: data });
-      } else {
-        const data = await searchIndexRecords(q);
-        setResult({ kind: "search", search: data });
-      }
-      setLatency(Math.round(performance.now() - t0));
-    } catch (err) {
-      if (err instanceof ApiError) setError(`${err.status}: ${err.message}`);
-      else setError("Query failed. Check your input and try again.");
-      setLatency(Math.round(performance.now() - t0));
-    } finally {
-      setLoading(false);
+    navigateDiscovery({ q: URN_RE.test(q) ? "" : q, locator: URN_RE.test(q) ? q : "", mode });
+    if (q === initialQuery && mode === initialMode) {
+      setLoading(true); setError(null); setResult(null); setLatency(null);
+      setAttempt((value) => value + 1);
     }
   }
 
@@ -186,6 +191,7 @@ export default function QueryPage() {
 
         <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
           <input
+            aria-label="Discovery query"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={placeholder}
@@ -205,6 +211,7 @@ export default function QueryPage() {
         )}
       </form>
 
+      {isPersonalValue(initialQuery) && <p className="mt-4 text-xs text-slate-600">{LINK_PRIVACY_NOTE}</p>}
       <div className="mt-6 space-y-4">
         {error && (
           <div className="rounded-3xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">

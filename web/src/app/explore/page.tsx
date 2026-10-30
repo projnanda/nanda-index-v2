@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { listIndexRecords } from "@/lib/nanda-api";
+import { discoveryLink, isPersonalValue, LINK_PRIVACY_NOTE, navigateDiscovery, pageNumber, selectedValues, useDiscoveryLocation } from "@/lib/discoveryLocation";
 import { JsonPanel } from "@/components/JsonPanel";
 import { PageShell } from "@/components/PageShell";
 import type { IndexCatalogEntry, TrustManifest } from "@/lib/nanda-types";
@@ -65,16 +66,15 @@ export default function ExplorePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [search, setSearch] = useState("");
-  const [ownerFilters, setOwnerFilters] = useState<Set<Owner>>(new Set());
-  const [protocolFilters, setProtocolFilters] = useState<Set<Protocol>>(new Set());
-  const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState<IndexCatalogEntry | null>(null);
+  const { state } = useDiscoveryLocation();
+  const search = state.q ?? "";
+  const ownerFilters = useMemo(() => selectedValues(state.owner, OWNER_LABELS), [state.owner]);
+  const protocolFilters = useMemo(() => selectedValues(state.protocol, PROTOCOL_LABELS), [state.protocol]);
+  const page = pageNumber(state.page);
+  const selected = rows.find((row) => row.identifier === state.entry)?.record ?? null;
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
     listIndexRecords()
       .then((data) => {
         if (cancelled) return;
@@ -92,14 +92,10 @@ export default function ExplorePage() {
     };
   }, []);
 
-  function toggleFacet<T extends string>(value: T, setter: React.Dispatch<React.SetStateAction<Set<T>>>) {
-    setter((previous) => {
-      const next = new Set(previous);
-      if (next.has(value)) next.delete(value);
-      else next.add(value);
-      return next;
-    });
-    setPage(1);
+  function toggleFacet(key: "owner" | "protocol", value: string, previous: ReadonlySet<string>) {
+    const next = new Set(previous);
+    if (next.has(value)) next.delete(value); else next.add(value);
+    navigateDiscovery({ [key]: [...next].sort().join(","), page: "" });
   }
 
   const filtered = useMemo(() => {
@@ -142,21 +138,13 @@ export default function ExplorePage() {
       <div className="flex flex-col lg:flex-row gap-6">
         <FilterSidebar
           search={search}
-          onSearchChange={(v) => {
-            setSearch(v);
-            setPage(1);
-          }}
+          onSearchChange={(q) => navigateDiscovery({ q, page: "" }, true)}
           rows={rows}
           ownerFilters={ownerFilters}
           protocolFilters={protocolFilters}
-          onToggleOwner={(value) => toggleFacet(value, setOwnerFilters)}
-          onToggleProtocol={(value) => toggleFacet(value, setProtocolFilters)}
-          onClear={() => {
-            setOwnerFilters(new Set());
-            setProtocolFilters(new Set());
-            setSearch("");
-            setPage(1);
-          }}
+          onToggleOwner={(value) => toggleFacet("owner", value, ownerFilters)}
+          onToggleProtocol={(value) => toggleFacet("protocol", value, protocolFilters)}
+          onClear={() => navigateDiscovery({ owner: "", protocol: "", q: "", page: "" })}
         />
 
         <div className="flex-1 min-w-0">
@@ -197,7 +185,7 @@ export default function ExplorePage() {
                   <RegistryCard
                     key={item.record.identifier}
                     item={item}
-                    onSelect={() => setSelected(item.record)}
+                    onSelect={() => navigateDiscovery({ entry: item.identifier })}
                   />
                 ))}
               </div>
@@ -205,16 +193,18 @@ export default function ExplorePage() {
               <Pagination
                 page={currentPage}
                 total={totalPages}
-                onPrev={() => setPage((p) => Math.max(1, p - 1))}
-                onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
-                onGoto={(p) => setPage(p)}
+                onPrev={() => navigateDiscovery({ page: String(Math.max(1, currentPage - 1)) })}
+                onNext={() => navigateDiscovery({ page: String(Math.min(totalPages, currentPage + 1)) })}
+                onGoto={(p) => navigateDiscovery({ page: String(p) })}
               />
             </>
           )}
         </div>
       </div>
 
-      <DetailDrawer record={selected} onClose={() => setSelected(null)} />
+      {(isPersonalValue(search) || isPersonalValue(state.entry ?? "")) && <p className="mt-4 text-xs text-ink-medium">{LINK_PRIVACY_NOTE}</p>}
+      {!loading && !error && state.entry && !selected && <p role="status" className="mt-4 text-sm text-ink-medium">This shared entry is not available in the index.</p>}
+      <DetailDrawer record={selected} onClose={() => navigateDiscovery({ entry: "" })} />
     </PageShell>
   );
 }
@@ -422,6 +412,8 @@ function DetailDrawer({ record, onClose }: { record: IndexCatalogEntry | null; o
             </div>
 
             <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+              <a href={discoveryLink("/resolve", { urn: record.identifier })} className="inline-block rounded-control bg-brand-600 px-3 py-2 text-sm font-medium text-white">Resolve this identifier</a>
+              {isPersonalValue(record.identifier) && <p className="text-xs text-ink-medium">{LINK_PRIVACY_NOTE}</p>}
               <div className="bg-surface-light rounded-card border border-line p-5 shadow-card">
                 {entryOps(record).domain && (
                   <p className="text-sm text-ink-medium break-all">{entryOps(record).domain}</p>
