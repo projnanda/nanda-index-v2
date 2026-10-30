@@ -2,7 +2,7 @@
 
 import { formatTimestamp } from "@/lib/formatTimestamp";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { OrgActionDialog, type OrgAction } from "@/components/OrgActionDialog";
 import { FieldLabel } from "@/components/FieldLabel";
@@ -49,6 +49,9 @@ export default function OrgDetailPage() {
   const [resending, setResending] = useState(false);
   const [resent, setResent] = useState(false);
   const [action, setAction] = useState<OrgAction | null>(null);
+  const actionInFlight = useRef(false);
+  const actionSucceeded = useRef(false);
+  const actionFocusTarget = useRef<HTMLHeadingElement>(null);
 
   const [displayName, setDisplayName] = useState("");
   const [registryUrl, setRegistryUrl] = useState("");
@@ -56,6 +59,14 @@ export default function OrgDetailPage() {
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState("");
   const [version, setVersion] = useState("");
+
+  useEffect(() => {
+    if (action === null && actionSucceeded.current) {
+      // The status change may remove the opener, so use a stable page target.
+      actionFocusTarget.current?.focus();
+      actionSucceeded.current = false;
+    }
+  }, [action]);
 
   useEffect(() => {
     let cancelled = false;
@@ -124,36 +135,46 @@ export default function OrgDetailPage() {
   }
 
   async function onSuspend() {
+    if (actionInFlight.current) return;
+    actionInFlight.current = true;
     setError(null);
     setSuspending(true);
     try {
       const updated = await suspendOrg(orgId);
+      actionSucceeded.current = true;
       setOrg(updated);
       setAction(null);
     } catch (err) {
       if (err instanceof ApiError) setError(`${err.status}: ${err.message}`);
       else setError(`Unexpected error: ${String(err)}`);
     } finally {
+      actionInFlight.current = false;
       setSuspending(false);
     }
   }
 
   async function onReactivate() {
+    if (actionInFlight.current) return;
+    actionInFlight.current = true;
     setError(null);
     setReactivating(true);
     try {
       const updated = await reactivateOrg(orgId);
+      actionSucceeded.current = true;
       setOrg(updated);
       setAction(null);
     } catch (err) {
       if (err instanceof ApiError) setError(`${err.status}: ${err.message}`);
       else setError(`Unexpected error: ${String(err)}`);
     } finally {
+      actionInFlight.current = false;
       setReactivating(false);
     }
   }
 
   async function onDelete() {
+    if (actionInFlight.current) return;
+    actionInFlight.current = true;
     setError(null);
     setDeleting(true);
     try {
@@ -164,6 +185,7 @@ export default function OrgDetailPage() {
       if (err instanceof ApiError) setError(`${err.status}: ${err.message}`);
       else setError(`Unexpected error: ${String(err)}`);
     } finally {
+      actionInFlight.current = false;
       setDeleting(false);
     }
   }
@@ -309,13 +331,13 @@ export default function OrgDetailPage() {
 
         {action && <OrgActionDialog action={action} orgId={orgId} domain={org.domain}
           busy={suspending || reactivating || deleting} error={error}
-          onCancel={() => { setAction(null); setError(null); }}
+          onCancel={() => { if (!actionInFlight.current) { setAction(null); setError(null); } }}
           onConfirm={action === "suspend" ? onSuspend : action === "reactivate" ? onReactivate : onDelete} />}
 
         <JsonPanel data={org} />
 
         <div className="rounded-3xl border border-rose-100 bg-rose-50 p-5 space-y-3">
-          <h3 className="text-sm font-semibold text-rose-800">Danger Zone</h3>
+          <h3 ref={actionFocusTarget} tabIndex={-1} className="text-sm font-semibold text-rose-800">Danger Zone</h3>
           {org.status === "suspended" ? (
             <div className="flex items-center justify-between">
               <p className="text-sm text-rose-700">This organization is suspended and hidden from the public index.</p>
