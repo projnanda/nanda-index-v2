@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { RegistrationBoundary } from "@/components/RegistrationBoundary";
 import { FieldLabel } from "@/components/FieldLabel";
 import { cardManagement } from "@/lib/cardManagement";
 import { PageShell } from "@/components/PageShell";
@@ -339,6 +340,10 @@ function SuccessScreen({ record, path }: { record: IndexRecord; path: HostingPat
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function NewOrgPage() {
+  return <RegistrationBoundary><RegistrationWizard /></RegistrationBoundary>;
+}
+
+function RegistrationWizard() {
   useRequireAuth();
   const router = useRouter();
   const [form, setForm] = useState<FormState>(EMPTY);
@@ -351,7 +356,7 @@ export default function NewOrgPage() {
   const [taken, setTaken] = useState<Record<string, string>>({});
   const [apiError, setApiError] = useState<string | null>(null);
   const [needsAccountVerification, setNeedsAccountVerification] = useState(false);
-  const [created, setCreated] = useState<IndexRecord | null>(null);
+  const [created, setCreated] = useState<{ record: IndexRecord; orgId: string; path: HostingPath } | null>(null);
 
   const patch = (key: keyof FormState, val: string) => {
     setForm((f) => ({ ...f, [key]: val }));
@@ -441,7 +446,7 @@ export default function NewOrgPage() {
         version: form.version || undefined,
         extensions,
       });
-      setCreated(record);
+      setCreated({ record, orgId: form.org_id, path: form.hosting_path });
     } catch (err) {
       setNeedsAccountVerification(isAccountNotVerified(err));
       setApiError(err instanceof ApiError ? err.message : "Registration failed.");
@@ -452,9 +457,11 @@ export default function NewOrgPage() {
 
   if (created) {
     return (
-      <PageShell title="Registered" description="">
-        <SuccessScreen record={created} path={form.hosting_path} />
-      </PageShell>
+      <RegistrationBoundary savedOrgId={created.orgId}>
+        <PageShell title="Registered" description="">
+          <SuccessScreen record={created.record} path={created.path} />
+        </PageShell>
+      </RegistrationBoundary>
     );
   }
 
