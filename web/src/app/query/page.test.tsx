@@ -6,7 +6,7 @@ import { getIndexRecord, resolveAgent, searchIndexRecords } from "@/lib/nanda-ap
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("@/lib/nanda-api", async () => {
   const original = await vi.importActual<typeof import("@/lib/nanda-api")>("@/lib/nanda-api");
-  return { ...original, searchIndexRecords: vi.fn(), getIndexRecord: vi.fn(), resolveAgent: vi.fn(), fetchAgentRecord: vi.fn(), agenticSearch: vi.fn() };
+  return { ...original, searchIndexRecords: vi.fn(), getIndexRecord: vi.fn(), resolveAgent: vi.fn(), fetchRegistryHop: vi.fn(), agenticSearch: vi.fn() };
 });
 beforeEach(() => { vi.resetAllMocks(); window.history.replaceState(null, "", "/discover"); vi.mocked(searchIndexRecords).mockResolvedValue({ query: "cake", count: 0, results: [] }); });
 afterEach(cleanup);

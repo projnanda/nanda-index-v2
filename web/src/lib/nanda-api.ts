@@ -1,8 +1,8 @@
 import { getAuthToken } from "./auth";
+import { resolveRegistryHop, type RegistryHop } from "./catalogHop";
 import type {
   IndexRecord,
   IndexCatalogEntry,
-  CatalogEntry,
   ResolveResponse,
   SearchResponse,
   AgenticSearchResponse,
@@ -140,30 +140,19 @@ export async function resolveAgent(locator: string): Promise<ResolveResponse> {
   return request<ResolveResponse>(`/api/v1/resolve?locator=${encodeURIComponent(locator)}`);
 }
 
-/**
- * Fetch an agent card for hop 2.
- *
- * - If mediaType is 'application/a2a-agent-card+json', registryUrl IS the card —
- *   fetch it directly.
- * - Otherwise (ai-catalog registry), append /agents/<agentId> to the base URL.
- */
-export async function fetchAgentRecord(
-  registryUrl: string,
-  agentId: string,
-  mediaType?: string,
-): Promise<CatalogEntry> {
-  const isDirectCard = mediaType === "application/a2a-agent-card+json" ||
-    mediaType === "application/mcp-server-card+json" ||
-    mediaType === "application/agentskill+zip";
-  const url = isDirectCard
-    ? registryUrl
-    : `${registryUrl.replace(/\/+$/, "")}/agents/${encodeURIComponent(agentId)}`;
+/** GET a publisher-hosted JSON document (card, catalog or registry API) for hop 2. */
+async function fetchRemoteJson(url: string): Promise<unknown> {
   const res = await fetch(url, {
     headers: { Accept: "application/json" },
     cache: "no-store",
   });
-  if (!res.ok) return parseApiResponse<CatalogEntry>(res);
-  return res.json() as Promise<CatalogEntry>;
+  if (!res.ok) return parseApiResponse<unknown>(res);
+  return res.json();
+}
+
+/** Follow the index result to a direct resource, static catalog or registry API. */
+export function fetchRegistryHop(resolved: ResolveResponse): Promise<RegistryHop> {
+  return resolveRegistryHop(resolved, fetchRemoteJson);
 }
 
 /** GET /auth/providers — which OAuth providers are configured on the server. */
