@@ -91,8 +91,9 @@ export default function PrivacyPage() {
           </h2>
           <p>
             Your account and the entries you register are kept until they are deleted. One exception:
-            an entry that has not yet proven its domain or email does not reserve them, so it is removed
-            if someone else proves the same domain or email first.
+            an entry whose ownership is not yet proven does not reserve its domain or its personal
+            identifier, so it is removed if someone else proves the same domain or personal identifier
+            first.
           </p>
           <p className="mt-3">
             You can delete an entry at any time from its page in the dashboard. Deleting an entry
