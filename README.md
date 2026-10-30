@@ -279,7 +279,7 @@ interface IndexRecord {
 | ARD directory | `urn:air:<domain>:registry:<name>` | `urn:air:acme.com:registry:ard` |
 | Personal | `urn:air:host39.org:personal:<email>` | `urn:air:host39.org:personal:john@hotmail.com` |
 
-Identifiers follow ARD's `urn:air:<publisher-FQDN>:<namespace...>:<short-name>`. The publisher FQDN must be the domain you verified; personal identifiers are derived from your verified email. The retired `urn:ai:*` forms are rejected.
+Identifiers follow ARD's `urn:air:<publisher-FQDN>:<namespace...>:<short-name>`. The publisher FQDN must be the domain you verified; personal identifiers are derived from your verified email. Host39 is the naming authority for personal URNs. The personal entry publisher block represents that naming authority, not the card author or hosting provider; the card may be hosted at any public URL. The retired `urn:ai:*` forms are rejected.
 
 ---
 
