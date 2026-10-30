@@ -36,7 +36,7 @@ export const ORG_FIELD_HELP = {
   tags:
     "Comma-separated keywords for your agent or catalog, e.g. bakery, orders, pickup. Agent search matches against them alongside the name and description.",
   version:
-    "The version of this catalog or agent card in SemVer form, e.g. v1.0.0. Shown on your listing card; bump it when you publish changes.",
+    "A free-text version label for this catalog or agent card, up to 64 characters, e.g. v1.0.0 or 2026-10. Shown on your listing card; update it when you publish changes.",
   identifier:
     "The permanent urn:air identifier resolvers use to look up your record. It's derived for you; override it only if you need a custom path, and it must stay under urn:air:<your-domain>:.",
   contact_email:
