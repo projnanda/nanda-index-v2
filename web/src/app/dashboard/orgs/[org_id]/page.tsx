@@ -1,5 +1,7 @@
 "use client";
 
+import { formatTimestamp } from "@/lib/formatTimestamp";
+
 import { useEffect, useId, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { FieldLabel } from "@/components/FieldLabel";
@@ -291,7 +293,7 @@ export default function OrgDetailPage() {
                 </div>
               )}
               <div><span className="font-medium">TTL:</span> {org.ttl_seconds}s</div>
-              <div><span className="font-medium">Created:</span> {new Date(org.created_at).toLocaleString()}</div>
+              <div><span className="font-medium">Created:</span> {formatTimestamp(org.created_at)}</div>
             </div>
           </div>
         )}
