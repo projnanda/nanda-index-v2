@@ -6,19 +6,19 @@ import { PERSONAL_CARD_HOST } from "@/lib/air";
  */
 export const ORG_FIELD_HELP = {
   org_id:
-    "A permanent, unique handle for your organization in the NANDA Index. It appears in your dashboard URL, is searchable, and becomes the default agent name in your identifier. Use 2–64 lowercase letters, numbers or hyphens, e.g. moon-bakery. It can't be changed later.",
+    "A permanent, unique handle for your entry in the NANDA Index. It appears in your dashboard URL, is searchable, and becomes the default agent name in your identifier. Use 2–64 lowercase letters, numbers or hyphens, e.g. moon-bakery. It can't be changed later.",
   display_name:
     "The human-readable name people see in search results and on your dashboard, and one of the fields agent search matches against. Use your organization's, agent's or own name, e.g. Moon Bakery. Spaces and capitals are fine, and you can change it later.",
   domain:
     "A domain you own. Your agents are addressed under it (urn:air:<domain>:…), and you'll prove ownership with a DNS TXT record before the record goes live. Enter the bare hostname, e.g. moonbakery.com, not https://moonbakery.com.",
   identity_email:
-    `Personal agents don't need a domain: this verified email is your identity and becomes part of your identifier (urn:air:${PERSONAL_CARD_HOST}:personal:<email>). We send a verification link here, so use an address you can receive mail at.`,
+    `Personal agents don't need a domain: this verified email is your identity and becomes part of your publicly visible identifier (urn:air:${PERSONAL_CARD_HOST}:personal:<email>). We send a verification link here, so use an address you can receive mail at.`,
   catalog_url:
     "The public URL of your AI Catalog, the JSON file that lists your agents, usually https://<your-domain>/.well-known/ai-catalog.json. You can also enter the base URL of your nanda-registry server. Resolvers fetch it to discover your agents.",
   svcb_card_url:
     "The URL of the A2A Agent Card (a JSON file describing your agent) that your SVCB DNS records point to. The index stores it as a pointer; your DNS stays authoritative.",
   agent_card_url:
-    `The URL of your A2A Agent Card, the JSON file describing your agent's skills and endpoint. Create the card on ${PERSONAL_CARD_HOST} first, then paste its URL here.`,
+    `The URL of your A2A Agent Card, the JSON file describing your agent's skills and endpoint. You can host the card on ${PERSONAL_CARD_HOST} or with another provider, then paste its public URL here.`,
   registry_url:
     "Where resolvers fetch this record's details: your AI Catalog URL (usually https://<your-domain>/.well-known/ai-catalog.json) if you run a catalog, or your A2A Agent Card URL if you registered a single agent.",
   agent_id:
