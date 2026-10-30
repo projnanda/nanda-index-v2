@@ -44,7 +44,8 @@ describe("privacy page", () => {
     await act(async () => root.render(<PrivacyPage />));
     expect(api.getAuthProviders).toHaveBeenCalledTimes(1);
     expect(container.textContent).toMatch(/an email address and a password\./);
-    expect(container.textContent).not.toMatch(/Google|GitHub sign-in/);
+    // Scoped to sign-in wording: the Analytics section may legitimately say "Google Analytics".
+    expect(container.textContent).not.toMatch(/Google sign-in|GitHub sign-in|Google or GitHub/);
   });
 
   it("names a provider only when the API says it is configured", async () => {

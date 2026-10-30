@@ -84,16 +84,20 @@ export default function PrivacyPage() {
             How long we keep your data
           </h2>
           <p>
-            Your account and the entries you register are kept until they are deleted. One exception:
-            an entry whose ownership is not yet proven does not reserve its domain or its personal
-            identifier, so it is removed if someone else proves the same domain or personal identifier
-            first.
+            Your account and the entries you register are kept until they are deleted, with two
+            exceptions. An entry whose domain or personal identifier is not currently proven does not
+            reserve it, so it is removed if someone else proves the same domain or personal identifier
+            first, even if the entry was proven before. And an entry that has never proven its ownership
+            stops reserving its org ID once a hold period has passed since it was created (the
+            configurable default is 48 hours), so it is removed if someone else then registers that org
+            ID. Both rules apply to pending and suspended entries alike.
           </p>
           <p className="mt-3">
-            You can delete an entry at any time from its page in the dashboard. Deleting an entry
+            Once your account email is verified, you can delete an entry at any time from its page in
+            the dashboard. Deleting an entry
             permanently removes it and its membership records from the index database; it cannot be
-            recovered. Suspending an entry instead hides it from the public index and keeps it until you
-            reactivate or delete it.
+            recovered. Suspending an entry instead hides it from the public index and keeps its record, which
+            stays subject to the two removal rules above.
           </p>
           <p className="mt-3">There is no self-service account deletion yet.</p>
         </section>
@@ -102,8 +106,9 @@ export default function PrivacyPage() {
             After an entry is removed
           </h2>
           <p>
-            Each entry carries a time-to-live (24 hours by default, between 1 hour and 7 days) that tells
-            resolvers how long they may reuse it. A resolver or search engine that copied your entry while
+            Each entry carries a cache TTL (time-to-live): 24 hours by default, between 1 hour and 7 days.
+            It tells resolvers how long they may cache the entry before fetching it again. A resolver or
+            search engine that copied your entry while
             it was live may keep showing it until its copy expires or it checks again. Those copies are
             outside this site&apos;s control, as are the agent card and catalog files the entry pointed
             to, which stay wherever you host them.
