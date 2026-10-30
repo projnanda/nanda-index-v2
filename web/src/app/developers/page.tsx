@@ -141,11 +141,11 @@ const ERROR_CODES = [
   { status: 400, code: "DOMAIN_NOT_VERIFIED", meaning: "The TXT record was not found yet; detail says what was expected and what was seen." },
   { status: 400, code: "INVALID_TOKEN", meaning: "An account-verification or password-reset token is invalid or expired." },
   { status: 400, code: "invalid_locator", meaning: "The resolve locator is not a valid urn:air: identifier." },
-  { status: 401, code: "UNAUTHORIZED", meaning: "No valid session token, or the session was revoked; sign in again." },
+  { status: 401, code: "UNAUTHORIZED", meaning: "Wrong email or password on sign-in, or no valid session token (missing, expired or revoked); sign in again." },
   { status: 403, code: "ACCOUNT_NOT_VERIFIED", meaning: "Confirm your account email before writing to the index." },
   { status: 403, code: "FORBIDDEN", meaning: "You are not an admin of that entry." },
   { status: 403, code: "MODERATED", meaning: "An index operator took the entry down; it cannot be suspended or reactivated by its owner (edits and deletion still work)." },
-  { status: 404, code: "NOT_FOUND", meaning: "No such entry, or it is not live (index reads), or the token was not found (verify-email)." },
+  { status: 404, code: "NOT_FOUND", meaning: "No such entry, or it is not live (index reads), or the verify-email token was not found, already used or expired." },
   { status: 404, code: "not_found", meaning: "Resolve found no live entry for the locator." },
   { status: 409, code: "CONFLICT", meaning: "Already taken: the account email, an org_id held by another registration, or a domain or personal identity that another registration has already proven." },
   { status: 409, code: "ALREADY_VERIFIED", meaning: "The contact email is already verified." },
@@ -158,8 +158,10 @@ const ERROR_CODES = [
 ];
 
 const linkClass = "underline hover:text-ink-strong";
+// Blocks scroll sideways on narrow screens; tabIndex={0} lets keyboard users reach and scroll them.
 const preClass = "overflow-x-auto rounded-card border border-line bg-surface-light p-4 font-mono text-xs leading-relaxed text-ink";
-const h2Class = "font-display text-lg font-bold text-ink-strong";
+// scroll-mt-24 keeps anchored headings clear of the sticky header (as on how-it-works).
+const h2Class = "scroll-mt-24 font-display text-lg font-bold text-ink-strong";
 const h3Class = "font-semibold text-ink-strong";
 
 export default function DevelopersPage() {
@@ -167,7 +169,7 @@ export default function DevelopersPage() {
   return (
     <PageShell
       title="Developers"
-      description="The NANDA Index is a REST API. Public reads need no key; writes use the session token from sign-in."
+      description="The NANDA Index has a REST API. Public reads need no key; writes use the session token from sign-in."
     >
       <div className="max-w-3xl space-y-10 text-sm leading-relaxed text-ink-medium">
         <section aria-labelledby="dev-reference" className="space-y-3">
@@ -175,7 +177,7 @@ export default function DevelopersPage() {
           <p>
             API base URL: <code className="font-mono text-ink">{api}</code>. Every route is described in the{" "}
             <a href={apiDocsUrl(api)} target="_blank" rel="noopener noreferrer" className={linkClass}>
-              interactive API reference (Swagger UI)
+              API reference (Swagger UI)
             </a>
             , generated from the server&apos;s own route schemas; the{" "}
             <a href={openApiUrl(api)} target="_blank" rel="noopener noreferrer" className={linkClass}>
@@ -186,7 +188,7 @@ export default function DevelopersPage() {
               source and README
             </a>{" "}
             cover self-hosting. Identifiers follow the ARD form{" "}
-            <code className="font-mono text-ink">urn:air:&lt;publisher-FQDN&gt;:&lt;namespace&gt;:&lt;short-name&gt;</code>;
+            <code className="font-mono text-ink">urn:air:&lt;publisher-FQDN&gt;:&lt;namespace...&gt;:&lt;short-name&gt;</code>;
             see <Link href="/how-it-works" className={linkClass}>How it works</Link> for the model.
           </p>
         </section>
@@ -194,11 +196,11 @@ export default function DevelopersPage() {
         <section aria-labelledby="dev-quickstart" className="space-y-5">
           <h2 id="dev-quickstart" className={h2Class}>Quickstart: read the index</h2>
           {QUICKSTART.map((step) => (
-            <div key={step.id} id={`quickstart-${step.id}`} className="space-y-2">
+            <div key={step.id} id={`quickstart-${step.id}`} className="scroll-mt-24 space-y-2">
               <h3 className={h3Class}>{step.title}</h3>
               <p>{step.note}</p>
-              <pre className={preClass}>{step.command(api)}</pre>
-              {step.response && <pre className={preClass}>{step.response}</pre>}
+              <pre className={preClass} tabIndex={0}>{step.command(api)}</pre>
+              {step.response && <pre className={preClass} tabIndex={0}>{step.response}</pre>}
             </div>
           ))}
           <p>
@@ -219,7 +221,7 @@ export default function DevelopersPage() {
               <li key={step.title} className="space-y-2">
                 <h3 className={h3Class}>{step.title}</h3>
                 <p>{step.body}</p>
-                <pre className={preClass}>{step.command(api)}</pre>
+                <pre className={preClass} tabIndex={0}>{step.command(api)}</pre>
               </li>
             ))}
           </ol>

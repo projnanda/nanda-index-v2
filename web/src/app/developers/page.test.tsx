@@ -65,10 +65,26 @@ describe("developers page", () => {
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
 
-  it("keeps one h1 and lists rate limits and error codes", async () => {
+  it("follows a configured API origin for the reference links and every curl target", async () => {
+    vi.stubEnv("NEXT_PUBLIC_NANDA_INDEX_API_URL", "https://api.example.test/");
+    await act(async () => root.render(<DevelopersPage />));
+    expect(links().find((a) => a.textContent?.includes("Swagger"))?.getAttribute("href")).toBe("https://api.example.test/docs");
+    expect(links().find((a) => a.textContent?.includes("OpenAPI"))?.getAttribute("href")).toBe("https://api.example.test/docs/json");
+    const targets = Array.from(container.querySelectorAll("pre"))
+      .flatMap((pre) => (pre.textContent ?? "").split("\n"))
+      .filter((line) => line.trimStart().startsWith("curl"))
+      .map((line) => line.match(/https?:\/\/[^\s"']+/)?.[0]);
+    expect(targets.length).toBeGreaterThanOrEqual(10);
+    for (const url of targets) expect(url!.startsWith("https://api.example.test/"), url).toBe(true);
+  });
+
+  it("keeps one h1, makes code blocks keyboard-reachable, and lists rate limits and error codes", async () => {
     await act(async () => root.render(<DevelopersPage />));
     expect(container.querySelectorAll("h1")).toHaveLength(1);
     expect(container.querySelector("h1")?.textContent).toBe("Developers");
+    const blocks = Array.from(container.querySelectorAll("pre"));
+    expect(blocks.length).toBeGreaterThan(0);
+    for (const pre of blocks) expect(pre.getAttribute("tabindex")).toBe("0");
     const text = container.textContent ?? "";
     expect(text).toMatch(/120 requests per minute/);
     expect(text).toMatch(/ACCOUNT_NOT_VERIFIED/);
