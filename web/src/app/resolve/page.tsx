@@ -5,6 +5,7 @@ import { PageShell } from "@/components/PageShell";
 import { ApiError, resolveAgent, fetchAgentRecord, fetchFactsUrl } from "@/lib/nanda-api";
 import type { ResolveResponse, CatalogEntry } from "@/lib/nanda-types";
 import { resolutionSummary, type HopStatus } from "@/lib/resolutionStatus";
+import { resolveExamples, type ExampleKind } from "@/lib/resolveExamples";
 import { cn } from "@/lib/utils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -103,6 +104,7 @@ function hopError(error: unknown): string {
 export default function ResolvePage() {
   const [locator, setLocator]   = useState("");
   const [traceLocator, setTraceLocator] = useState("");
+  const [traceExample, setTraceExample] = useState<ExampleKind | null>(null);
   const generation = useRef(0);
   useEffect(() => () => { generation.current += 1; }, []);
   const [resolving, setResolving] = useState(false);
@@ -123,12 +125,13 @@ export default function ResolvePage() {
     await runResolve(locator);
   }
 
-  async function runResolve(value: string, from: 1 | 2 | 3 = 1) {
+  async function runResolve(value: string, from: 1 | 2 | 3 = 1, example: ExampleKind | null = null) {
     const requested = value.trim();
     if (!requested) return;
     const run = ++generation.current;
     const current = () => run === generation.current;
     setTraceLocator(requested);
+    setTraceExample(example);
     setResolving(true);
     if (from === 1) setHop1(IDLE);
     if (from <= 2) setHop2(IDLE);
@@ -139,14 +142,14 @@ export default function ResolvePage() {
     const t0 = performance.now();
 
     // ── Hop 1: NANDA Index ────────────────────────────────────────────────
-    const h1url = `/api/v1/resolve?locator=${encodeURIComponent(requested)}`;
-    if (from === 1) setHop1({ status: "loading", url: `GET ${process.env.NEXT_PUBLIC_NANDA_INDEX_API_URL ?? ""}${h1url}` });
+    const h1url = example ? `/api/resolve-examples/${example}/index` : `/api/v1/resolve?locator=${encodeURIComponent(requested)}`;
+    if (from === 1) setHop1({ status: "loading", url: `GET ${example ? "" : process.env.NEXT_PUBLIC_NANDA_INDEX_API_URL ?? ""}${h1url}` });
 
     let indexData = hop1.data as ResolveResponse;
     if (from === 1) try {
-      indexData = await resolveAgent(requested);
+      indexData = example ? await fetchFactsUrl(h1url) as ResolveResponse : await resolveAgent(requested);
       if (!current()) return;
-      setHop1({ status: "ok", url: `GET ${process.env.NEXT_PUBLIC_NANDA_INDEX_API_URL ?? ""}${h1url}`, data: indexData });
+      setHop1({ status: "ok", url: `GET ${example ? "" : process.env.NEXT_PUBLIC_NANDA_INDEX_API_URL ?? ""}${h1url}`, data: indexData });
     } catch (err) {
       if (!current()) return;
       setHop1({ status: "error", url: h1url, error: hopError(err) });
@@ -197,7 +200,7 @@ export default function ResolvePage() {
     }
 
     // ── Hop 3: Agent facts URL ─────────────────────────────────────────────
-    const h3url = catalogEntry.url;
+    const h3url = isDirectCard ? entryUrl : catalogEntry.url;
     if (!h3url) {
       setHop3({ status: "skipped", url: "Catalog entry embeds the artifact inline (no URL to fetch)." });
       setHop4({ status: "skipped" });
@@ -209,9 +212,10 @@ export default function ResolvePage() {
 
     let facts: unknown;
     try {
-      facts = await fetchFactsUrl(h3url);
+      // A direct card was fetched at hop 2. Its url is the runtime, not another card.
+      facts = isDirectCard ? catalogEntry : await fetchFactsUrl(h3url);
       if (!current()) return;
-      setHop3({ status: "ok", url: `GET ${h3url}`, data: facts });
+      setHop3({ status: "ok", url: isDirectCard ? `Card received from ${h3url} at hop 2` : `GET ${h3url}`, data: facts });
       // Extract runtime endpoint for hop 4
       const endpoint = (facts as Record<string, unknown>)?.url as string | undefined;
       if (endpoint) {
@@ -283,7 +287,7 @@ export default function ResolvePage() {
           aria-label="Resource identifier"
           value={locator}
           onChange={(e) => setLocator(e.target.value)}
-          placeholder="urn:air:regentix.ai:agent:regentix-ceo"
+          placeholder="urn:air:example.org:agent:orders"
           className="flex-1 rounded-2xl border border-black/10 bg-white px-5 py-3 font-mono text-sm outline-none focus:ring-2 focus:ring-slate-300"
         />
         <button
@@ -294,6 +298,20 @@ export default function ResolvePage() {
           {resolving ? "Resolving…" : "Resolve"}
         </button>
       </form>
+
+      <div className="mb-6">
+        <p className="mb-2 text-xs text-slate-500">Hosted demonstrations. These examples use this site&apos;s sample index and cards, and make no external calls.</p>
+        <div className="flex flex-wrap gap-2">
+          {resolveExamples.map((example) => (
+            <button key={example.kind} type="button" disabled={resolving || talking}
+              className="rounded-full border border-slate-300 px-3 py-1.5 text-sm disabled:opacity-50"
+              onClick={() => { setLocator(example.identifier); void runResolve(example.identifier, 1, example.kind); }}>
+              {example.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {traceExample && <p role="note" className="mb-4 text-sm text-slate-600">Demonstration trace: the first hop uses a controlled sample index. Results do not describe a registered production entry.</p>}
 
       {latency !== null && (
         <p role="status" className="mb-4 text-xs text-slate-500">
@@ -316,11 +334,11 @@ export default function ResolvePage() {
 
             <HopCard
               n={1}
-              label="NANDA Index"
+              label={traceExample ? "Example Index" : "NANDA Index"}
               subtitle="Each entry points to the correct next discovery object for a given resource identifier."
               hop={hop1}
               busy={resolving || talking}
-              onRetry={() => void runResolve(traceLocator, 1)}
+              onRetry={() => void runResolve(traceLocator, 1, traceExample)}
             />
 
             {hop1.status !== "idle" && (
@@ -333,7 +351,7 @@ export default function ResolvePage() {
                   subtitle="The requester follows the discovery path specified by the entry."
                   hop={hop2}
               busy={resolving || talking}
-              onRetry={() => void runResolve(traceLocator, 2)}
+              onRetry={() => void runResolve(traceLocator, 2, traceExample)}
                 />
 
                 {hop2.status !== "idle" && (
@@ -346,7 +364,7 @@ export default function ResolvePage() {
                       subtitle="A2A Agent Cards define how to interact with individual agents."
                       hop={hop3}
               busy={resolving || talking}
-              onRetry={() => void runResolve(traceLocator, 3)}
+              onRetry={() => void runResolve(traceLocator, 3, traceExample)}
                     />
 
                     {hop3.status !== "idle" && (
@@ -395,7 +413,7 @@ export default function ResolvePage() {
             Enter a URN above to trace the resolution hops.
           </p>
           <p className="mt-2 font-mono text-xs text-slate-300">
-            e.g. urn:air:regentix.ai:agent:regentix-ceo
+            Choose a hosted demonstration above, or enter an identifier from Explore.
           </p>
         </div>
       )}
