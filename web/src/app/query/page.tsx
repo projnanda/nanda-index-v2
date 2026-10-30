@@ -108,7 +108,7 @@ async function executeQuery(q: string, mode: Mode, current: () => boolean): Prom
 export default function QueryPage() {
   const { state } = useDiscoveryLocation();
   const query = (state.locator ?? state.q ?? "").trim();
-  const mode: Mode = state.mode === "org_id" || state.mode === "agentic" ? state.mode : "search";
+  const mode: Mode = state.mode === "org_id" ? "org_id" : "search";
   // A history navigation gets fresh local form/result state. The old request's
   // effect cleanup prevents its response from appearing in the new view.
   return <QueryView key={JSON.stringify([query, mode])} initialQuery={query} initialMode={mode} />;
@@ -162,7 +162,7 @@ function QueryView({ initialQuery, initialMode }: { initialQuery: string; initia
   return (
     <PageShell
       title="Discover"
-      description="Look up an organization by org ID, keyword, URN, or a natural-language prompt."
+      description="Look up an organization by org ID, keyword, or URN."
     >
       <form
         className="space-y-4 rounded-3xl border border-black/10 bg-white p-5 shadow-sm"
@@ -171,7 +171,8 @@ function QueryView({ initialQuery, initialMode }: { initialQuery: string; initia
         {/* Mode selector, hidden when URN is detected */}
         {!isUrn && (
           <div className="flex flex-wrap gap-2">
-            {(["agentic", "search", "org_id"] as Mode[]).map((key) => (
+            {/* Agentic search is hidden. Re-enabling it also requires allowing its URL mode in QueryPage. */}
+            {(["search", "org_id"] as Mode[]).map((key) => (
               <button
                 key={key}
                 type="button"
