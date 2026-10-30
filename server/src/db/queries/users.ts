@@ -62,7 +62,8 @@ export async function findUserById(id: string): Promise<User | null> {
 }
 
 /**
- * Inserts a new user or updates display_name and avatar_url on conflict.
+ * Inserts a new user or refreshes their provider profile on conflict.
+ * A name edited in Account settings is retained, including a deliberately cleared name.
  * Returns the upserted user.
  *
  * On conflict the account stays verified if the provider verifies the email
@@ -78,7 +79,7 @@ export async function upsertUser(params: UpsertUserParams): Promise<User> {
     ON CONFLICT (provider, provider_id)
       DO UPDATE SET
         email          = EXCLUDED.email,
-        display_name   = EXCLUDED.display_name,
+        display_name   = CASE WHEN users.display_name_customized THEN users.display_name ELSE EXCLUDED.display_name END,
         avatar_url     = EXCLUDED.avatar_url,
         email_verified = EXCLUDED.email_verified
                          OR (users.email_verified AND users.email = EXCLUDED.email),

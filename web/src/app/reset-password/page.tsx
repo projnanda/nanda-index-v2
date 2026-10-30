@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { PageShell } from "@/components/PageShell";
 import { ApiError, resetPassword } from "@/lib/nanda-api";
+import { NEW_PASSWORD_GUIDANCE, newPasswordError } from "@/lib/passwordRules";
 
 const inputClass =
   "w-full h-10 rounded-control border-2 border-line bg-surface-light px-3 text-sm text-ink placeholder:text-ink-weak focus:outline-none focus:border-brand-500 transition-colors";
@@ -27,6 +28,11 @@ function ResetPasswordInner() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const passwordError = newPasswordError(password);
+    if (passwordError) {
+      setError(passwordError);
+      return;
+    }
     if (password !== confirm) {
       setError("Passwords do not match.");
       return;
@@ -68,9 +74,13 @@ function ResetPasswordInner() {
             </p>
           ) : (
             <form onSubmit={onSubmit} className="space-y-3">
+              <p id="password-guidance" className="text-xs text-ink-medium">{NEW_PASSWORD_GUIDANCE}</p>
               <input
                 type="password"
                 placeholder="New password"
+                aria-label="New password"
+                autoComplete="new-password"
+                aria-describedby="password-guidance"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -80,6 +90,8 @@ function ResetPasswordInner() {
               <input
                 type="password"
                 placeholder="Confirm new password"
+                aria-label="Confirm new password"
+                autoComplete="new-password"
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
                 required
@@ -88,7 +100,7 @@ function ResetPasswordInner() {
               />
 
               {error && (
-                <p className="rounded-control border border-[#b42318]/30 bg-[#fef3f2] px-4 py-2.5 text-sm text-[#b42318]">
+                <p role="alert" className="rounded-control border border-[#b42318]/30 bg-[#fef3f2] px-4 py-2.5 text-sm text-[#b42318]">
                   {error}
                 </p>
               )}
