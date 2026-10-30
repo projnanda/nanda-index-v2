@@ -72,7 +72,7 @@ function VerifyEmailInner() {
     if (tokenFromUrl) window.history.replaceState(null, "", window.location.pathname);
   }, [tokenFromUrl]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; invalidToken: boolean } | null>(null);
   const [verifiedOrg, setVerifiedOrg] = useState<IndexRecord | null>(null);
 
   async function onConfirm() {
@@ -81,11 +81,13 @@ function VerifyEmailInner() {
     try {
       setVerifiedOrg(await verifyEmail(token));
     } catch (err) {
-      setError(
-        err instanceof ApiError && err.status === 404
+      const invalidToken = err instanceof ApiError && err.status === 404;
+      setError({
+        invalidToken,
+        message: invalidToken
           ? "This link has expired or was already used. If your dashboard shows the email as verified, you're done — otherwise send a new link from the dashboard."
           : "Something went wrong. Please try again.",
-      );
+      });
     } finally {
       setLoading(false);
     }
@@ -107,28 +109,28 @@ function VerifyEmailInner() {
         <div className="bg-surface-light rounded-card border border-line p-8 shadow-card space-y-4">
           {!token ? (
             <div className="space-y-3">
-            <h2 className="text-lg font-semibold text-ink-strong">Check email verification</h2>
-            <p className="text-sm text-ink-medium">
-              No verification token is present. If you already confirmed this address, no further action is needed. Open your{" "}
-              <Link href="/dashboard" className="underline hover:text-brand-600">dashboard</Link>{" "}
-              to check the current status or send a new verification link.
-            </p>
+              <h2 className="text-lg font-semibold text-ink-strong">Check email verification</h2>
+              <p className="text-sm text-ink-medium">
+                No verification token is present. If you already confirmed this address, no further action is needed. Open your{" "}
+                <Link href="/dashboard" className="underline hover:text-brand-600">dashboard</Link>{" "}
+                to check the current status or send a new verification link.
+              </p>
             </div>
-          ) : (
+          ) : !error?.invalidToken ? (
             <>
               <p className="text-sm text-ink-medium">Press the button to confirm this email address.</p>
               <button onClick={onConfirm} disabled={loading} className={primaryBtnClass}>
                 {loading ? "Verifying…" : "Verify email"}
               </button>
             </>
-          )}
+          ) : null}
 
           {error && (
             <div role="alert" className="space-y-3">
-            <p className="rounded-control border border-[#b42318]/30 bg-[#fef3f2] px-4 py-2.5 text-sm text-[#b42318]">
-              {error}
-            </p>
-            <Link href="/dashboard" className="text-sm underline hover:text-brand-600">Check verification or send a new link</Link>
+              <p className="rounded-control border border-[#b42318]/30 bg-[#fef3f2] px-4 py-2.5 text-sm text-[#b42318]">
+                {error.message}
+              </p>
+              <Link href="/dashboard" className="text-sm underline hover:text-brand-600">Check verification or send a new link</Link>
             </div>
           )}
         </div>

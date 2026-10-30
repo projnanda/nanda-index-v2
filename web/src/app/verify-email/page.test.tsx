@@ -58,6 +58,24 @@ describe("email verification", () => {
     await userEvent.click(screen.getByRole("button", { name: "Verify email" }));
     expect(await screen.findByText(/expired or was already used/)).toBeTruthy();
     expect(screen.getByRole("link", { name: "Check verification or send a new link" }).getAttribute("href")).toBe("/dashboard");
+    expect(screen.queryByRole("button", { name: "Verify email" })).toBeNull();
+    expect(screen.queryByText(/Press the button to confirm/)).toBeNull();
+  });
+
+  it("allows another confirmation attempt after a temporary failure", async () => {
+    status = 503;
+    result = { error: "temporarily_unavailable" };
+    render(<VerifyEmailPage />);
+    await userEvent.click(screen.getByRole("button", { name: "Verify email" }));
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(requests).toHaveLength(1);
+
+    status = 200;
+    result = org;
+    await userEvent.click(screen.getByRole("button", { name: "Verify email" }));
+    expect(await screen.findByRole("heading", { name: "Your email is confirmed" })).toBeTruthy();
+    expect(requests).toHaveLength(2);
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
   it("gives a neutral recovery state on refresh after the token was removed", () => {
