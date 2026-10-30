@@ -1,6 +1,8 @@
 import { PageShell } from "@/components/PageShell";
 import Link from "next/link";
+import { SignInMethods } from "@/components/SignInMethods";
 import { DEFAULT_POSTHOG_HOST } from "@/lib/posthogHosts";
+import { externalLinks } from "@/lib/site-data";
 
 import type { Metadata } from "next";
 
@@ -15,8 +17,13 @@ const posthogRegion = new URL(process.env.NEXT_PUBLIC_POSTHOG_HOST ?? DEFAULT_PO
   ? "the EU"
   : "the US";
 
-// Draft wording for owner review. Keep it factual: it describes what this
-// deployment collects and why, and nothing it does not do.
+// Draft wording, not yet owner-reviewed. Keep it factual: it describes what
+// this deployment collects and does, and nothing it does not do. Still open
+// for the owner: a private contact address for privacy requests, and whether
+// to state a retention period (today data is kept until it is deleted).
+const issuesUrl = `${externalLinks.github}/issues`;
+const linkClass = "underline hover:text-ink-strong";
+
 export default function PrivacyPage() {
   return (
     <PageShell title="Privacy" description="What NANDA Index collects and why.">
@@ -24,8 +31,8 @@ export default function PrivacyPage() {
         <section>
           <h2 className="mb-2 font-display text-base font-semibold text-ink-strong">Accounts</h2>
           <p>
-            To register agents you create an account with an email address (and a password, or a Google or
-            GitHub sign-in). We use the email to sign you in, to verify it belongs to you, and to send
+            To register agents you create an account with an email address and a password
+            <SignInMethods />. We use the email to sign you in, to verify it belongs to you, and to send
             account messages such as verification and password-reset links. Passwords are stored only as
             secure hashes.
           </p>
@@ -79,15 +86,55 @@ export default function PrivacyPage() {
           )}
         </section>
         <section>
-          <h2 className="mb-2 font-display text-base font-semibold text-ink-strong">Contact</h2>
+          <h2 className="mb-2 font-display text-base font-semibold text-ink-strong">
+            How long we keep your data
+          </h2>
           <p>
+            Your account and the entries you register are kept until they are deleted. One exception:
+            an entry that has not yet proven its domain or email does not reserve them, so it is removed
+            if someone else proves the same domain or email first.
+          </p>
+          <p className="mt-3">
+            You can delete an entry at any time from its page in the dashboard. Deleting an entry
+            permanently removes it and its membership records from the index database; it cannot be
+            recovered. Suspending an entry instead hides it from the public index and keeps it until you
+            reactivate or delete it.
+          </p>
+          <p className="mt-3">
             You can edit your display name, change your password, sign out every device, or delete
-            your account in <Link href="/dashboard/settings" className="text-brand-600 underline">Account settings</Link>.
+            your account in <Link href="/dashboard/settings" className={linkClass}>Account settings</Link>.
             Account deletion removes your profile, sign-in email, memberships, and account tokens.
             You must first delete entries for which you are the only administrator. Shared entries
             remain published with their existing public and contact data, including any email addresses
-            in those records. To ask about other data, contact the NANDA Index team via the
-            project&apos;s GitHub repository.
+            in those records.
+          </p>
+        </section>
+        <section>
+          <h2 className="mb-2 font-display text-base font-semibold text-ink-strong">
+            After an entry is removed
+          </h2>
+          <p>
+            Each entry carries a time-to-live (24 hours by default, between 1 hour and 7 days) that tells
+            resolvers how long they may reuse it. A resolver or search engine that copied your entry while
+            it was live may keep showing it until its copy expires or it checks again. Those copies are
+            outside this site&apos;s control, as are the agent card and catalog files the entry pointed
+            to, which stay wherever you host them.
+          </p>
+        </section>
+        <section>
+          <h2 className="mb-2 font-display text-base font-semibold text-ink-strong">Contact</h2>
+          <p>
+            To ask about or remove your data, delete your entries from the dashboard or contact the
+            NANDA Index team through the project&apos;s{" "}
+            <a href={externalLinks.github} target="_blank" rel="noopener noreferrer" className={linkClass}>
+              GitHub repository
+            </a>{" "}
+            by opening an{" "}
+            <a href={issuesUrl} target="_blank" rel="noopener noreferrer" className={linkClass}>
+              issue
+            </a>
+            . Issues are public, so leave your email address and other personal details out of them. A
+            private contact address for privacy requests is not published yet.
           </p>
         </section>
       </div>
