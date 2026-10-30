@@ -201,28 +201,27 @@ function PathCard({ value, selected, onSelect, title, subtitle, description }: {
 }) {
   const active = value === selected;
   return (
-    <button type="button" onClick={() => onSelect(value)}
+    <label
       className={cn(
-        "flex items-start gap-3 rounded-2xl border px-4 py-3.5 text-left transition w-full",
+        "flex items-start gap-3 rounded-2xl border px-4 py-3.5 text-left transition w-full cursor-pointer focus-within:ring-2 focus-within:ring-slate-400 focus-within:ring-offset-2",
         active ? "border-slate-950 bg-slate-950 text-white" : "border-black/10 bg-white hover:border-slate-400",
       )}
     >
-      <span className={cn("mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2",
-        active ? "border-white bg-white" : "border-slate-400")}>
-        {active && <span className="h-2 w-2 rounded-full bg-slate-950" />}
-      </span>
-      <div>
-        <p className={cn("text-sm font-semibold leading-tight", active ? "text-white" : "text-slate-950")}>
+      <input type="radio" name="hosting-path" value={value} checked={active}
+        onChange={() => onSelect(value)}
+        className="mt-0.5 h-4 w-4 shrink-0 accent-slate-950 focus-visible:outline-2 focus-visible:outline-offset-4" />
+      <span>
+        <span className={cn("block text-sm font-semibold leading-tight", active ? "text-white" : "text-slate-950")}>
           {title}
           <span className={cn("ml-2 text-xs font-normal", active ? "text-slate-300" : "text-slate-400")}>
             {subtitle}
           </span>
-        </p>
-        <p className={cn("mt-0.5 text-xs", active ? "text-slate-300" : "text-slate-500")}>
+        </span>
+        <span className={cn("mt-0.5 block text-xs", active ? "text-slate-300" : "text-slate-500")}>
           {description}
-        </p>
-      </div>
-    </button>
+        </span>
+      </span>
+    </label>
   );
 }
 
@@ -475,10 +474,10 @@ export default function NewOrgPage() {
             </div>
 
             {/* Path choice first so domain/email fields adapt immediately */}
-            <div className="space-y-2">
-              <span className="block text-xs font-medium uppercase tracking-[0.16em] text-slate-500">
+            <fieldset className="space-y-2">
+              <legend className="mb-2 block text-xs font-medium uppercase tracking-[0.16em] text-slate-500">
                 What best describes you?
-              </span>
+              </legend>
               <PathCard value="registry" selected={form.hosting_path} onSelect={patchPath}
                 title="Enterprise AI Catalog" subtitle="Teams / Orgs"
                 description="Publish an AI Catalog at a well-known endpoint under your domain." />
@@ -491,7 +490,7 @@ export default function NewOrgPage() {
               <PathCard value="personal" selected={form.hosting_path} onSelect={patchPath}
                 title="Personal Agent" subtitle="Individual"
                 description="No personally controlled domain is required. The account identity must be verifiably bound to the resolution record." />
-            </div>
+            </fieldset>
 
             <Field label="Org ID" value={form.org_id} onChange={(v) => patch("org_id", v)}
               onBlur={() => touch("org_id")} placeholder="moon-bakery"
