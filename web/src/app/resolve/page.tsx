@@ -225,7 +225,7 @@ export default function ResolvePage() {
   return (
     <PageShell
       title="Resolve Agent"
-      description="Resolve a resource identifier to the appropriate discovery entry point."
+      description="Trace a URN hop by hop: the index entry, the agent source, the agent card, then the agent itself. To search by keyword or description, use Discover."
     >
       {/* Search bar */}
       <form onSubmit={onResolve} className="mb-8 flex gap-3">

@@ -81,6 +81,14 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
+  async redirects() {
+    return [
+      // The Discover page moved from /query to /discover so the path matches
+      // its label. Old links and bookmarks keep working; the query string is
+      // carried over.
+      { source: "/query", destination: "/discover", permanent: true },
+    ];
+  },
   async rewrites() {
     return posthogRewrites();
   },
