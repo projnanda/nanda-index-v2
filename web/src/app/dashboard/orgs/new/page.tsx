@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { FieldLabel } from "@/components/FieldLabel";
@@ -329,6 +329,7 @@ export default function NewOrgPage() {
   useRequireAuth();
   const router = useRouter();
   const [form, setForm] = useState<FormState>(EMPTY);
+  const formRevision = useRef(0);
   const [step, setStep] = useState<Step>(1);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -341,6 +342,7 @@ export default function NewOrgPage() {
   const [created, setCreated] = useState<IndexRecord | null>(null);
 
   const patch = (key: keyof FormState, val: string) => {
+    formRevision.current += 1;
     setForm((f) => ({ ...f, [key]: val }));
     // Editing a field invalidates its "already taken" result.
     setTaken((t) => (key in t ? Object.fromEntries(Object.entries(t).filter(([k]) => k !== key)) : t));
@@ -364,6 +366,7 @@ export default function NewOrgPage() {
   });
 
   function patchPath(v: HostingPath) {
+    formRevision.current += 1;
     // An identifier override is anchored to the old path's shape — drop it.
     setForm((f) => ({ ...f, hosting_path: v, identifier: "" }));
   }
@@ -392,6 +395,7 @@ export default function NewOrgPage() {
     touch("contact_email", "ttl_seconds");
     if (Object.keys(s3Errors).length) return;
 
+    const submittedRevision = formRevision.current;
     setSaving(true);
     setApiError(null);
     try {
@@ -430,6 +434,8 @@ export default function NewOrgPage() {
       });
       setCreated(record);
     } catch (err) {
+      // Errors describe the submitted values, which may have changed while saving.
+      if (formRevision.current !== submittedRevision) return;
       setNeedsAccountVerification(isAccountNotVerified(err));
       const failure = orgFormError(err);
       const fields = Object.keys(failure.fields);

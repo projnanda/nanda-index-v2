@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import NewOrgPage from "./page";
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn(), back: vi.fn() }) }));
@@ -38,4 +38,27 @@ it("keeps a server TTL validation error on the contact step and associates it wi
   const ttl = await screen.findByLabelText(/^Cache TTL/);
   expect(ttl.getAttribute("aria-invalid")).toBe("true");
   expect(document.getElementById(ttl.getAttribute("aria-describedby")!)!.textContent).toMatch(/Cache TTL/);
+});
+
+it("ignores a delayed server field error after the registration form has changed", async () => {
+  let complete!: (response: Response) => void;
+  vi.stubGlobal("fetch", (url: string) => url.includes("availability")
+    ? Promise.resolve(new Response(JSON.stringify({ org_id_available: true, domain_available: true })))
+    : new Promise<Response>((resolve) => { complete = resolve; }));
+  render(<NewOrgPage />);
+  fireEvent.change(screen.getByLabelText(/^Org ID/), { target: { value: "validation-entry" } });
+  fireEvent.change(screen.getByLabelText(/^Display Name/), { target: { value: "Valid Entry" } });
+  fireEvent.change(screen.getByLabelText(/^Domain/), { target: { value: "example.com" } });
+  await userEvent.click(screen.getByRole("button", { name: "Continue →" }));
+  fireEvent.change(await screen.findByLabelText(/^AI Catalog Hosted URL/), { target: { value: "https://example.com/catalog.json" } });
+  await userEvent.click(screen.getByRole("button", { name: "Continue →" }));
+  fireEvent.change(screen.getByLabelText(/^Contact Email/), { target: { value: "owner@example.com" } });
+  await userEvent.click(screen.getByRole("button", { name: "Register" }));
+  await userEvent.click(screen.getByRole("button", { name: "← Back" }));
+  fireEvent.change(screen.getByLabelText(/^AI Catalog Hosted URL/), { target: { value: "https://corrected.example.com/catalog.json" } });
+  await act(async () => { complete(new Response(JSON.stringify({ error: "VALIDATION", field: "registry_url", detail: "registry_url must start with https://" }), { status: 400 })); });
+  const url = screen.getByLabelText(/^AI Catalog Hosted URL/) as HTMLInputElement;
+  expect(url.value).toBe("https://corrected.example.com/catalog.json");
+  expect(url.getAttribute("aria-invalid")).toBe("false");
+  expect(screen.queryByText("Enter a valid URL starting with http:// or https://.")).toBeNull();
 });
