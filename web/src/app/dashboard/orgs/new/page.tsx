@@ -34,7 +34,7 @@ interface FormState {
   auth_execution: string;       // smb / personal optional
   description: string;
   tags: string;
-  version: string;              // optional SemVer of the artifact
+  version: string;              // optional version label of the artifact
   // Step 3 — contact
   contact_email: string;
   ttl_seconds: string;
@@ -664,9 +664,9 @@ export default function NewOrgPage() {
               placeholder="smb, bakery, orders, a2a-agent-card"
               hint="Comma-separated labels." info={ORG_FIELD_HELP.tags} optional />
 
-            <Field label="Version" value={form.version} onChange={(v) => patch("version", v)}
+            <Field label="Version label" value={form.version} onChange={(v) => patch("version", v)}
               placeholder="v1.0.0"
-              hint="SemVer of this artifact (shown on the card)." info={ORG_FIELD_HELP.version} optional />
+              hint="Optional version label, up to 64 characters (for example, v1.0.0 or 2026-10)." info={ORG_FIELD_HELP.version} optional />
 
             {/* Advanced: identifier override */}
             <div className="border-t border-black/5 pt-3">
