@@ -14,6 +14,7 @@ vi.mock('node:dns/promises', () => ({
 import { buildServer } from '../../src/server.js';
 import { getSql } from '../../src/db/client.js';
 import { upsertUser } from '../../src/db/queries/users.js';
+import { captureOrgVerificationEmails } from '../helpers/orgVerificationEmails.js';
 
 /**
  * Claims, proof and publication.
@@ -46,6 +47,7 @@ function personalOrg(orgId: string, email: string): Payload {
 
 describe('Org claims — proof before publication, no squatting', () => {
   let fastify: FastifyInstance;
+  let emails: ReturnType<typeof captureOrgVerificationEmails>;
   const tokens: Record<string, string> = {};
 
   const create = (who: string, payload: Payload) => fastify.inject({
@@ -64,9 +66,7 @@ describe('Org claims — proof before publication, no squatting', () => {
     return rows[0]?.status;
   };
   const verifyEmail = async (orgId: string) => {
-    // The client maps columns to camelCase.
-    const rows = await getSql()<{ verifyToken: string }[]>`SELECT verify_token FROM organizations WHERE org_id = ${orgId}`;
-    return fastify.inject({ method: 'POST', url: '/api/v1/verify-email', payload: { token: rows[0]!.verifyToken } });
+    return fastify.inject({ method: 'POST', url: '/api/v1/verify-email', payload: { token: emails.tokenFor(orgId) } });
   };
   const proveDomain = async (who: string, orgId: string) => {
     const chal = (await post(who, `/api/v1/orgs/${orgId}/domain-challenge`)).json();
@@ -75,6 +75,7 @@ describe('Org claims — proof before publication, no squatting', () => {
   };
 
   beforeAll(async () => {
+    emails = captureOrgVerificationEmails();
     const built = await buildServer({ logger: false });
     fastify = built.fastify;
     await fastify.ready();
@@ -88,6 +89,7 @@ describe('Org claims — proof before publication, no squatting', () => {
   });
 
   afterAll(async () => {
+    emails.restore();
     await fastify.close();
     const { closeSql } = await import('../../src/db/client.js');
     await closeSql();

@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { buildServer } from '../../src/server.js';
 import { getSql } from '../../src/db/client.js';
 import { upsertUser } from '../../src/db/queries/users.js';
+import { captureOrgVerificationEmails } from '../helpers/orgVerificationEmails.js';
 
 /**
  * Account flows the external test found broken: editing a personal entry,
@@ -15,6 +16,7 @@ const PREFIX = 'af-';
 describe('account flows', () => {
   let fastify: FastifyInstance;
   let token: string;
+  let emails: ReturnType<typeof captureOrgVerificationEmails>;
 
   const auth = () => ({ authorization: `Bearer ${token}` });
   const createPersonal = (orgId: string, email: string) => fastify.inject({
@@ -32,11 +34,11 @@ describe('account flows', () => {
     },
   });
   const verifyToken = async (orgId: string): Promise<string> => {
-    const rows = await getSql()<{ verifyToken: string }[]>`SELECT verify_token FROM organizations WHERE org_id = ${orgId}`;
-    return rows[0]!.verifyToken;
+    return emails.tokenFor(orgId);
   };
 
   beforeAll(async () => {
+    emails = captureOrgVerificationEmails();
     fastify = (await buildServer({ logger: false })).fastify;
     await fastify.ready();
     const user = await upsertUser({
@@ -46,6 +48,7 @@ describe('account flows', () => {
   });
 
   afterAll(async () => {
+    emails.restore();
     await fastify.close();
     const { closeSql } = await import('../../src/db/client.js');
     await closeSql();
@@ -138,6 +141,7 @@ describe('account flows', () => {
     expect(res.statusCode).toBe(302);
     expect(res.headers.location).toContain(`/verify-email?token=${t}`);
     expect(await verifyToken(`${PREFIX}scan`)).toBe(t);
+    expect((await fastify.inject({ method: 'POST', url: '/api/v1/verify-email', payload: { token: t } })).statusCode).toBe(200);
   });
 
   it('verifies with an explicit POST from the web page', async () => {

@@ -408,6 +408,23 @@ curl "https://api.nandaindex.org/api/v1/resolve?locator=urn:air:acme.com:agent:f
 
 ---
 
+## Organization email verification upgrade (migration 020)
+
+`organizations.verify_token` stores a SHA-256 hex digest. Email links and API
+payloads are unchanged. Migration 020 clears outstanding tokens and expiry values;
+ownership proofs, memberships, and publication status are preserved. Old links
+require a new email via `POST /api/v1/orgs/:org_id/resend-verification`.
+
+Stop all old API instances before deploying. The entrypoint applies migration 020
+before serving requests. Mixed versions are unsupported because old code writes
+plaintext tokens. For rollback, stop all instances and clear outstanding tokens
+and expiry values before starting the old version; users must request new links.
+
+`POST /api/v1/verify-email` uses `AUTH_RATE_LIMIT_MAX` (default `10`) and
+`AUTH_RATE_LIMIT_WINDOW` (default `1 minute`) per client IP per API instance.
+Excess requests return `429` with `Retry-After` without consuming tokens. Client
+IP selection follows `TRUST_PROXY_HOPS`. GET remains a non-consuming redirect.
+
 ## Health Check
 
 ```bash
