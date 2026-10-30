@@ -4,11 +4,10 @@ import { useState } from "react";
 import { PageShell } from "@/components/PageShell";
 import { ApiError, resolveAgent, fetchAgentRecord, fetchFactsUrl } from "@/lib/nanda-api";
 import type { ResolveResponse, CatalogEntry } from "@/lib/nanda-types";
+import { resolutionSummary, type HopStatus } from "@/lib/resolutionStatus";
 import { cn } from "@/lib/utils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-
-type HopStatus = "idle" | "loading" | "ok" | "error" | "skipped";
 
 interface HopState {
   status: HopStatus;
@@ -61,6 +60,10 @@ function HopCard({
 
       {hop.status === "loading" && (
         <p className="ml-12 mt-3 text-xs text-indigo-500 animate-pulse">Fetching…</p>
+      )}
+
+      {hop.status === "skipped" && (
+        <p className="ml-12 mt-3 text-sm text-slate-500">Skipped</p>
       )}
 
       {hop.status === "error" && (
@@ -120,6 +123,8 @@ export default function ResolvePage() {
       setHop1({ status: "ok", url: `GET ${process.env.NEXT_PUBLIC_NANDA_INDEX_API_URL ?? ""}${h1url}`, data: indexData });
     } catch (err) {
       setHop1({ status: "error", url: h1url, error: err instanceof ApiError ? err.message : "Index lookup failed." });
+      setHop2({ status: "skipped" }); setHop3({ status: "skipped" }); setHop4({ status: "skipped" });
+      setLatency(Math.round(performance.now() - t0));
       setResolving(false);
       return;
     }
@@ -129,6 +134,7 @@ export default function ResolvePage() {
 
     if (!entryUrl) {
       setHop2({ status: "skipped", url: "No URL to follow — inline data or custom discovery path." });
+      setHop3({ status: "skipped" }); setHop4({ status: "skipped" });
       setResolving(false);
       setLatency(Math.round(performance.now() - t0));
       return;
@@ -149,6 +155,7 @@ export default function ResolvePage() {
       setHop2({ status: "ok", url: `GET ${h2url}`, data: catalogEntry });
     } catch (err) {
       setHop2({ status: "error", url: h2url, error: err instanceof ApiError ? err.message : "Registry unreachable." });
+      setHop3({ status: "skipped" }); setHop4({ status: "skipped" });
       setResolving(false);
       setLatency(Math.round(performance.now() - t0));
       return;
@@ -157,7 +164,8 @@ export default function ResolvePage() {
     // ── Hop 3: Agent facts URL ─────────────────────────────────────────────
     const h3url = catalogEntry.url;
     if (!h3url) {
-      setHop3({ status: "error", url: "—", error: "Catalog entry embeds the artifact inline (no url to fetch)." });
+      setHop3({ status: "skipped", url: "Catalog entry embeds the artifact inline (no URL to fetch)." });
+      setHop4({ status: "skipped" });
       setResolving(false);
       setLatency(Math.round(performance.now() - t0));
       return;
@@ -245,7 +253,9 @@ export default function ResolvePage() {
       </form>
 
       {latency !== null && (
-        <p className="mb-4 text-xs text-slate-400">Hops 1–3 completed in {latency} ms</p>
+        <p role="status" className="mb-4 text-xs text-slate-500">
+          {resolutionSummary([hop1.status, hop2.status, hop3.status])} · {latency} ms. Document fetching does not establish endpoint availability.
+        </p>
       )}
 
       {/* Hops */}

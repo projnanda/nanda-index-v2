@@ -287,7 +287,7 @@ export default function QueryPage() {
         {result?.kind === "resolve" && result.resolve && (
           <>
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
-              Resolved: <span className="font-mono normal-case">{result.resolve.locator}</span>
+              Index match: <span className="font-mono normal-case">{result.resolve.locator}</span>
             </p>
 
             {/* Hop 1: NANDA Index record */}
