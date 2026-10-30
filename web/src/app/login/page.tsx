@@ -21,12 +21,12 @@ const primaryBtnClass =
 const oauthBtnClass =
   "inline-flex items-center justify-center gap-3 h-9 w-full rounded-control border-2 border-line bg-surface-light px-3 text-sm font-medium text-ink hover:border-line-strong transition";
 
-function LoginPageInner() {
+function LoginForm({ initialMode }: { initialMode: Mode }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const reason = searchParams.get("reason");
   const oauthError = searchParams.get("error");
-  const [mode, setMode] = useState<Mode>("login");
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -66,8 +66,10 @@ function LoginPageInner() {
 
   return (
     <PageShell
-      title="Sign In"
-      description="Sign in to manage your organization's index record."
+      title={mode === "register" ? "Create account" : "Sign in"}
+      description={mode === "register"
+        ? "Create an account to register and manage agents for yourself or your organization."
+        : "Sign in to manage your agents and index entries."}
     >
       <div className="mx-auto max-w-md space-y-5">
         {/* Session / OAuth notices */}
@@ -98,6 +100,8 @@ function LoginPageInner() {
           <div className="mb-5 flex rounded-control border border-line bg-surface-strong p-1 text-sm">
             <button
               type="button"
+              aria-pressed={mode === "login"}
+              disabled={loading}
               onClick={() => { setMode("login"); setError(null); }}
               className={`flex-1 rounded-control py-1.5 font-medium transition ${
                 mode === "login"
@@ -109,6 +113,8 @@ function LoginPageInner() {
             </button>
             <button
               type="button"
+              aria-pressed={mode === "register"}
+              disabled={loading}
               onClick={() => { setMode("register"); setError(null); }}
               className={`flex-1 rounded-control py-1.5 font-medium transition ${
                 mode === "register"
@@ -122,34 +128,57 @@ function LoginPageInner() {
 
           <form onSubmit={onSubmit} className="space-y-3">
             {mode === "register" && (
+              <>
+              <label htmlFor="display-name" className="sr-only">Display name (optional)</label>
               <input
+                id="display-name"
+                name="display_name"
                 type="text"
+                autoComplete="nickname"
+                maxLength={255}
                 placeholder="Display name (optional)"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 className={inputClass}
               />
+              </>
             )}
+            <label htmlFor="email" className="sr-only">Email</label>
             <input
+              id="email"
+              name="email"
               type="email"
+              autoComplete="email"
+              maxLength={255}
               placeholder="Email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
               className={inputClass}
             />
+            <label htmlFor="password" className="sr-only">Password</label>
             <input
+              id="password"
+              name="password"
               type="password"
+              autoComplete={mode === "register" ? "new-password" : "current-password"}
+              aria-describedby={mode === "register" ? "password-rules" : undefined}
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={8}
+              maxLength={128}
               className={inputClass}
             />
+            {mode === "register" && (
+              <p id="password-rules" className="text-xs text-ink-medium">
+                Use 8 to 128 characters. Choose a unique password you do not use elsewhere.
+              </p>
+            )}
 
             {error && (
-              <p className="rounded-control border border-[#b42318]/30 bg-[#fef3f2] px-4 py-2.5 text-sm text-[#b42318]">
+              <p role="alert" className="rounded-control border border-[#b42318]/30 bg-[#fef3f2] px-4 py-2.5 text-sm text-[#b42318]">
                 {error}
               </p>
             )}
@@ -205,7 +234,7 @@ function LoginPageInner() {
         )}
 
         <p className="text-center text-xs text-ink-weak">
-          <Link href="/" className="underline hover:text-brand-600">
+          <Link href="/explore" className="underline hover:text-brand-600">
             Browse public records
           </Link>{" "}
           without signing in.
@@ -213,6 +242,12 @@ function LoginPageInner() {
       </div>
     </PageShell>
   );
+}
+
+function LoginPageInner() {
+  const searchParams = useSearchParams();
+  const mode = searchParams.get("mode") === "register" ? "register" : "login";
+  return <LoginForm key={mode} initialMode={mode} />;
 }
 
 export default function LoginPage() {
