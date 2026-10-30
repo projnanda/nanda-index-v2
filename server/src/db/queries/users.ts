@@ -1,4 +1,5 @@
 import { getSql } from '../client.js';
+import type { TransactionSql } from 'postgres';
 
 /** Domain type — camelCase (postgres.camel maps snake_case columns). */
 export interface User {
@@ -59,6 +60,21 @@ export async function findUserById(id: string): Promise<User | null> {
     SELECT * FROM users WHERE id = ${id} LIMIT 1
   `;
   return rows[0] ?? null;
+}
+
+/**
+ * Recheck account control in the transaction granting entry ownership.
+ * Writing the row also makes a SERIALIZABLE account deletion with an older
+ * snapshot retry after this grant commits, so it sees the new membership.
+ * A row lock alone would not refresh that deletion's snapshot.
+ */
+export async function lockVerifiedUserForOwnership(
+  tx: TransactionSql, userId: string, tokenVersion: number,
+): Promise<boolean> {
+  const rows = await tx`UPDATE users SET updated_at = clock_timestamp()
+    WHERE id = ${userId} AND email_verified AND token_version = ${tokenVersion}
+    RETURNING id`;
+  return rows.length > 0;
 }
 
 /**
