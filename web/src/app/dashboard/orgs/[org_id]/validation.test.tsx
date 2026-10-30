@@ -6,7 +6,7 @@ import OrgDetailPage from "./page";
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn() }), useParams: () => ({ org_id: "validation-entry" }) }));
 vi.mock("@/hooks/useRequireAuth", () => ({ useRequireAuth: () => {} }));
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
-const org = { org_id: "validation-entry", display_name: "Valid Entry", domain: null, registry_url: "https://example.com/card.json", ttl_seconds: 86400, status: "active", email_verified: true, domain_verified: false, identifier: "urn:air:host39.org:personal:lee@example.com", created_at: "2026-10-30T12:00:00Z", updated_at: "2026-10-30T12:00:00Z", extensions: {} };
+const org = { org_id: "validation-entry", display_name: "Valid Entry", domain: null, registry_url: "https://example.com/card.json", ttl_seconds: 86400, status: "active", email_verified: true, domain_verified: false, identifier: "urn:air:host39.org:personal:lee@example.com", created_at: "2026-10-30T12:00:00Z", updated_at: "2026-10-30T12:00:00Z", extensions: { "org.projectnanda": { resolutionRole: "personal-agent-card" } } };
 
 it("blocks invalid URLs inline before sending edits", async () => {
   let writes = 0;
@@ -63,4 +63,55 @@ it("holds the submitted edit values until a delayed validation response returns"
   await userEvent.type(url, "?corrected=true");
   expect(url.value).toBe(`${org.registry_url}?corrected=true`);
   expect(url.getAttribute("aria-invalid")).toBe("false");
+});
+
+it("shows the account verification recovery message after a rejected edit", async () => {
+  vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => init.method
+    ? new Response(JSON.stringify({ error: "ACCOUNT_NOT_VERIFIED", detail: "account email is not verified" }), { status: 403 })
+    : new Response(JSON.stringify(org)));
+  render(<OrgDetailPage />);
+  await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
+  await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+  expect(await screen.findByText(/Verify your email to register and manage agents/)).toBeTruthy();
+  expect(screen.getByText(/resend it from your dashboard/)).toBeTruthy();
+  expect(screen.queryByText(/ACCOUNT_NOT_VERIFIED|account email is not verified/)).toBeNull();
+});
+
+it("reveals and focuses a server runtime URL error after the pending edit is unlocked", async () => {
+  vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => init.method
+    ? new Response(JSON.stringify({ error: "VALIDATION", detail: "extensions.org.projectnanda.runtime.url must be an absolute HTTP(S) URL" }), { status: 400 })
+    : new Response(JSON.stringify(org)));
+  render(<OrgDetailPage />);
+  await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
+  const runtimeUrl = screen.getByLabelText(/^Runtime URL/) as HTMLInputElement;
+  expect(runtimeUrl.closest("details")!.open).toBe(false);
+  await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+  expect(runtimeUrl.closest("details")!.open).toBe(true);
+  expect(document.activeElement).toBe(runtimeUrl);
+  expect(runtimeUrl.getAttribute("aria-invalid")).toBe("true");
+  expect(document.getElementById(runtimeUrl.getAttribute("aria-describedby")!)?.textContent).toMatch(/URL/);
+  expect(screen.queryByText(/extensions\.org\.projectnanda/)).toBeNull();
+  await userEvent.type(runtimeUrl, "https://runtime.example.com");
+  expect(runtimeUrl.value).toBe("https://runtime.example.com");
+  expect(runtimeUrl.getAttribute("aria-invalid")).toBe("false");
+});
+
+it.each(["nested-ai-catalog", "dns-svcb-pointer", undefined])("allows unrelated edits with hidden legacy runtime hints for %s", async (resolutionRole) => {
+  const record = { ...org, extensions: { "org.projectnanda": { resolutionRole, "runtime.url": "javascript:legacy()" } } };
+  let saved: Record<string, unknown> | undefined;
+  vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+    if (init.method === "PUT") saved = JSON.parse(init.body as string);
+    return new Response(JSON.stringify({ ...record, ...saved }));
+  });
+  render(<OrgDetailPage />);
+  await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
+  fireEvent.change(screen.getByLabelText(/^Display Name/), { target: { value: "Updated entry" } });
+  await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+  await screen.findByRole("button", { name: "Edit" });
+  expect(saved).toMatchObject({ display_name: "Updated entry" });
+  expect(saved).not.toHaveProperty("extensions");
+  expect(screen.queryByLabelText(/^Runtime URL/)).toBeNull();
 });

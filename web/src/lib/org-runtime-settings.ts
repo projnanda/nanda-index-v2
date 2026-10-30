@@ -1,6 +1,8 @@
 import { NANDA_EXTENSION } from "./air";
 import type { CatalogExtensions } from "./nanda-types";
 
+export const RUNTIME_PROVIDERS = ["AWS", "Azure", "GCP", "Railway", "GoDaddy", "Vercel", "Other"];
+
 export const RUNTIME_FIELDS = [
   { key: "runtime.provider", label: "Runtime provider", help: "runtime_provider" },
   { key: "runtime.url", label: "Runtime URL", help: "runtime_url" },

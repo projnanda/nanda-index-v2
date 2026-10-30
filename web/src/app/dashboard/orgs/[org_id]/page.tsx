@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { formatTimestamp } from "@/lib/formatTimestamp";
 import { useRouter, useParams } from "next/navigation";
 import { FieldLabel } from "@/components/FieldLabel";
 import { PageShell } from "@/components/PageShell";
@@ -9,8 +10,9 @@ import { JsonPanel } from "@/components/JsonPanel";
 import { DomainVerification } from "@/components/DomainVerification";
 import { ApiError, getOrgAsOwner, updateOrg, suspendOrg, reactivateOrg, deleteOrg, resendVerification } from "@/lib/nanda-api";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
-import { applyRuntimeSettings, readRuntimeSettings, RUNTIME_FIELDS } from "@/lib/org-runtime-settings";
+import { applyRuntimeSettings, readRuntimeSettings, RUNTIME_FIELDS, RUNTIME_PROVIDERS } from "@/lib/org-runtime-settings";
 import { orgFormError, validateOrgFields, type OrgFieldErrors, type OrgFormField } from "@/lib/org-validation";
+import { nandaField } from "@/lib/air";
 import { ORG_FIELD_HELP } from "@/lib/org-field-help";
 import type { IndexRecord, Moderation } from "@/lib/nanda-types";
 
@@ -55,11 +57,30 @@ export default function OrgDetailPage() {
   const [tags, setTags] = useState("");
   const [version, setVersion] = useState("");
   const [ttlSeconds, setTtlSeconds] = useState("86400");
+  const advancedRef = useRef<HTMLDetailsElement>(null);
+  const ttlRef = useRef<HTMLInputElement>(null);
+  const runtimeUrlRef = useRef<HTMLInputElement>(null);
+  const pendingAdvancedFocus = useRef<"ttl_seconds" | "runtime_url" | null>(null);
+  const resolutionRole = org ? nandaField(org, "resolutionRole") : undefined;
+  const originalRuntimeProvider = org ? nandaField(org, "runtime.provider") : undefined;
+  const isAgentCard = resolutionRole === "smb-agent-card" || resolutionRole === "personal-agent-card";
   const [runtime, setRuntime] = useState(() => readRuntimeSettings({}));
   const [fieldErrors, setFieldErrors] = useState<OrgFieldErrors>({});
   const validation = validateOrgFields({ display_name: displayName, ...(org?.domain ? { domain } : {}),
-    registry_url: registryUrl, description, tags, version, runtime_url: runtime["runtime.url"], ttl_seconds: ttlSeconds },
+    registry_url: registryUrl, description, tags, version, ...(isAgentCard ? { runtime_url: runtime["runtime.url"] } : {}), ttl_seconds: ttlSeconds },
     { allowEmptyRegistryUrl: !org?.registry_url });
+  function showFieldErrors(errors: OrgFieldErrors) {
+    pendingAdvancedFocus.current = errors.ttl_seconds ? "ttl_seconds" : isAgentCard && errors.runtime_url ? "runtime_url" : null;
+    setFieldErrors(errors);
+  }
+  useEffect(() => {
+    // A server response must unlock the fieldset before its invalid field can receive focus.
+    if (saving || !pendingAdvancedFocus.current) return;
+    if (advancedRef.current) advancedRef.current.open = true;
+    const target = pendingAdvancedFocus.current === "ttl_seconds" ? ttlRef.current : runtimeUrlRef.current;
+    pendingAdvancedFocus.current = null;
+    target?.focus();
+  }, [fieldErrors, saving]);
   function clearFieldError(field: OrgFormField) {
     setFieldErrors((errors) => ({ ...errors, [field]: undefined }));
   }
@@ -68,7 +89,7 @@ export default function OrgDetailPage() {
       onBlur: () => setFieldErrors((errors) => ({ ...errors, [field]: validation[field] })) };
   }
   function fieldError(field: OrgFormField) {
-    return fieldErrors[field] ? <p id={`${fid}-${field}-error`} className="mt-1 text-xs text-rose-700">{fieldErrors[field]}</p> : null;
+    return fieldErrors[field] ? <p id={`${fid}-${field}-error`} role="alert" className="mt-1 text-xs text-rose-700">{fieldErrors[field]}</p> : null;
   }
 
   useEffect(() => {
@@ -111,7 +132,7 @@ export default function OrgDetailPage() {
 
   async function onSave() {
     setError(null);
-    setFieldErrors(validation);
+    showFieldErrors(validation);
     if (Object.keys(validation).length) return;
     const ttl = Number(ttlSeconds);
     setSaving(true);
@@ -127,13 +148,13 @@ export default function OrgDetailPage() {
         tags: tagList.length ? tagList : [],
         version: version || undefined,
         ttl_seconds: ttl,
-        extensions: applyRuntimeSettings(org!.extensions, runtime),
+        ...(isAgentCard ? { extensions: applyRuntimeSettings(org!.extensions, runtime) } : {}),
       });
       setOrg(updated);
       setEditing(false);
     } catch (err) {
       const failure = orgFormError(err);
-      setFieldErrors(failure.fields);
+      showFieldErrors(failure.fields);
       setError(failure.message);
     } finally {
       setSaving(false);
@@ -192,6 +213,7 @@ export default function OrgDetailPage() {
     setVersion(org.version ?? "");
     setTtlSeconds(String(org.ttl_seconds));
     setRuntime(readRuntimeSettings(org.extensions));
+    pendingAdvancedFocus.current = null;
     setError(null);
     setFieldErrors({});
     setEditing(true);
@@ -287,29 +309,42 @@ export default function OrgDetailPage() {
               <p className="mt-1 text-[11px] text-slate-400">Separate tags with commas.</p>
             </div>
             <div>
-              <FieldLabel htmlFor={`${fid}-version`} label="Version" info={ORG_FIELD_HELP.version} optional />
+              <FieldLabel htmlFor={`${fid}-version`} label="Version label" info={ORG_FIELD_HELP.version} optional />
               <input id={`${fid}-version`} {...fieldProps("version")} value={version} onChange={(e) => { setVersion(e.target.value); clearFieldError("version"); }} className={inputCls} placeholder="v1.0.0" />
               {fieldError("version")}
-              <p className="mt-1 text-[11px] text-slate-400">SemVer of this artifact (shown on the card).</p>
+              <p className="mt-1 text-[11px] text-slate-400">Optional version label, up to 64 characters (for example, v1.0.0 or 2026-10).</p>
             </div>
-            <details open={!!(fieldErrors.runtime_url || fieldErrors.ttl_seconds) || undefined} className="space-y-4 rounded-2xl border border-black/10 p-4">
+            <details ref={advancedRef} className="space-y-4 rounded-2xl border border-black/10 p-4">
               <summary className="cursor-pointer text-sm font-medium text-slate-700">Advanced settings</summary>
               <div>
                 <FieldLabel htmlFor={`${fid}-ttl`} label="Cache TTL" info={ORG_FIELD_HELP.ttl_seconds} />
-                <input id={`${fid}-ttl`} {...fieldProps("ttl_seconds")} type="number" min={3600} max={604800} step={1} value={ttlSeconds}
+                <input ref={ttlRef} id={`${fid}-ttl`} {...fieldProps("ttl_seconds")} type="number" min={3600} max={604800} step={1} value={ttlSeconds}
                   onChange={(e) => { setTtlSeconds(e.target.value); clearFieldError("ttl_seconds"); }} className={inputCls} />
-              {fieldError("ttl_seconds")}
+                {fieldError("ttl_seconds")}
                 <p className="mt-1 text-xs text-slate-500">Seconds, from 3600 (1 hour) to 604800 (7 days).</p>
               </div>
-              <p className="text-xs text-slate-500">Runtime and authentication fields are public hints. Do not enter passwords, tokens or other credentials.</p>
-              {RUNTIME_FIELDS.map(({ key, label, help }) => (
-                <div key={key}>
-                  <FieldLabel htmlFor={`${fid}-${key}`} label={label} info={ORG_FIELD_HELP[help]} optional />
-                  <input id={`${fid}-${key}`} {...(key === "runtime.url" ? fieldProps("runtime_url") : {})} value={runtime[key]} className={inputCls}
-                    onChange={(e) => { setRuntime((current) => ({ ...current, [key]: e.target.value })); if (key === "runtime.url") clearFieldError("runtime_url"); }} />
-                  {key === "runtime.url" && fieldError("runtime_url")}
-                </div>
-              ))}
+              {isAgentCard && (
+                <>
+                  <p className="text-xs text-slate-500">Runtime and authentication fields are public hints. Do not enter passwords, tokens or other credentials.</p>
+                  {RUNTIME_FIELDS.map(({ key, label, help }) => (
+                    <div key={key}>
+                      <FieldLabel htmlFor={`${fid}-${key}`} label={label} info={ORG_FIELD_HELP[help]} optional />
+                      {key === "runtime.provider" ? (
+                        <select id={`${fid}-${key}`} value={runtime[key]} className={inputCls}
+                          onChange={(e) => setRuntime((current) => ({ ...current, [key]: e.target.value }))}>
+                          <option value="">Select provider…</option>
+                          {originalRuntimeProvider && !RUNTIME_PROVIDERS.includes(originalRuntimeProvider) && <option value={originalRuntimeProvider}>{originalRuntimeProvider}</option>}
+                          {RUNTIME_PROVIDERS.map((provider) => <option key={provider} value={provider}>{provider}</option>)}
+                        </select>
+                      ) : (
+                        <input ref={key === "runtime.url" ? runtimeUrlRef : undefined} id={`${fid}-${key}`} {...(key === "runtime.url" ? fieldProps("runtime_url") : {})} value={runtime[key]} className={inputCls}
+                          onChange={(e) => { setRuntime((current) => ({ ...current, [key]: e.target.value })); if (key === "runtime.url") clearFieldError("runtime_url"); }} />
+                      )}
+                      {key === "runtime.url" && fieldError("runtime_url")}
+                    </div>
+                  ))}
+                </>
+              )}
             </details>
             <div className="flex gap-3">
               <button onClick={onSave} disabled={saving} className="rounded-2xl bg-slate-950 px-6 py-2.5 text-sm font-medium text-white disabled:opacity-60">
@@ -352,13 +387,13 @@ export default function OrgDetailPage() {
                 </div>
               )}
               <div><span className="font-medium">TTL:</span> {org.ttl_seconds}s</div>
-              <div><span className="font-medium">Created:</span> {new Date(org.created_at).toLocaleString()}</div>
+              <div><span className="font-medium">Created:</span> {formatTimestamp(org.created_at)}</div>
             </div>
           </div>
         )}
 
         {error && (
-          <div className="rounded-3xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}</div>
+          <div role="alert" className="rounded-3xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}</div>
         )}
 
         <JsonPanel data={org} />

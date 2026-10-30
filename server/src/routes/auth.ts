@@ -85,6 +85,15 @@ function oauthErrorCode(err: unknown): string {
   return (err as { code?: unknown }).code === '23505' ? 'account_exists' : 'oauth_failed';
 }
 
+/**
+ * Trusts a Google address only when the userinfo response says, as a real
+ * boolean, that Google verified it. A missing, null or malformed flag counts
+ * as unverified, so the user must confirm the address with us instead.
+ */
+export function googleEmailVerified(profile: { verified_email?: unknown }): boolean {
+  return profile.verified_email === true;
+}
+
 export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void> {
   const config = buildConfig();
   const passwords = createPasswordHasher(config.auth.maxConcurrentHashes);
@@ -151,8 +160,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
         avatarUrl:   profile.picture ?? null,
         provider:    'google',
         providerId:  profile.id,
-        // Google reports whether it has verified the address; trust only that.
-        emailVerified: profile.verified_email !== false,
+        emailVerified: googleEmailVerified(profile),
       });
       if (wasJustCreated(user)) fastify.analytics.capture('user_signed_up', { method: 'google' });
 
