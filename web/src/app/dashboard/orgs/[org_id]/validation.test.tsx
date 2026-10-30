@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import OrgDetailPage from "./page";
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn() }), useParams: () => ({ org_id: "validation-entry" }) }));
@@ -43,4 +43,24 @@ it("validates advanced runtime URL and TTL before saving", async () => {
   expect(writes).toBe(0);
   expect(screen.getByLabelText(/^Runtime URL/).getAttribute("aria-invalid")).toBe("true");
   expect(screen.getByLabelText(/^Cache TTL/).getAttribute("aria-invalid")).toBe("true");
+});
+
+it("holds the submitted edit values until a delayed validation response returns", async () => {
+  let complete!: (response: Response) => void;
+  vi.stubGlobal("fetch", (_url: string, init: RequestInit) => init.method
+    ? new Promise<Response>((resolve) => { complete = resolve; })
+    : Promise.resolve(new Response(JSON.stringify(org))));
+  render(<OrgDetailPage />);
+  await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
+  const url = screen.getByLabelText(/^Catalog \/ Agent Card URL/) as HTMLInputElement;
+  await userEvent.click(screen.getByRole("button", { name: "Save" }));
+  await userEvent.type(url, "?changed=true");
+  expect(url.value).toBe(org.registry_url);
+  await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+  await act(async () => { complete(new Response(JSON.stringify({ error: "VALIDATION", field: "registry_url", detail: "registry_url must start with https://" }), { status: 400 })); });
+  expect(url.getAttribute("aria-invalid")).toBe("true");
+  await userEvent.type(url, "?corrected=true");
+  expect(url.value).toBe(`${org.registry_url}?corrected=true`);
+  expect(url.getAttribute("aria-invalid")).toBe("false");
 });
