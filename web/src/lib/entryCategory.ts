@@ -1,39 +1,45 @@
 import type { IndexCatalogEntry } from "@/lib/nanda-types";
 import { nandaField } from "@/lib/air";
 
-// Exactly six categories, decided in this order:
-//   1. A personal entry (resolutionRole "personal-agent-card") is Personal,
-//      whatever it publishes: agent card, MCP server card or skill.
-//   2. Media type: MCP server card → MCPs, skill → Skills, AI catalog or
-//      registry → Enterprise.
-//   3. The org.projectnanda resolutionRole: DNS-SVCB pointer → DNS SVCB,
-//      SMB agent card → SMBs.
-//   4. An A2A agent card with neither falls back to its tags.
+export type Owner = "enterprise" | "smb" | "personal";
+export type Protocol = "a2a" | "mcp" | "skill" | "catalog";
 
-export type Category = "enterprise" | "dns-svcb" | "smb" | "personal" | "mcp" | "skill";
+export const OWNER_LABELS: Record<Owner, string> = { enterprise: "Enterprise", smb: "SMB", personal: "Personal" };
+export const PROTOCOL_LABELS: Record<Protocol, string> = { a2a: "A2A", mcp: "MCP", skill: "Agent Skill", catalog: "Catalog" };
 
-const ROLE_CATEGORY: Record<string, Category> = {
-  "dns-svcb-pointer": "dns-svcb",
-  "smb-agent-card": "smb",
-};
-
-/** Map a single record to one of the six categories, or null when it fits none. */
-export function categoryOf(record: IndexCatalogEntry): Category | null {
+/** Ownership and protocol are independent; a personal entry can publish MCP. */
+export function ownerOf(record: IndexCatalogEntry): Owner | null {
   const role = nandaField(record, "resolutionRole");
   if (role === "personal-agent-card") return "personal";
-
-  const mt = record.type ?? "";
-  if (mt === "application/mcp-server-card+json") return "mcp";
-  if (mt === "application/agentskill+zip") return "skill";
-  if (mt === "application/ai-catalog+json" || mt === "application/ai-registry+json") return "enterprise";
-
-  if (role && ROLE_CATEGORY[role]) return ROLE_CATEGORY[role];
-
-  // A2A agent cards split into Personal vs SMB by their tags.
-  if (mt === "application/a2a-agent-card+json") {
-    const tags = (record.tags ?? []).map((t) => t.toLowerCase());
-    if (tags.includes("personal-agent") || tags.includes("email-identity")) return "personal";
-    if (tags.includes("smb")) return "smb";
-  }
+  if (role === "smb-agent-card") return "smb";
+  if (["nested-ai-catalog", "dns-svcb-pointer", "ard-endpoint"].includes(role ?? "")) return "enterprise";
+  const tags = (record.tags ?? []).map((tag) => tag.toLowerCase());
+  if (tags.includes("personal-agent") || tags.includes("email-identity")) return "personal";
+  if (tags.includes("smb")) return "smb";
+  if (tags.includes("enterprise") || protocolOf(record) === "catalog") return "enterprise";
   return null;
+}
+
+export function protocolOf(record: IndexCatalogEntry): Protocol | null {
+  switch (record.type?.split(";", 1)[0].trim().toLowerCase()) {
+    case "application/a2a-agent-card+json": return "a2a";
+    case "application/mcp-server-card+json": return "mcp";
+    case "application/agentskill+zip": return "skill";
+    case "application/ai-catalog+json":
+    case "application/ai-registry+json": return "catalog";
+    default: return null;
+  }
+}
+
+export function discoveryMethodOf(record: IndexCatalogEntry): string {
+  if (nandaField(record, "resolutionRole") === "dns-svcb-pointer") return "DNS SVCB";
+  if (protocolOf(record) === "catalog") return "Catalog";
+  return record.url ? "Hosted resource" : record.data ? "Inline resource" : "Custom discovery";
+}
+
+export function matchesFacets(record: IndexCatalogEntry, owners: ReadonlySet<Owner>, protocols: ReadonlySet<Protocol>): boolean {
+  const owner = ownerOf(record);
+  const protocol = protocolOf(record);
+  return (!owners.size || (owner !== null && owners.has(owner)))
+    && (!protocols.size || (protocol !== null && protocols.has(protocol)));
 }
