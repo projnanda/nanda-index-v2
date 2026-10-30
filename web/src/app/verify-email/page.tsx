@@ -32,7 +32,9 @@ function EmailConfirmed({ org }: { org: IndexRecord }) {
         <p className="text-sm text-ink-medium">
           {active
             ? "Your entry is now live in the index."
-            : "Next, verify your domain from the dashboard to make your entry live."}{" "}
+            : org.status === "pending" && org.domain && !org.domain_verified
+              ? "Next, verify your domain from the dashboard to make your entry live."
+              : "Check your entry in the dashboard for its current publication status."}{" "}
           <Link href={`/dashboard/orgs/${encodeURIComponent(org.org_id)}`} className="underline hover:text-brand-600">
             Go to the dashboard
           </Link>
@@ -104,11 +106,14 @@ function VerifyEmailInner() {
       <div className="mx-auto max-w-md space-y-5">
         <div className="bg-surface-light rounded-card border border-line p-8 shadow-card space-y-4">
           {!token ? (
+            <div className="space-y-3">
+            <h2 className="text-lg font-semibold text-ink-strong">Check email verification</h2>
             <p className="text-sm text-ink-medium">
-              This verification link is invalid or incomplete. Open your{" "}
+              No verification token is present. If you already confirmed this address, no further action is needed. Open your{" "}
               <Link href="/dashboard" className="underline hover:text-brand-600">dashboard</Link>{" "}
-              to send a new one.
+              to check the current status or send a new verification link.
             </p>
+            </div>
           ) : (
             <>
               <p className="text-sm text-ink-medium">Press the button to confirm this email address.</p>
@@ -119,9 +124,12 @@ function VerifyEmailInner() {
           )}
 
           {error && (
+            <div role="alert" className="space-y-3">
             <p className="rounded-control border border-[#b42318]/30 bg-[#fef3f2] px-4 py-2.5 text-sm text-[#b42318]">
               {error}
             </p>
+            <Link href="/dashboard" className="text-sm underline hover:text-brand-600">Check verification or send a new link</Link>
+            </div>
           )}
         </div>
       </div>
@@ -131,7 +139,7 @@ function VerifyEmailInner() {
 
 export default function VerifyEmailPage() {
   return (
-    <Suspense>
+    <Suspense fallback={<PageShell title="Verify your email" description="Loading verification…"><p role="status">Loading…</p></PageShell>}>
       <VerifyEmailInner />
     </Suspense>
   );
