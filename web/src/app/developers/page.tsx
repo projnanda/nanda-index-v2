@@ -124,10 +124,10 @@ curl -X DELETE "${api}/api/v1/orgs/acme" -H "Authorization: Bearer $TOKEN"
 ];
 
 const RATE_LIMITS = [
-  { routes: "Public reads: /api/v1/index, /api/v1/index/:org_id, /api/v1/search, /api/v1/resolve, ARD listings", limit: "120 requests per minute per IP address" },
-  { routes: "Agentic search: /api/v1/agentic-search, /api/ard/search", limit: "30 requests per minute per IP address" },
-  { routes: "Account routes: /auth/register, /auth/login, password reset, account verification, resend", limit: "10 requests per minute per IP address; sign-in locks for 15 minutes after 5 failed attempts for one email from one network, doubling on further failures" },
-  { routes: "Entry writes: POST /api/v1/orgs, PUT /api/v1/orgs/:org_id, POST /api/v1/orgs/:org_id/claim", limit: "30 requests per hour per IP address; claim also has a 30 per hour budget per account across all IP addresses" },
+  { routes: "Public reads: /api/v1/index, /api/v1/index/:org_id, /api/v1/search, /api/v1/resolve, GET /api/ard/agents, POST /api/ard/explore", limit: "120 requests per minute per IP address, counted separately for each route" },
+  { routes: "Agentic search: /api/v1/agentic-search, /api/ard/search", limit: "30 requests per minute per IP address, counted separately for each route" },
+  { routes: "Account routes: /auth/register, /auth/login, password reset, account verification, resend", limit: "10 requests per minute per IP address, counted separately for each route; sign-in locks for 15 minutes after 5 failed attempts for one email from one network, doubling on further failures" },
+  { routes: "Entry writes: POST /api/v1/orgs, PUT /api/v1/orgs/:org_id, POST /api/v1/orgs/:org_id/claim", limit: "30 requests per hour per IP address, counted separately for each route; claim also has a 30 per hour budget per account across all IP addresses" },
 ];
 
 const ERROR_CODES = [
@@ -228,7 +228,8 @@ export default function DevelopersPage() {
         <section aria-labelledby="dev-limits" className="space-y-3">
           <h2 id="dev-limits" className={h2Class}>Rate limits</h2>
           <p>
-            Defaults for this index; an operator can change them. Over a route limit, the API answers 429 with a
+            Defaults for this index; an operator can change them. Each limited route has its own per-IP budget,
+            so hitting the limit on one route does not block the others. Over a route limit, the API answers 429 with a
             Retry-After header (seconds) and X-RateLimit-Limit, X-RateLimit-Remaining and X-RateLimit-Reset
             headers; the body&apos;s error text says how long to wait, for example &quot;retry in 1 minute&quot;.
             The 429 codes below that the application raises itself (TOO_MANY_ATTEMPTS, TOO_MANY_UNVERIFIED,
