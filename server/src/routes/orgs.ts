@@ -1,7 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { findByOrgId, findProvenByDomain, findProvenByIdentifier, countUnprovenOrgsForUser, insertOrganization, updateOrganization, suspendOrganization, reactivateOrganization, deleteOrganization, issueDomainChallenge, markDomainVerified, renewVerifyToken, toIndexRecord, type Organization } from '../db/queries/organizations.js';
-import { insertMembership, checkMembership } from '../db/queries/orgMemberships.js';
+import { findByOrgId, findProvenByDomain, findProvenByIdentifier, countUnprovenOrgsForUser, updateOrganization, suspendOrganization, reactivateOrganization, deleteOrganization, issueDomainChallenge, markDomainVerified, renewVerifyToken, toIndexRecord, type Organization } from '../db/queries/organizations.js';
+import { checkMembership } from '../db/queries/orgMemberships.js';
+import { createOwnedOrganization } from '../db/queries/organizationRegistration.js';
 import { sendVerificationEmail } from '../services/email.js';
 import { generateRepresentativeQueries } from '../services/llmEnrichment.js';
 import { buildConfig } from '../config/index.js';
@@ -363,6 +364,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       },
       response: {
         201: INDEX_RECORD_SCHEMA,
+        401: apiErrorSchema,
         409: apiErrorSchema,
         400: apiErrorSchema,
         403: apiErrorSchema,
@@ -408,9 +410,9 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       buildConfig().llmEnrichment,
     );
 
-    let org: Organization;
+    let org: Organization | null;
     try {
-      org = await insertOrganization({
+      org = await createOwnedOrganization({
         orgId:                body.org_id,
         displayName:          body.display_name,
         domain:               body.domain?.toLowerCase() ?? null,
@@ -429,13 +431,15 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
         version:              body.version,
         trustManifest:        body.trust_manifest,
         representativeQueries,
-      });
+      }, user.userId, user.tokenVersion ?? 0);
     } catch (err) {
       if (isUniqueViolation(err)) return reply.code(RACE_CONFLICT.status).send(RACE_CONFLICT.body);
       throw err;
     }
 
-    await insertMembership(user.userId, org.orgId, 'admin');
+    if (!org) {
+      return reply.code(401).send({ error: 'UNAUTHORIZED', detail: 'session expired; please sign in again' });
+    }
     await sendVerificationEmail(body.contact_email, verifyToken, body.org_id);
     fastify.analytics.capture('entry_registered', {
       hosting_path: path,
