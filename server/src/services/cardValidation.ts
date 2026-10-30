@@ -12,6 +12,11 @@ function object(value: unknown): value is Record<string, unknown> {
 }
 function text(value: unknown): boolean { return typeof value === 'string' && value.trim().length > 0; }
 function strings(value: unknown): boolean { return Array.isArray(value) && value.length > 0 && value.every(text); }
+const coreBindings = new Set(['JSONRPC', 'GRPC', 'HTTP+JSON']);
+function absoluteUrl(value: unknown): boolean {
+  try { const url = new URL(typeof value === 'string' ? value : ''); return !url.username && !url.password; }
+  catch { return false; }
+}
 function httpUrl(value: unknown): boolean {
   try {
     const url = new URL(typeof value === 'string' ? value : '');
@@ -28,7 +33,7 @@ function validShape(body: unknown, mediaType: string): boolean {
   if (mediaType === 'application/a2a-agent-card+json') {
     const interfaces = body.supportedInterfaces;
     const endpoint = interfaces !== undefined
-      ? Array.isArray(interfaces) && interfaces.length > 0 && interfaces.every((item) => object(item) && httpUrl(item.url) && text(item.protocolBinding) && text(item.protocolVersion))
+      ? Array.isArray(interfaces) && interfaces.length > 0 && interfaces.every((item) => object(item) && text(item.protocolBinding) && text(item.protocolVersion) && (coreBindings.has(String(item.protocolBinding)) ? httpUrl(item.url) : absoluteUrl(item.url)))
       : httpUrl(body.url);
     return endpoint && object(body.capabilities) && strings(body.defaultInputModes) && strings(body.defaultOutputModes)
       && Array.isArray(body.skills) && body.skills.every((skill) => object(skill) && text(skill.id) && text(skill.name) && text(skill.description) && Array.isArray(skill.tags) && skill.tags.every(text));
@@ -60,9 +65,12 @@ export async function validateRegistrationCard(
         const response = await fetch(url, { signal: controller.signal, redirect: 'error' });
         if (!response.ok) return result('unavailable', `Card request returned HTTP ${response.status}.`);
         const body = await readCappedJson(response);
-        return validShape(body, mediaType)
-          ? result('valid', 'Card fetched and required discovery fields passed structural checks. Runtime availability and optional protocol fields were not tested.')
-          : result('invalid', 'Card is not valid JSON within 256 KiB or does not satisfy the required discovery-field checks.');
+        if (!validShape(body, mediaType)) return result('invalid', 'Card is not valid JSON within 256 KiB or does not satisfy the required discovery-field checks.');
+        if (mediaType === 'application/a2a-agent-card+json' && object(body) && Array.isArray(body.supportedInterfaces)
+          && body.supportedInterfaces.some((item) => object(item) && !coreBindings.has(String(item.protocolBinding)))) {
+          return result('not_checked', 'Card fetched, but a custom protocol binding is outside this checker’s supported scope. Its endpoint was not fetched or tested.');
+        }
+        return result('valid', 'Card fetched and required discovery fields passed structural checks. Runtime availability and optional protocol fields were not tested.');
       })(),
       new Promise<CardValidation>((resolve) => {
         timer = setTimeout(() => {

@@ -47,3 +47,13 @@ it('checks required MCP server card fields', async () => {
   expect((await validateRegistrationCard('https://example.org/card.json', 'application/mcp-server-card+json', { guard: guard(body) })).status).toBe('valid');
   expect((await validateRegistrationCard('https://example.org/card.json', 'application/mcp-server-card+json', { guard: guard({ ...body, remotes: 'bad' }) })).status).toBe('invalid');
 });
+
+it('leaves custom A2A bindings unchecked instead of calling valid WebSocket URLs malformed', async () => {
+  const body = { ...card, url: undefined, supportedInterfaces: [{ url: 'wss://agent.example.com/a2a/websocket', protocolBinding: 'https://example.com/bindings/websocket/v1', protocolVersion: '1.0' }] };
+  const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(body)));
+  const result = await validateRegistrationCard('https://example.org/card.json', type, { guard: async () => fetch });
+  expect(result).toMatchObject({ status: 'not_checked', detail: expect.stringContaining('custom protocol binding') });
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(fetch.mock.calls[0]?.[0]).toBe('https://example.org/card.json');
+  expect((await validateRegistrationCard('https://example.org/card.json', type, { guard: guard({ ...body, supportedInterfaces: [{ ...body.supportedInterfaces[0], url: 'not a URL' }] }) })).status).toBe('invalid');
+});

@@ -3,6 +3,8 @@ import type { FastifyInstance } from 'fastify';
 import { buildServer } from '../../src/server.js';
 import { getSql, closeSql } from '../../src/db/client.js';
 import { upsertUser } from '../../src/db/queries/users.js';
+import { sendVerificationEmail } from '../../src/services/email.js';
+vi.mock('../../src/services/email.js', () => ({ sendVerificationEmail: vi.fn().mockResolvedValue(undefined) }));
 let fastify: FastifyInstance;
 let token: string;
 const card = { name: 'Example', description: 'A demo', version: '1', url: 'https://example.org/run', capabilities: {}, skills: [], defaultInputModes: ['text'], defaultOutputModes: ['text'] };
@@ -14,7 +16,7 @@ beforeAll(async () => {
   const user = await upsertUser({ email: 'card-owner@example.org', displayName: 'Owner', avatarUrl: null, provider: 'google', providerId: 'card-owner' });
   token = fastify.jwt.sign({ userId: user.id, email: user.email, displayName: null });
 });
-afterEach(async () => { vi.unstubAllGlobals(); await getSql()`DELETE FROM organizations WHERE org_id = 'card-check'`; });
+afterEach(async () => { vi.unstubAllGlobals(); vi.clearAllMocks(); await getSql()`DELETE FROM organizations WHERE org_id = 'card-check'`; });
 afterAll(async () => { await fastify.close(); await closeSql(); });
 it('validates at registration, persists the result, and exposes it with identity separately', async () => {
   vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response(JSON.stringify(card))));
@@ -41,8 +43,9 @@ it('warns on an unavailable card and rechecks a changed URL without trusting cli
 it('records the real contact-email proof time when verification succeeds', async () => {
   vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response(JSON.stringify(card))));
   await fastify.inject({ method: 'POST', url: '/api/v1/orgs', headers: headers(), payload });
-  const [row] = await getSql()`SELECT verify_token FROM organizations WHERE org_id='card-check'`;
-  const verified = await fastify.inject({ method: 'POST', url: '/api/v1/verify-email', payload: { token: row!.verifyToken } });
+  expect(sendVerificationEmail).toHaveBeenCalledWith(payload.contact_email, expect.any(String), payload.org_id);
+  const verificationToken = vi.mocked(sendVerificationEmail).mock.calls[0]![1];
+  const verified = await fastify.inject({ method: 'POST', url: '/api/v1/verify-email', payload: { token: verificationToken } });
   expect(verified.statusCode, verified.body).toBe(200);
   expect(verified.json().email_verified_at).toMatch(/^\d{4}-/);
 });
