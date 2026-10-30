@@ -15,6 +15,7 @@ import { buildServer } from '../../src/server.js';
 import { getSql } from '../../src/db/client.js';
 import { upsertUser, wasJustCreated } from '../../src/db/queries/users.js';
 import { issueAccountVerifyToken } from '../../src/db/queries/accountVerification.js';
+import { captureOrgVerificationEmails } from '../helpers/orgVerificationEmails.js';
 
 const EMAIL_PREFIX = 'analytics-events-';
 const ORG_ID = 'ae-org';
@@ -98,6 +99,7 @@ describe('Analytics events from account and entry routes', () => {
   });
 
   it('counts an entry through registration, both verifications and deletion', async () => {
+    const emails = captureOrgVerificationEmails();
     const owner = await upsertUser({
       email: `${EMAIL_PREFIX}owner@example.com`, displayName: null, avatarUrl: null,
       provider: 'google', providerId: 'analytics-events-owner',
@@ -120,7 +122,10 @@ describe('Analytics events from account and entry routes', () => {
     const [row] = await sql<{ token: string }[]>`
       SELECT verify_token AS token FROM organizations WHERE org_id = ${ORG_ID}
     `;
-    const emailVerified = await fastify.inject({ method: 'POST', url: '/api/v1/verify-email', payload: { token: row?.token } });
+    const token = emails.tokenFor(ORG_ID);
+    expect(row?.token).toMatch(/^[a-f0-9]{64}$/);
+    expect(row?.token).not.toBe(token);
+    const emailVerified = await fastify.inject({ method: 'POST', url: '/api/v1/verify-email', payload: { token } });
     expect(emailVerified.statusCode).toBe(200);
 
     const challenge = await fastify.inject({ method: 'POST', url: `/api/v1/orgs/${ORG_ID}/domain-challenge`, headers });
