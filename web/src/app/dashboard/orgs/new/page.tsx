@@ -12,7 +12,7 @@ import { ApiError, checkAvailability, createOrg, isAccountNotVerified } from "@/
 import { cn } from "@/lib/utils";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import type { CatalogExtensions, HostingPath, IndexRecord } from "@/lib/nanda-types";
-import { NANDA_EXTENSION, PERSONAL_CARD_HOST, isAnchoredTo, previewIdentifier } from "@/lib/air";
+import { NANDA_EXTENSION, isAnchoredTo, previewIdentifier } from "@/lib/air";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -284,8 +284,9 @@ function SuccessScreen({ record, path }: { record: IndexRecord; path: HostingPat
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
           <p className="text-sm font-semibold text-amber-800">Confirm your email to go live</p>
           <p className="mt-0.5 text-xs text-amber-700">
-            Your record is <span className="font-semibold">pending</span> and hidden from the public index until you confirm your contact address. We&apos;ve emailed a verification link — no domain ownership needed for personal agents.
+            Your record is <span className="font-semibold">pending</span> and hidden from the public index until you confirm your contact address. We&apos;ve emailed a verification link. No domain ownership is needed for personal agents.
           </p>
+          <p className="mt-2 text-xs text-amber-700">Your account email confirms your sign-in address. This separate verification confirms the address published by this entry, even when both addresses are the same.</p>
         </div>
       ) : (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
@@ -319,7 +320,7 @@ function SuccessScreen({ record, path }: { record: IndexRecord; path: HostingPat
         {isPersonal && (
           <Link href={`/dashboard/orgs/${record.org_id}`}
             className="flex flex-col rounded-2xl border border-black/10 bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-sm">
-            <span className="text-sm font-semibold text-slate-950">View your org →</span>
+            <span className="text-sm font-semibold text-slate-950">View your entry →</span>
             <span className="mt-0.5 text-xs text-slate-500">Check status and edit details.</span>
           </Link>
         )}
@@ -466,7 +467,7 @@ function RegistrationWizard() {
   }
 
   return (
-    <PageShell title="Register" description="Add your organization to the NANDA Index.">
+    <PageShell title="Register" description={isPersonal ? "Add your personal agent to the NANDA Index." : "Add your organization to the NANDA Index."}>
       <StepIndicator current={step} />
 
       {/* ── Step 1: Identity ──────────────────────────────────────────────── */}
@@ -499,8 +500,8 @@ function RegistrationWizard() {
                 description="No personally controlled domain is required. The account identity must be verifiably bound to the resolution record." />
             </fieldset>
 
-            <Field label="Org ID" value={form.org_id} onChange={(v) => patch("org_id", v)}
-              onBlur={() => touch("org_id")} placeholder="moon-bakery"
+            <Field label={isPersonal ? "Handle" : "Org ID"} value={form.org_id} onChange={(v) => patch("org_id", v)}
+              onBlur={() => touch("org_id")} placeholder={isPersonal ? "lee-agent" : "moon-bakery"}
               hint="Lowercase letters, numbers, hyphens. Permanent — cannot be changed later."
               info={ORG_FIELD_HELP.org_id} error={visible("org_id")} />
 
@@ -520,9 +521,11 @@ function RegistrationWizard() {
             {isPersonal && (
               <Field label="Email Identity" value={form.identity_email} onChange={(v) => patch("identity_email", v)}
                 onBlur={() => touch("identity_email")} type="email" placeholder="john@hotmail.com"
-                hint={`We email a verification link here. Your identifier: urn:air:${PERSONAL_CARD_HOST}:personal:john@hotmail.com`}
+                hint="We email a link here to confirm this entry’s address."
                 info={ORG_FIELD_HELP.identity_email} error={visible("identity_email")} />
             )}
+
+            {isPersonal && <p className="text-sm text-amber-800">This email address will be publicly visible in your identifier.</p>}
 
             {/* Locator preview */}
             {((isPersonal && form.identity_email && !s1Errors.identity_email) ||
@@ -629,8 +632,8 @@ function RegistrationWizard() {
 
             {/* Runtime info — SMB + Personal */}
             {isAgentCard && (
-              <div className="space-y-3 border-t border-black/5 pt-3">
-                <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">Runtime & auth <span className="font-normal normal-case tracking-normal text-slate-400">(optional)</span></p>
+              <details className="space-y-3 border-t border-black/5 pt-3">
+                <summary className="cursor-pointer text-xs font-medium text-slate-600">Advanced runtime and authentication</summary>
 
                 <div>
                   <FieldLabel htmlFor="runtime-provider" label="Runtime provider"
@@ -659,7 +662,7 @@ function RegistrationWizard() {
                   placeholder="payment_or_session_token_required"
                   hint='What callers need to invoke this agent. E.g. "user_consent_required".'
                   info={ORG_FIELD_HELP.auth_execution} optional />
-              </div>
+              </details>
             )}
 
             <Field label="Description" value={form.description} onChange={(v) => patch("description", v)}
@@ -724,6 +727,7 @@ function RegistrationWizard() {
                 <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400">Verification email</p>
                 <p className="mt-1 font-mono text-sm text-slate-950 break-all">{form.identity_email}</p>
                 <p className="mt-1 text-[11px] text-slate-400">Confirming this address binds it to your identifier and activates the record.</p>
+                <p className="mt-2 text-xs text-amber-800">This email address will be publicly visible in your identifier.</p>
               </div>
             ) : (
               <Field label="Contact Email" value={form.contact_email}
@@ -733,21 +737,24 @@ function RegistrationWizard() {
                 info={ORG_FIELD_HELP.contact_email} error={visible("contact_email")} />
             )}
 
-            <div>
+            <details className="space-y-3">
+              <summary className="cursor-pointer text-xs font-medium text-slate-600">Advanced cache settings</summary>
+              <div>
               <FieldLabel htmlFor="cache-ttl" label="Cache TTL" info={ORG_FIELD_HELP.ttl_seconds} />
               <select id="cache-ttl" value={form.ttl_seconds} onChange={(e) => patch("ttl_seconds", e.target.value)}
                 className="w-full rounded-2xl border border-black/10 bg-white px-4 py-2.5 text-sm font-mono outline-none focus:ring-2 focus:ring-slate-300">
                 {TTL_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
               </select>
-              <p className="mt-1 text-[11px] text-slate-400">How long resolvers should cache your index record.</p>
-            </div>
+              <p className="mt-1 text-[11px] text-slate-400">How long resolvers should cache your index record. The default is 24 hours.</p>
+              </div>
+            </details>
 
             {/* Summary */}
             <div className="border-t border-black/5 pt-3">
               <p className="mb-2 text-xs font-medium uppercase tracking-[0.14em] text-slate-400">Summary</p>
               <dl className="divide-y divide-black/5">
                 {[
-                  { label: "Org ID", value: form.org_id },
+                  { label: isPersonal ? "Handle" : "Org ID", value: form.org_id },
                   { label: "Display Name", value: form.display_name },
                   { label: "Path", value: PATH_LABEL[form.hosting_path] },
                   { label: "Identifier", value: form.identifier || derivedIdentifier },
