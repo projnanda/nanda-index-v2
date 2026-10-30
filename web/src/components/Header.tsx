@@ -19,7 +19,7 @@ export function Header() {
       return;
     }
     const payload = parseJwtPayload(token);
-    setDisplayName(payload?.displayName ?? payload?.email ?? null);
+    setDisplayName(payload?.displayName || payload?.email || null);
   }, [pathname]);
 
   function closeMobileMenu() {
@@ -32,10 +32,13 @@ export function Header() {
     router.push("/");
   }
 
-  // Public nav items (always shown)
+  // Account links are rendered from the same auth state on both screen sizes.
   const publicNav = navigation.filter(
     (item) => item.href !== "/login" && item.href !== "/dashboard"
   );
+  const visibleNav = displayName
+    ? [...publicNav, { href: "/dashboard", label: "Dashboard" }]
+    : publicNav;
 
   const userInitial = displayName?.trim().charAt(0).toUpperCase() ?? "";
 
@@ -59,7 +62,7 @@ export function Header() {
         {/* RIGHT: nav + counter + auth */}
         <div className="flex items-center gap-6">
           <nav className="hidden items-center gap-6 lg:flex">
-            {publicNav.map((item) => (
+            {visibleNav.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
@@ -90,12 +93,17 @@ export function Header() {
                 </button>
               </div>
             ) : (
+              <div className="flex items-center gap-3">
               <Link
                 href="/login"
                 className="inline-flex h-9 items-center rounded-control bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600 transition"
               >
                 Sign in
               </Link>
+              <Link href="/register" className="text-sm font-medium text-brand-600 hover:underline">
+                Sign up
+              </Link>
+              </div>
             )}
           </div>
 
@@ -105,7 +113,7 @@ export function Header() {
             </summary>
 
             <div className="absolute right-0 mt-2 w-56 rounded-card border border-line bg-surface-light p-2 shadow-card">
-              {navigation.map((item) => (
+              {visibleNav.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
@@ -122,7 +130,12 @@ export function Header() {
                 >
                   Sign out ({displayName})
                 </button>
-              ) : null}
+              ) : (
+                <>
+                  <Link href="/login" onClick={closeMobileMenu} className="block rounded-control px-3 py-2 text-sm text-ink hover:bg-surface-strong">Sign in</Link>
+                  <Link href="/register" onClick={closeMobileMenu} className="block rounded-control px-3 py-2 text-sm text-ink hover:bg-surface-strong">Sign up</Link>
+                </>
+              )}
             </div>
           </details>
         </div>
