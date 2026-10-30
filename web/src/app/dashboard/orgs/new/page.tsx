@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { FieldLabel } from "@/components/FieldLabel";
 import { PageShell } from "@/components/PageShell";
+import { orgFormError, validateOrgFields } from "@/lib/org-validation";
 import { ORG_FIELD_HELP } from "@/lib/org-field-help";
 import { ApiError, checkAvailability, createOrg, isAccountNotVerified } from "@/lib/nanda-api";
 import { cn } from "@/lib/utils";
@@ -78,7 +79,6 @@ const PATH_LABEL: Record<HostingPath, string> = {
 const SHORT_NAME_RE = /^[A-Za-z0-9._~-]+$/;
 
 const ORG_ID_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$|^[a-z0-9]$/;
-const DOMAIN_RE = /^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // ── Validation ────────────────────────────────────────────────────────────────
@@ -92,19 +92,13 @@ function validateStep1(form: FormState): Record<string, string> {
   } else if (form.org_id.length > 64) {
     e.org_id = "Max 64 characters.";
   }
-  if (!form.display_name) e.display_name = "Required.";
+  Object.assign(e, validateOrgFields({ display_name: form.display_name, ...(form.hosting_path !== "personal" ? { domain: form.domain } : {}) }));
 
   if (form.hosting_path === "personal") {
     if (!form.identity_email) {
       e.identity_email = "Required.";
     } else if (!EMAIL_RE.test(form.identity_email)) {
       e.identity_email = "Enter a valid email address.";
-    }
-  } else {
-    if (!form.domain) {
-      e.domain = "Required.";
-    } else if (!DOMAIN_RE.test(form.domain)) {
-      e.domain = "Enter a valid domain (e.g., moonbakery.com).";
     }
   }
   return e;
@@ -116,7 +110,7 @@ function validateStep1(form: FormState): Record<string, string> {
  * itself errors, registration still rejects a taken org_id or domain with 409.
  */
 async function findTakenFields(form: FormState): Promise<Record<string, string>> {
-  const domain = form.hosting_path === "personal" ? undefined : form.domain.toLowerCase();
+  const domain = form.hosting_path === "personal" ? undefined : form.domain.trim().toLowerCase();
   try {
     const result = await checkAvailability({ org_id: form.org_id, domain });
     return {
@@ -133,23 +127,20 @@ async function findTakenFields(form: FormState): Promise<Record<string, string>>
 }
 
 function validateStep2(form: FormState): Record<string, string> {
-  const e: Record<string, string> = {};
-  if (!form.registry_url) {
-    e.registry_url = "Required.";
-  } else if (!/^https?:\/\/.+/.test(form.registry_url)) {
-    e.registry_url = "Must start with https:// (or http:// in development).";
-  }
+  const e: Record<string, string> = validateOrgFields({ registry_url: form.registry_url,
+    description: form.description, tags: form.tags, version: form.version,
+    ...(form.hosting_path === "smb" || form.hosting_path === "personal" ? { runtime_url: form.runtime_url } : {}) });
   if (form.agent_id && !SHORT_NAME_RE.test(form.agent_id)) {
     e.agent_id = "Letters, numbers, dots, hyphens and underscores only.";
   }
-  if (form.identifier && form.hosting_path !== "personal" && !isAnchoredTo(form.identifier, form.domain)) {
+  if (form.identifier && form.hosting_path !== "personal" && !isAnchoredTo(form.identifier, form.domain.trim())) {
     e.identifier = `Must be urn:air:${form.domain || "<domain>"}:<namespace>:<name>.`;
   }
   return e;
 }
 
 function validateStep3(form: FormState): Record<string, string> {
-  const e: Record<string, string> = {};
+  const e: Record<string, string> = validateOrgFields({ ttl_seconds: form.ttl_seconds });
   // Personal registrations verify the identity email itself — it is the contact.
   if (form.hosting_path === "personal") return e;
   if (!form.contact_email) {
@@ -179,14 +170,14 @@ function Field({
     <div>
       <FieldLabel htmlFor={id} label={label} info={info} optional={optional} />
       {textarea ? (
-        <textarea id={id} value={value} onChange={(e) => onChange(e.target.value)} onBlur={onBlur}
+        <textarea id={id} aria-invalid={!!error} aria-describedby={error || hint ? `${id}-help` : undefined} value={value} onChange={(e) => onChange(e.target.value)} onBlur={onBlur}
           placeholder={placeholder} rows={3} className={cn(cls, "resize-none")} />
       ) : (
-        <input id={id} type={type} value={value} onChange={(e) => onChange(e.target.value)}
+        <input id={id} aria-invalid={!!error} aria-describedby={error || hint ? `${id}-help` : undefined} type={type} value={value} onChange={(e) => onChange(e.target.value)}
           onBlur={onBlur} placeholder={placeholder} className={cls} />
       )}
-      {error ? <p className="mt-1 text-[11px] text-rose-500">{error}</p>
-        : hint ? <p className="mt-1 text-[11px] text-slate-400">{hint}</p>
+      {error ? <p id={`${id}-help`} className="mt-1 text-[11px] text-rose-500">{error}</p>
+        : hint ? <p id={`${id}-help`} className="mt-1 text-[11px] text-slate-400">{hint}</p>
           : null}
     </div>
   );
@@ -369,7 +360,7 @@ export default function NewOrgPage() {
   const isAgentPointer = form.hosting_path === "smb" || form.hosting_path === "dns-svcb";
   // What the server will assign unless the advanced override is used.
   const derivedIdentifier = previewIdentifier(form.hosting_path, {
-    domain: form.domain, email: form.identity_email, shortName: form.agent_id || form.org_id,
+    domain: form.domain.trim(), email: form.identity_email, shortName: form.agent_id || form.org_id,
   });
 
   function patchPath(v: HostingPath) {
@@ -392,14 +383,14 @@ export default function NewOrgPage() {
   }
 
   function advanceTo3() {
-    const fields = ["registry_url", "agent_id", "identifier"];
+    const fields = ["registry_url", "agent_id", "identifier", "description", "tags", "version", "runtime_url"];
     touch(...fields);
     if (fields.every((f) => !s2Errors[f])) setStep(3);
   }
 
   async function submit() {
-    touch("contact_email");
-    if (s3Errors.contact_email) return;
+    touch("contact_email", "ttl_seconds");
+    if (Object.keys(s3Errors).length) return;
 
     setSaving(true);
     setApiError(null);
@@ -412,7 +403,7 @@ export default function NewOrgPage() {
         ? {
           agentCardHost: new URL(form.registry_url).hostname,
           ...(form.runtime_provider ? { "runtime.provider": form.runtime_provider } : {}),
-          ...(form.runtime_url ? { "runtime.url": form.runtime_url } : {}),
+          ...(form.runtime_url ? { "runtime.url": form.runtime_url.trim() } : {}),
           ...(form.auth_metadata ? { "auth.metadata": form.auth_metadata } : {}),
           ...(form.auth_execution ? { "auth.execution": form.auth_execution } : {}),
         }
@@ -425,11 +416,11 @@ export default function NewOrgPage() {
 
       const record = await createOrg({
         org_id: form.org_id,
-        display_name: form.display_name,
+        display_name: form.display_name.trim(),
         hosting_path: form.hosting_path,
-        domain: isPersonal ? undefined : (form.domain || undefined),
+        domain: isPersonal ? undefined : (form.domain.trim().toLowerCase() || undefined),
         contact_email: isPersonal ? form.identity_email : form.contact_email,
-        registry_url: form.registry_url,
+        registry_url: form.registry_url.trim(),
         ttl_seconds: parseInt(form.ttl_seconds, 10) || 86400,
         identifier: isPersonal ? undefined : identifier,
         description: form.description || undefined,
@@ -440,7 +431,13 @@ export default function NewOrgPage() {
       setCreated(record);
     } catch (err) {
       setNeedsAccountVerification(isAccountNotVerified(err));
-      setApiError(err instanceof ApiError ? err.message : "Registration failed.");
+      const failure = orgFormError(err);
+      const fields = Object.keys(failure.fields);
+      if (fields.length) {
+        setTaken(failure.fields as Record<string, string>);
+        touch(...fields);
+        setStep(fields.some((field) => field === "domain" || field === "display_name") ? 1 : fields.includes("ttl_seconds") ? 3 : 2);
+      } else setApiError(isAccountNotVerified(err) ? (err as ApiError).message : failure.message);
     } finally {
       setSaving(false);
     }
@@ -635,7 +632,7 @@ export default function NewOrgPage() {
                   onChange={(v) => patch("runtime_url", v)}
                   placeholder="https://my-agent.aws.example.com"
                   hint="The endpoint where your agent runtime is hosted."
-                  info={ORG_FIELD_HELP.runtime_url} optional />
+                  info={ORG_FIELD_HELP.runtime_url} error={visible("runtime_url")} onBlur={() => touch("runtime_url")} optional />
 
                 <Field label="Auth metadata" value={form.auth_metadata}
                   onChange={(v) => patch("auth_metadata", v)}
@@ -653,15 +650,15 @@ export default function NewOrgPage() {
 
             <Field label="Description" value={form.description} onChange={(v) => patch("description", v)}
               placeholder="Ordering agent for Moon Bakery. Supports menu lookup, order placement, and pickup scheduling."
-              info={ORG_FIELD_HELP.description} textarea optional />
+              info={ORG_FIELD_HELP.description} error={visible("description")} onBlur={() => touch("description")} textarea optional />
 
             <Field label="Tags" value={form.tags} onChange={(v) => patch("tags", v)}
               placeholder="smb, bakery, orders, a2a-agent-card"
-              hint="Comma-separated labels." info={ORG_FIELD_HELP.tags} optional />
+              hint="Comma-separated labels." info={ORG_FIELD_HELP.tags} error={visible("tags")} onBlur={() => touch("tags")} optional />
 
             <Field label="Version" value={form.version} onChange={(v) => patch("version", v)}
               placeholder="v1.0.0"
-              hint="SemVer of this artifact (shown on the card)." info={ORG_FIELD_HELP.version} optional />
+              hint="SemVer of this artifact (shown on the card)." info={ORG_FIELD_HELP.version} error={visible("version")} onBlur={() => touch("version")} optional />
 
             {/* Advanced: identifier override */}
             <div className="border-t border-black/5 pt-3">
@@ -724,10 +721,11 @@ export default function NewOrgPage() {
 
             <div>
               <FieldLabel htmlFor="cache-ttl" label="Cache TTL" info={ORG_FIELD_HELP.ttl_seconds} />
-              <select id="cache-ttl" value={form.ttl_seconds} onChange={(e) => patch("ttl_seconds", e.target.value)}
+              <select id="cache-ttl" aria-invalid={!!visible("ttl_seconds")} aria-describedby={visible("ttl_seconds") ? "cache-ttl-error" : undefined} value={form.ttl_seconds} onChange={(e) => patch("ttl_seconds", e.target.value)}
                 className="w-full rounded-2xl border border-black/10 bg-white px-4 py-2.5 text-sm font-mono outline-none focus:ring-2 focus:ring-slate-300">
                 {TTL_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
               </select>
+              {visible("ttl_seconds") && <p id="cache-ttl-error" className="mt-1 text-xs text-rose-700">{visible("ttl_seconds")}</p>}
               <p className="mt-1 text-[11px] text-slate-400">How long resolvers should cache your index record.</p>
             </div>
 
