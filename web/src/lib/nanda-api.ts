@@ -162,7 +162,8 @@ export async function fetchAgentRecord(
     headers: { Accept: "application/json" },
     cache: "no-store",
   });
-  return parseApiResponse<CatalogEntry>(res);
+  if (!res.ok) return parseApiResponse<CatalogEntry>(res);
+  return res.json() as Promise<CatalogEntry>;
 }
 
 /** GET /auth/providers — which OAuth providers are configured on the server. */
@@ -332,7 +333,8 @@ export async function fetchFactsUrl(url: string): Promise<unknown> {
     headers: { Accept: "application/json, */*" },
     cache: "no-store",
   });
-  return parseApiResponse(res);
+  if (!res.ok) return parseApiResponse(res);
+  return res.json();
 }
 
 /** @deprecated Use listIndexRecords. Kept for backwards compat during migration. */
