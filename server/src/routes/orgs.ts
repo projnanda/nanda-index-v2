@@ -169,11 +169,11 @@ interface UpdateOrgBody {
 
 interface ApiError {
   status: 400 | 409;
-  body: { error: string; detail: string };
+  body: { error: string; detail: string; field?: string };
 }
 
 const validationError = (detail: string): ApiError => ({ status: 400, body: { error: 'VALIDATION', detail } });
-const conflictError = (detail: string): ApiError => ({ status: 409, body: { error: 'CONFLICT', detail } });
+const conflictError = (detail: string, field?: string): ApiError => ({ status: 409, body: { error: 'CONFLICT', detail, ...(field ? { field } : {}) } });
 
 /**
  * A blank domain means "no domain": the entry is then anchored to host39 (personal)
@@ -220,13 +220,13 @@ function validateCreateBody(body: CreateOrgBody, path: HostingPath): ApiError | 
  * cannot block MIT.
  */
 async function findConflict(identifier: string, domain: string | null, selfOrgId?: string): Promise<ApiError | null> {
-  const byIdentifier = await findProvenByIdentifier(identifier);
-  if (byIdentifier && byIdentifier.orgId !== selfOrgId) {
-    return conflictError(`identifier "${identifier}" is already registered`);
-  }
   const byDomain = domain ? await findProvenByDomain(domain) : null;
   if (byDomain && byDomain.orgId !== selfOrgId) {
-    return conflictError(`domain "${domain}" is already registered`);
+    return conflictError(`domain "${domain}" is already registered`, 'domain');
+  }
+  const byIdentifier = await findProvenByIdentifier(identifier);
+  if (byIdentifier && byIdentifier.orgId !== selfOrgId) {
+    return conflictError(`identifier "${identifier}" is already registered`, 'identifier');
   }
   return null;
 }
@@ -235,7 +235,7 @@ async function findConflict(identifier: string, domain: string | null, selfOrgId
 async function findSlugConflict(orgId: string): Promise<ApiError | null> {
   const holder = await findByOrgId(orgId);
   if (!holder) return null;
-  if (!isAbandonedClaim(holder)) return conflictError(`org_id "${orgId}" is already taken`);
+  if (!isAbandonedClaim(holder)) return conflictError(`org_id "${orgId}" is already taken`, 'org_id');
   await deleteOrganization(holder.orgId);
   return null;
 }
@@ -245,7 +245,14 @@ function isUniqueViolation(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: unknown }).code === '23505';
 }
 
-const RACE_CONFLICT = conflictError('identifier or domain was registered concurrently — retry');
+function raceConflict(err: unknown): ApiError {
+  const constraint = (err as { constraint_name?: string }).constraint_name;
+  const field = constraint === 'organizations_org_id_key' ? 'org_id'
+    : constraint === 'uq_organizations_verified_domain' || constraint === 'organizations_domain_key' ? 'domain'
+    : constraint === 'uq_organizations_proven_identifier' || constraint === 'organizations_identifier_key' ? 'identifier'
+    : undefined;
+  return conflictError(field ? `${field} was registered concurrently; choose another value` : 'Registration conflicts with another entry; check its identifier and domain.', field);
+}
 
 /** Current stored entry as an EntryProfile, for updateEntryProfile. */
 function profileOf(org: Organization): EntryProfile {
@@ -431,7 +438,10 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
         representativeQueries,
       });
     } catch (err) {
-      if (isUniqueViolation(err)) return reply.code(RACE_CONFLICT.status).send(RACE_CONFLICT.body);
+      if (isUniqueViolation(err)) {
+        const conflict = raceConflict(err);
+        return reply.code(conflict.status).send(conflict.body);
+      }
       throw err;
     }
 
@@ -667,7 +677,10 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
         representativeQueries,
       });
     } catch (err) {
-      if (isUniqueViolation(err)) return reply.code(RACE_CONFLICT.status).send(RACE_CONFLICT.body);
+      if (isUniqueViolation(err)) {
+        const conflict = raceConflict(err);
+        return reply.code(conflict.status).send(conflict.body);
+      }
       throw err;
     }
     if (!updated) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { RegistrationBoundary } from "@/components/RegistrationBoundary";
@@ -181,14 +181,14 @@ function Field({
     <div>
       <FieldLabel htmlFor={id} label={label} info={info} optional={optional} />
       {textarea ? (
-        <textarea id={id} value={value} onChange={(e) => onChange(e.target.value)} onBlur={onBlur}
+        <textarea id={id} aria-invalid={!!error} aria-describedby={error || hint ? `${id}-help` : undefined} value={value} onChange={(e) => onChange(e.target.value)} onBlur={onBlur}
           placeholder={placeholder} rows={3} className={cn(cls, "resize-none")} />
       ) : (
-        <input id={id} type={type} value={value} onChange={(e) => onChange(e.target.value)}
+        <input id={id} aria-invalid={!!error} aria-describedby={error || hint ? `${id}-help` : undefined} type={type} value={value} onChange={(e) => onChange(e.target.value)}
           onBlur={onBlur} placeholder={placeholder} className={cls} />
       )}
-      {error ? <p className="mt-1 text-[11px] text-rose-500">{error}</p>
-        : hint ? <p className="mt-1 text-[11px] text-slate-400">{hint}</p>
+      {error ? <p id={`${id}-help`} className="mt-1 text-[11px] text-rose-500">{error}</p>
+        : hint ? <p id={`${id}-help`} className="mt-1 text-[11px] text-slate-400">{hint}</p>
           : null}
     </div>
   );
@@ -357,9 +357,11 @@ function RegistrationWizard() {
   const [taken, setTaken] = useState<Record<string, string>>({});
   const [apiError, setApiError] = useState<string | null>(null);
   const [needsAccountVerification, setNeedsAccountVerification] = useState(false);
+  const availabilityVersion = useRef(0);
   const [created, setCreated] = useState<{ record: IndexRecord; orgId: string; path: HostingPath } | null>(null);
 
   const patch = (key: keyof FormState, val: string) => {
+    availabilityVersion.current += 1;
     setForm((f) => ({ ...f, [key]: val }));
     // Editing a field invalidates its "already taken" result.
     setTaken((t) => (key in t ? Object.fromEntries(Object.entries(t).filter(([k]) => k !== key)) : t));
@@ -383,8 +385,18 @@ function RegistrationWizard() {
   });
 
   function patchPath(v: HostingPath) {
+    availabilityVersion.current += 1;
+    setTaken({});
     // An identifier override is anchored to the old path's shape — drop it.
     setForm((f) => ({ ...f, hosting_path: v, identifier: "" }));
+  }
+
+  async function checkOnBlur(field: "org_id" | "domain") {
+    touch(field);
+    if (s1Errors[field]) return;
+    const version = ++availabilityVersion.current;
+    const conflicts = await findTakenFields(form);
+    if (version === availabilityVersion.current) setTaken(conflicts);
   }
 
   async function advanceTo2() {
@@ -395,8 +407,10 @@ function RegistrationWizard() {
     if (fields.some((f) => s1Errors[f])) return;
 
     setChecking(true);
+    const version = ++availabilityVersion.current;
     const conflicts = await findTakenFields(form);
     setChecking(false);
+    if (version !== availabilityVersion.current) return;
     setTaken(conflicts);
     if (Object.keys(conflicts).length === 0) setStep(2);
   }
@@ -411,6 +425,7 @@ function RegistrationWizard() {
     touch("contact_email");
     if (s3Errors.contact_email) return;
 
+    const submittedVersion = availabilityVersion.current;
     setSaving(true);
     setApiError(null);
     try {
@@ -449,6 +464,20 @@ function RegistrationWizard() {
       });
       setCreated({ record, orgId: form.org_id, path: form.hosting_path });
     } catch (err) {
+      const field = err instanceof ApiError && err.status === 409 && err.payload && typeof err.payload === "object"
+        ? (err.payload as { field?: unknown }).field : null;
+      if (field === "org_id" || field === "domain" || field === "identifier") {
+        if (submittedVersion !== availabilityVersion.current) return;
+        const input = field === "identifier" && isPersonal ? "identity_email" : field;
+        const message = field === "org_id" ? "This handle is already taken. Choose another one."
+          : field === "domain" ? "This domain is already registered. Use another domain or a subdomain."
+          : "This identifier is already registered. Choose another identity or identifier.";
+        setTaken({ [input]: message });
+        touch(input);
+        setStep(input === "identifier" ? 2 : 1);
+        if (input === "identifier") setShowAdvanced(true);
+        return;
+      }
       setNeedsAccountVerification(isAccountNotVerified(err));
       setApiError(err instanceof ApiError ? err.message : "Registration failed.");
     } finally {
@@ -501,7 +530,7 @@ function RegistrationWizard() {
             </fieldset>
 
             <Field label={isPersonal ? "Handle" : "Org ID"} value={form.org_id} onChange={(v) => patch("org_id", v)}
-              onBlur={() => touch("org_id")} placeholder={isPersonal ? "lee-agent" : "moon-bakery"}
+              onBlur={() => checkOnBlur("org_id")} placeholder={isPersonal ? "lee-agent" : "moon-bakery"}
               hint="Lowercase letters, numbers, hyphens. Permanent — cannot be changed later."
               info={ORG_FIELD_HELP.org_id} error={visible("org_id")} />
 
@@ -512,7 +541,7 @@ function RegistrationWizard() {
             {/* Domain (all except personal) */}
             {!isPersonal && (
               <Field label="Domain" value={form.domain} onChange={(v) => patch("domain", v)}
-                onBlur={() => touch("domain")} placeholder="moonbakery.com"
+                onBlur={() => checkOnBlur("domain")} placeholder="moonbakery.com"
                 hint="Agents will be addressable under this domain."
                 info={ORG_FIELD_HELP.domain} error={visible("domain")} />
             )}
