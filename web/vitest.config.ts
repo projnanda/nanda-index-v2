@@ -10,5 +10,10 @@ export default defineConfig({
   test: {
     include: ["src/**/*.test.{ts,tsx}"],
     environment: "node",
+    // Let jsdom provide browser storage instead of Node's file-backed globals.
+    // Older supported Node versions do not recognize this flag.
+    execArgv: process.allowedNodeEnvironmentFlags.has("--no-experimental-webstorage")
+      ? ["--no-experimental-webstorage"]
+      : [],
   },
 });
