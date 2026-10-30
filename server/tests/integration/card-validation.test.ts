@@ -1,0 +1,48 @@
+import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest';
+import type { FastifyInstance } from 'fastify';
+import { buildServer } from '../../src/server.js';
+import { getSql, closeSql } from '../../src/db/client.js';
+import { upsertUser } from '../../src/db/queries/users.js';
+let fastify: FastifyInstance;
+let token: string;
+const card = { name: 'Example', description: 'A demo', version: '1', url: 'https://example.org/run', capabilities: {}, skills: [], defaultInputModes: ['text'], defaultOutputModes: ['text'] };
+const headers = () => ({ authorization: `Bearer ${token}` });
+const payload = { org_id: 'card-check', display_name: 'Card check', hosting_path: 'personal', contact_email: 'card-check@example.org', registry_url: 'https://example.org/card.json' };
+beforeAll(async () => {
+  fastify = (await buildServer({ logger: false })).fastify;
+  await fastify.ready();
+  const user = await upsertUser({ email: 'card-owner@example.org', displayName: 'Owner', avatarUrl: null, provider: 'google', providerId: 'card-owner' });
+  token = fastify.jwt.sign({ userId: user.id, email: user.email, displayName: null });
+});
+afterEach(async () => { vi.unstubAllGlobals(); await getSql()`DELETE FROM organizations WHERE org_id = 'card-check'`; });
+afterAll(async () => { await fastify.close(); await closeSql(); });
+it('validates at registration, persists the result, and exposes it with identity separately', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response(JSON.stringify(card))));
+  const response = await fastify.inject({ method: 'POST', url: '/api/v1/orgs', headers: headers(), payload });
+  expect(response.statusCode).toBe(201);
+  expect(response.json().card_validation.status).toBe('valid');
+  expect(response.json().email_verified).toBe(false);
+  await getSql()`UPDATE organizations SET status='active', email_verified=true WHERE org_id='card-check'`;
+  const entry = await fastify.inject({ url: '/api/v1/index/card-check' });
+  expect(entry.json().extensions['org.projectnanda'].cardValidation.status).toBe('valid');
+  expect(entry.json().extensions['org.projectnanda'].emailVerifiedAt).toBeNull();
+});
+it('warns on an unavailable card and rechecks a changed URL without trusting client status', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response('missing', { status: 404 })));
+  const create = await fastify.inject({ method: 'POST', url: '/api/v1/orgs', headers: headers(), payload: { ...payload, extensions: { 'org.projectnanda': { cardValidation: { status: 'valid' } } } } });
+  expect(create.json().card_validation.status).toBe('unavailable');
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response(JSON.stringify(card))));
+  const update = await fastify.inject({ method: 'PUT', url: '/api/v1/orgs/card-check', headers: headers(), payload: { registry_url: 'https://example.org/new-card.json' } });
+  expect(update.statusCode, update.body).toBe(200);
+  expect(update.json().card_validation.status).toBe('valid');
+  const tamper = await fastify.inject({ method: 'PUT', url: '/api/v1/orgs/card-check', headers: headers(), payload: { extensions: { 'org.projectnanda': { cardValidation: { status: 'invalid' } } } } });
+  expect(tamper.json().card_validation.status).toBe('valid');
+});
+it('records the real contact-email proof time when verification succeeds', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response(JSON.stringify(card))));
+  await fastify.inject({ method: 'POST', url: '/api/v1/orgs', headers: headers(), payload });
+  const [row] = await getSql()`SELECT verify_token FROM organizations WHERE org_id='card-check'`;
+  const verified = await fastify.inject({ method: 'POST', url: '/api/v1/verify-email', payload: { token: row!.verifyToken } });
+  expect(verified.statusCode, verified.body).toBe(200);
+  expect(verified.json().email_verified_at).toMatch(/^\d{4}-/);
+});
