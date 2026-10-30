@@ -78,7 +78,7 @@ function IndexRecordCard({ org }: { org: IndexRecord }) {
 }
 
 export default function QueryPage() {
-  const [mode, setMode] = useState<Mode>("agentic");
+  const [mode, setMode] = useState<Mode>("search");
   const [query, setQuery] = useState("");
   const [result, setResult] = useState<QueryResult | null>(null);
   const [latency, setLatency] = useState<number | null>(null);
@@ -152,7 +152,7 @@ export default function QueryPage() {
   return (
     <PageShell
       title="Discover"
-      description="Look up an organization by org ID, keyword, URN, or a natural-language prompt."
+      description="Look up an organization by org ID, keyword, or URN."
     >
       <form
         className="space-y-4 rounded-3xl border border-black/10 bg-white p-5 shadow-sm"
@@ -161,7 +161,8 @@ export default function QueryPage() {
         {/* Mode selector, hidden when URN is detected */}
         {!isUrn && (
           <div className="flex flex-wrap gap-2">
-            {(["agentic", "search", "org_id"] as Mode[]).map((key) => (
+            {/* Agentic search is hidden for now; add "agentic" back first here and as the default mode to re-enable it. */}
+            {(["search", "org_id"] as Mode[]).map((key) => (
               <button
                 key={key}
                 type="button"
