@@ -14,7 +14,7 @@ beforeEach(() => { vi.resetAllMocks(); vi.mocked(resolveAgent).mockResolvedValue
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 async function submit() {
   render(<ResolvePage />);
-  fireEvent.change(screen.getByPlaceholderText("urn:air:regentix.ai:agent:regentix-ceo"), { target: { value: identifier } });
+  fireEvent.change(screen.getByRole("textbox", { name: "Resource identifier" }), { target: { value: identifier } });
   fireEvent.click(screen.getByRole("button", { name: "Resolve" }));
 }
 it("retries a failed card hop without repeating successful earlier requests", async () => {
@@ -65,4 +65,16 @@ it("reports malformed source data and offers a retry instead of leaving the trac
   await submit();
   expect(await screen.findByText(/source response must be a JSON object/)).toBeTruthy();
   expect(screen.getByRole("button", { name: "Retry Agent Source" }).hasAttribute("disabled")).toBe(false);
+});
+it.each(["catalog", "smb", "personal"] as const)("runs the controlled %s preset through the card without using the public index", async (kind) => {
+  const { exampleResponse, resolveExamples } = await import("@/lib/resolveExamples");
+  const preset = resolveExamples.find((example) => example.kind === kind)!;
+  vi.mocked(fetchFactsUrl).mockImplementation(async (url) => exampleResponse(kind, [url.endsWith("/index") ? "index" : "card"], "https://index.example"));
+  vi.mocked(fetchAgentRecord).mockResolvedValue(exampleResponse(kind, kind === "catalog" ? ["registry", "agents", "demo"] : ["card"], "https://index.example") as Awaited<ReturnType<typeof fetchAgentRecord>>);
+  render(<ResolvePage />);
+  fireEvent.click(screen.getByRole("button", { name: preset.label }));
+  expect(await screen.findByRole("button", { name: "Send" })).toBeTruthy();
+  expect(resolveAgent).not.toHaveBeenCalled();
+  expect(fetchFactsUrl).toHaveBeenCalledTimes(kind === "catalog" ? 2 : 1);
+  expect(screen.getByRole("note").textContent).toContain("sample index");
 });
