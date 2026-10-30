@@ -21,12 +21,11 @@ const primaryBtnClass =
 const oauthBtnClass =
   "inline-flex items-center justify-center gap-3 h-9 w-full rounded-control border-2 border-line bg-surface-light px-3 text-sm font-medium text-ink hover:border-line-strong transition";
 
-function LoginForm({ initialMode }: { initialMode: Mode }) {
+function LoginForm({ mode }: { mode: Mode }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const reason = searchParams.get("reason");
   const oauthError = searchParams.get("error");
-  const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -39,6 +38,15 @@ function LoginForm({ initialMode }: { initialMode: Mode }) {
       .then(setProviders)
       .catch(() => setProviders({ google: false, github: false }));
   }, []);
+
+  function changeMode(next: Mode) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "register") params.set("mode", "register");
+    else params.delete("mode");
+    setError(null);
+    const query = params.toString();
+    router.replace(`/login${query ? `?${query}` : ""}`);
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -102,7 +110,7 @@ function LoginForm({ initialMode }: { initialMode: Mode }) {
               type="button"
               aria-pressed={mode === "login"}
               disabled={loading}
-              onClick={() => { setMode("login"); setError(null); }}
+              onClick={() => changeMode("login")}
               className={`flex-1 rounded-control py-1.5 font-medium transition ${
                 mode === "login"
                   ? "bg-surface-light text-ink-strong shadow-[var(--shadow-sm)]"
@@ -115,7 +123,7 @@ function LoginForm({ initialMode }: { initialMode: Mode }) {
               type="button"
               aria-pressed={mode === "register"}
               disabled={loading}
-              onClick={() => { setMode("register"); setError(null); }}
+              onClick={() => changeMode("register")}
               className={`flex-1 rounded-control py-1.5 font-medium transition ${
                 mode === "register"
                   ? "bg-surface-light text-ink-strong shadow-[var(--shadow-sm)]"
@@ -247,7 +255,7 @@ function LoginForm({ initialMode }: { initialMode: Mode }) {
 function LoginPageInner() {
   const searchParams = useSearchParams();
   const mode = searchParams.get("mode") === "register" ? "register" : "login";
-  return <LoginForm key={mode} initialMode={mode} />;
+  return <LoginForm mode={mode} />;
 }
 
 export default function LoginPage() {

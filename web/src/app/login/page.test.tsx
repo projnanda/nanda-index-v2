@@ -60,9 +60,15 @@ describe("login and registration", () => {
     await render(<LoginPage />);
     expect(container.querySelector("h1")?.textContent).toBe("Sign in");
     await act(async () => button("Create account").click());
+    expect(state.router.replace).toHaveBeenLastCalledWith("/login?mode=register");
+    state.search = new URLSearchParams("mode=register");
+    await render(<LoginPage />);
     expect(container.querySelector("h1")?.textContent).toBe("Create account");
     expect(container.querySelector<HTMLInputElement>("input[type=password]")?.autocomplete).toBe("new-password");
     await act(async () => button("Sign in").click());
+    expect(state.router.replace).toHaveBeenLastCalledWith("/login");
+    state.search = new URLSearchParams();
+    await render(<LoginPage />);
     expect(container.querySelector("h1")?.textContent).toBe("Sign in");
     expect(container.querySelector<HTMLInputElement>("input[type=password]")?.autocomplete).toBe("current-password");
   });
@@ -75,6 +81,21 @@ describe("login and registration", () => {
     state.search = new URLSearchParams("mode=unknown");
     await render(<LoginPage />);
     expect(container.querySelector("h1")?.textContent).toBe("Sign in");
+  });
+});
+
+describe("registration URL state", () => {
+  it("preserves session notices while switching mode and follows back navigation", async () => {
+    state.search = new URLSearchParams("mode=register&reason=session_expired");
+    await render(<LoginPage />);
+    await act(async () => button("Sign in").click());
+    expect(state.router.replace).toHaveBeenLastCalledWith("/login?reason=session_expired");
+    state.search = new URLSearchParams("reason=session_expired");
+    await render(<LoginPage />);
+    expect(container.querySelector("h1")?.textContent).toBe("Sign in");
+    state.search = new URLSearchParams("mode=register&reason=session_expired");
+    await render(<LoginPage />);
+    expect(container.querySelector("h1")?.textContent).toBe("Create account");
   });
 });
 
