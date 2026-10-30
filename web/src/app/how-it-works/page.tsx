@@ -1,5 +1,11 @@
 import Link from "next/link";
 import { externalLinks } from "@/lib/site-data";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "How it works",
+  description: "How NandaIndex maps a resource identifier to the correct next discovery object.",
+};
 
 // Explanations follow Sections VI and VII of the linked paper.
 const STAGES = [

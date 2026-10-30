@@ -2,7 +2,12 @@ import { PageShell } from "@/components/PageShell";
 import Link from "next/link";
 import { DEFAULT_POSTHOG_HOST } from "@/lib/posthogHosts";
 
-export const metadata = { title: "Privacy - NANDA Index" };
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Privacy",
+  description: "What NANDA Index collects and why.",
+};
 
 const gaId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 const posthogKey = process.env.NEXT_PUBLIC_POSTHOG_KEY;
