@@ -147,7 +147,7 @@ const ERROR_CODES = [
   { status: 403, code: "MODERATED", meaning: "An index operator took the entry down; it cannot be suspended or reactivated by its owner (edits and deletion still work)." },
   { status: 404, code: "NOT_FOUND", meaning: "No such entry, or it is not live (index reads), or the token was not found (verify-email)." },
   { status: 404, code: "not_found", meaning: "Resolve found no live entry for the locator." },
-  { status: 409, code: "CONFLICT", meaning: "Already taken: the account email, an org_id held by another registration (an unverified holder releases it after 48 hours), or a domain or personal identity that another registration has already proven." },
+  { status: 409, code: "CONFLICT", meaning: "Already taken: the account email, an org_id held by another registration, or a domain or personal identity that another registration has already proven." },
   { status: 409, code: "ALREADY_VERIFIED", meaning: "The contact email is already verified." },
   { status: 409, code: "NOT_SUSPENDED", meaning: "Only a suspended entry can be reactivated." },
   { status: 422, code: "query_too_short", meaning: "Search needs at least 2 non-space characters." },
