@@ -152,7 +152,7 @@ export default function QueryPage() {
   return (
     <PageShell
       title="Discover"
-      description="Look up an organization by org ID, keyword, URN, or a natural-language prompt."
+      description="Describe what you need in plain words, or look up an entry by org ID, keyword, or URN. Explore browses every entry; Resolve traces one URN hop by hop."
     >
       <form
         className="space-y-4 rounded-3xl border border-black/10 bg-white p-5 shadow-sm"

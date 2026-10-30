@@ -2,7 +2,7 @@ export const navigation = [
   { href: "/", label: "Home" },
   { href: "/contributors", label: "Contributors" },
   { href: "/explore", label: "Explore" },
-  { href: "/query", label: "Discover" },
+  { href: "/discover", label: "Discover" },
   { href: "/how-it-works", label: "How it works" },
   { href: "/ongoing-projects", label: "Ongoing Projects" },
   { href: "/resolve", label: "Resolve" },
