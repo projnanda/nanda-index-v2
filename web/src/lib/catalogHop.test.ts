@@ -104,3 +104,15 @@ describe("resolveRegistryHop", () => {
       .rejects.toThrow("404 https://down.com/api/agents/x");
   });
 });
+
+describe("resolve example presets", () => {
+  it.each(["catalog", "smb", "personal"] as const)("plans a hop 2 URL the %s example route serves", async (kind) => {
+    const { exampleResponse } = await import("./resolveExamples");
+    const base = "https://index.example";
+    const index = exampleResponse(kind, ["index"], base) as ResolveResponse;
+    const step = planRegistryHop(index).steps[0]!;
+    const path = step.url.slice(`${base}/api/resolve-examples/${kind}/`.length).split("/");
+    expect(step.url.startsWith(`${base}/api/resolve-examples/${kind}/`)).toBe(true);
+    expect(exampleResponse(kind, path, base)).not.toBeNull();
+  });
+});

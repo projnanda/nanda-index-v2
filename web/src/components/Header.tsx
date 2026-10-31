@@ -1,26 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { navigation } from "@/lib/site-data";
-import { getAuthToken, parseJwtPayload, clearAuthToken, isTokenExpired } from "@/lib/auth";
+import { getAuthToken, parseJwtPayload, clearAuthToken, isTokenExpired, subscribeAuthChanges } from "@/lib/auth";
 
 export function Header() {
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const router = useRouter();
-  const pathname = usePathname();
-  const [displayName, setDisplayName] = useState<string | null>(null);
-
-  useEffect(() => {
-    const token = getAuthToken();
-    if (!token || isTokenExpired(token)) {
-      setDisplayName(null);
-      return;
-    }
-    const payload = parseJwtPayload(token);
-    setDisplayName(payload?.displayName ?? payload?.email ?? null);
-  }, [pathname]);
+  // Recheck expiry on navigation as well as when stored credentials change.
+  usePathname();
+  const token = useSyncExternalStore(subscribeAuthChanges, getAuthToken, () => null);
+  const payload = token && !isTokenExpired(token) ? parseJwtPayload(token) : null;
+  const displayName = payload?.displayName || payload?.email || null;
 
   function closeMobileMenu() {
     if (detailsRef.current) detailsRef.current.open = false;
@@ -28,7 +21,6 @@ export function Header() {
 
   function signOut() {
     clearAuthToken();
-    setDisplayName(null);
     router.push("/");
   }
 

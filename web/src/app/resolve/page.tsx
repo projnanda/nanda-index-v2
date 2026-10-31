@@ -1,16 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PageShell } from "@/components/PageShell";
 import { ApiError, resolveAgent, fetchRegistryHop, fetchFactsUrl } from "@/lib/nanda-api";
-import { CatalogEntryNotFound, planRegistryHop } from "@/lib/catalogHop";
+import { CatalogEntryNotFound, isSingleResourceType, planRegistryHop } from "@/lib/catalogHop";
 import type { ResolveResponse, CatalogEntry } from "@/lib/nanda-types";
+import { resolutionSummary, type HopStatus } from "@/lib/resolutionStatus";
+import { resolveExamples, type ExampleKind } from "@/lib/resolveExamples";
 import { cn } from "@/lib/utils";
 import { noUrlExplanation } from "@/lib/svcbPointer";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-
-type HopStatus = "idle" | "loading" | "ok" | "error" | "skipped";
 
 interface HopState {
   status: HopStatus;
@@ -24,9 +24,9 @@ const IDLE: HopState = { status: "idle" };
 // ── Components ────────────────────────────────────────────────────────────────
 
 function HopCard({
-  n, label, subtitle, hop, children,
+  n, label, subtitle, hop, children, onRetry, busy,
 }: {
-  n: number; label: string; subtitle: string; hop: HopState; children?: React.ReactNode;
+  n: number; label: string; subtitle: string; hop: HopState; children?: React.ReactNode; onRetry?: () => void; busy?: boolean;
 }) {
   const colors: Record<HopStatus, string> = {
     idle:    "border-black/10 bg-white",
@@ -65,8 +65,15 @@ function HopCard({
         <p className="ml-12 mt-3 text-xs text-indigo-500 animate-pulse">Fetching…</p>
       )}
 
+      {hop.status === "skipped" && (
+        <p className="ml-12 mt-3 text-sm text-slate-500">Skipped</p>
+      )}
+
       {hop.status === "error" && (
-        <p className="ml-12 mt-3 text-sm text-rose-700">{hop.error}</p>
+        <div className="ml-12 mt-3 space-y-2">
+          <p className="text-sm text-rose-700">{hop.error}</p>
+          {onRetry && <button type="button" disabled={busy} onClick={onRetry} className="rounded-xl border border-rose-300 px-3 py-1 text-sm text-rose-800 disabled:opacity-50">Retry {label}</button>}
+        </div>
       )}
 
       {hop.status === "ok" && hop.data !== undefined && (
@@ -85,10 +92,23 @@ function HopCard({
   );
 }
 
+class InvalidDiscoveryResponse extends Error {}
+
+function hopError(error: unknown): string {
+  if (error instanceof InvalidDiscoveryResponse) return error.message;
+  if (error instanceof ApiError) return `HTTP ${error.status}: ${error.message}`;
+  if (error instanceof SyntaxError) return "The host returned a response that is not valid JSON.";
+  return "The browser could not complete the request. Network, TLS, and cross-origin failures are not distinguishable here.";
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function ResolvePage() {
   const [locator, setLocator]   = useState("");
+  const [traceLocator, setTraceLocator] = useState("");
+  const [traceExample, setTraceExample] = useState<ExampleKind | null>(null);
+  const generation = useRef(0);
+  useEffect(() => () => { generation.current += 1; }, []);
   const [resolving, setResolving] = useState(false);
   const [latency, setLatency]   = useState<number | null>(null);
 
@@ -104,66 +124,96 @@ export default function ResolvePage() {
 
   async function onResolve(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!locator.trim()) return;
+    await runResolve(locator);
+  }
 
+  async function runResolve(value: string, from: 1 | 2 | 3 = 1, example: ExampleKind | null = null) {
+    const requested = value.trim();
+    if (!requested) return;
+    const run = ++generation.current;
+    const current = () => run === generation.current;
+    setTraceLocator(requested);
+    setTraceExample(example);
     setResolving(true);
-    setHop1(IDLE); setHop2(IDLE); setHop3(IDLE); setHop4(IDLE);
+    if (from === 1) setHop1(IDLE);
+    if (from <= 2) setHop2(IDLE);
+    setHop3(IDLE); setHop4(IDLE);
     setAgentRunUrl("");
+    setTalking(false);
     setLatency(null);
     const t0 = performance.now();
 
     // ── Hop 1: NANDA Index ────────────────────────────────────────────────
-    const h1url = `/api/v1/resolve?locator=${encodeURIComponent(locator.trim())}`;
-    setHop1({ status: "loading", url: `GET ${process.env.NEXT_PUBLIC_NANDA_INDEX_API_URL ?? ""}${h1url}` });
+    const h1url = example ? `/api/resolve-examples/${example}/index` : `/api/v1/resolve?locator=${encodeURIComponent(requested)}`;
+    if (from === 1) setHop1({ status: "loading", url: `GET ${example ? "" : process.env.NEXT_PUBLIC_NANDA_INDEX_API_URL ?? ""}${h1url}` });
 
-    let indexData: ResolveResponse;
-    try {
-      indexData = await resolveAgent(locator.trim());
-      setHop1({ status: "ok", url: `GET ${process.env.NEXT_PUBLIC_NANDA_INDEX_API_URL ?? ""}${h1url}`, data: indexData });
+    let indexData = hop1.data as ResolveResponse;
+    if (from === 1) try {
+      indexData = example ? await fetchFactsUrl(h1url) as ResolveResponse : await resolveAgent(requested);
+      if (!current()) return;
+      setHop1({ status: "ok", url: `GET ${example ? "" : process.env.NEXT_PUBLIC_NANDA_INDEX_API_URL ?? ""}${h1url}`, data: indexData });
     } catch (err) {
-      setHop1({ status: "error", url: h1url, error: err instanceof ApiError ? err.message : "Index lookup failed." });
+      if (!current()) return;
+      setHop1({ status: "error", url: h1url, error: hopError(err) });
+      setHop2({ status: "skipped" }); setHop3({ status: "skipped" }); setHop4({ status: "skipped" });
+      setLatency(Math.round(performance.now() - t0));
       setResolving(false);
       return;
     }
 
     // ── Hop 2: Registry ───────────────────────────────────────────────────
-    if (!indexData.entry.url) {
+    const { url: entryUrl, type: entryType } = indexData.entry;
+    if (!entryUrl) {
       setHop2({ status: "skipped", url: noUrlExplanation(indexData.entry) });
+      setHop3({ status: "skipped" }); setHop4({ status: "skipped" });
       setResolving(false);
       setLatency(Math.round(performance.now() - t0));
       return;
     }
 
+    const isDirectCard = isSingleResourceType(entryType);
     const h2url = planRegistryHop(indexData).steps[0]!.url;
-    setHop2({ status: "loading", url: `GET ${h2url}` });
 
-    let catalogEntry: CatalogEntry;
-    try {
+    if (from <= 2) setHop2({ status: "loading", url: `GET ${h2url}` });
+
+    let catalogEntry = hop2.data as CatalogEntry;
+    if (from <= 2) try {
       const hop = await fetchRegistryHop(indexData);
+      if (!current()) return;
       if (hop.kind === "catalog") {
         // The identifier names the catalog itself: its entries are the result.
         const count = hop.document.entries.length;
         setHop2({ status: "ok", url: `GET ${hop.url}`, data: hop.document });
         setHop3({ status: "skipped",
           url: `This identifier names a catalog of ${count} entr${count === 1 ? "y" : "ies"}. Resolve one of their identifiers to continue.` });
+        setHop4({ status: "skipped" });
         setResolving(false);
         setLatency(Math.round(performance.now() - t0));
         return;
       }
       catalogEntry = hop.entry;
+      if (!catalogEntry || typeof catalogEntry !== "object" || Array.isArray(catalogEntry)) {
+        throw new InvalidDiscoveryResponse("The source response must be a JSON object containing a catalog entry or card.");
+      }
+      if (catalogEntry.url !== undefined && typeof catalogEntry.url !== "string") {
+        throw new InvalidDiscoveryResponse("The source response contains an invalid card URL.");
+      }
       setHop2({ status: "ok", url: `GET ${hop.url}`, data: catalogEntry });
     } catch (err) {
+      if (!current()) return;
       setHop2({ status: "error", url: h2url,
-        error: err instanceof ApiError || err instanceof CatalogEntryNotFound ? err.message : "Registry unreachable." });
+        error: err instanceof CatalogEntryNotFound ? err.message : hopError(err) });
+      setHop3({ status: "skipped" }); setHop4({ status: "skipped" });
       setResolving(false);
       setLatency(Math.round(performance.now() - t0));
       return;
     }
 
     // ── Hop 3: Agent facts URL ─────────────────────────────────────────────
-    const h3url = catalogEntry.url;
+    const h3url = isDirectCard ? entryUrl : catalogEntry.url;
     if (!h3url) {
-      setHop3({ status: "error", url: "—", error: "Catalog entry embeds the artifact inline (no url to fetch)." });
+      setHop3({ status: "skipped", url: "Catalog entry embeds the artifact inline (no URL to fetch)." });
+      setHop4({ status: "skipped" });
       setResolving(false);
       setLatency(Math.round(performance.now() - t0));
       return;
@@ -172,8 +222,10 @@ export default function ResolvePage() {
 
     let facts: unknown;
     try {
-      facts = await fetchFactsUrl(h3url);
-      setHop3({ status: "ok", url: `GET ${h3url}`, data: facts });
+      // A direct card was fetched at hop 2. Its url is the runtime, not another card.
+      facts = isDirectCard ? catalogEntry : await fetchFactsUrl(h3url);
+      if (!current()) return;
+      setHop3({ status: "ok", url: isDirectCard ? `Card received from ${h3url} at hop 2` : `GET ${h3url}`, data: facts });
       // Extract runtime endpoint for hop 4
       const endpoint = (facts as Record<string, unknown>)?.url as string | undefined;
       if (endpoint) {
@@ -184,12 +236,11 @@ export default function ResolvePage() {
         setHop4({ status: "skipped", url: "No runtime URL found in agent card." });
       }
     } catch (err) {
+      if (!current()) return;
       setHop3({
         status: "error",
         url: h3url,
-        error: err instanceof ApiError
-          ? `${err.status}: ${err.message}`
-          : "Could not fetch agent card — host may not be running or CORS blocked.",
+        error: hopError(err),
       });
       setHop4({ status: "skipped" });
     }
@@ -200,7 +251,12 @@ export default function ResolvePage() {
 
   async function onTalk(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
+    await talkToAgent();
+  }
+
+  async function talkToAgent() {
     if (!agentRunUrl) return;
+    const run = generation.current;
     setTalking(true);
     setHop4((h) => ({ ...h, status: "loading" }));
     try {
@@ -212,17 +268,19 @@ export default function ResolvePage() {
           message: { role: "user", parts: [{ text: taskInput }] },
         }),
       });
+      if (!res.ok) throw new ApiError(`Agent returned ${res.status}`, res.status);
       const data = await res.json();
-      if (!res.ok) throw new Error(JSON.stringify(data));
+      if (run !== generation.current) return;
       setHop4({ status: "ok", url: `POST ${agentRunUrl}`, data });
     } catch (err) {
+      if (run !== generation.current) return;
       setHop4({
         status: "error",
         url: `POST ${agentRunUrl}`,
-        error: err instanceof Error ? err.message : "Agent invocation failed.",
+        error: hopError(err),
       });
     } finally {
-      setTalking(false);
+      if (run === generation.current) setTalking(false);
     }
   }
 
@@ -236,9 +294,10 @@ export default function ResolvePage() {
       {/* Search bar */}
       <form onSubmit={onResolve} className="mb-8 flex gap-3">
         <input
+          aria-label="Resource identifier"
           value={locator}
           onChange={(e) => setLocator(e.target.value)}
-          placeholder="urn:air:regentix.ai:agent:regentix-ceo"
+          placeholder="urn:air:example.org:agent:orders"
           className="flex-1 rounded-2xl border border-black/10 bg-white px-5 py-3 font-mono text-sm outline-none focus:ring-2 focus:ring-slate-300"
         />
         <button
@@ -250,8 +309,31 @@ export default function ResolvePage() {
         </button>
       </form>
 
+      <div className="mb-6">
+        <p className="mb-2 text-xs text-slate-500">Hosted demonstrations. These examples use this site&apos;s sample index and cards, and make no external calls.</p>
+        <div className="flex flex-wrap gap-2">
+          {resolveExamples.map((example) => (
+            <button key={example.kind} type="button" disabled={resolving || talking}
+              className="rounded-full border border-slate-300 px-3 py-1.5 text-sm disabled:opacity-50"
+              onClick={() => { setLocator(example.identifier); void runResolve(example.identifier, 1, example.kind); }}>
+              {example.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {traceExample && <p role="note" className="mb-4 text-sm text-slate-600">Demonstration trace: the first hop uses a controlled sample index. Results do not describe a registered production entry.</p>}
+
       {latency !== null && (
-        <p className="mb-4 text-xs text-slate-400">Hops 1–3 completed in {latency} ms</p>
+        <p role="status" className="mb-4 text-xs text-slate-500">
+          {resolutionSummary([hop1.status, hop2.status, hop3.status])} · {latency} ms. Document fetching does not establish endpoint availability.
+        </p>
+      )}
+
+      {[hop1, hop2, hop3, hop4].some((hop) => hop.status === "error") && (
+        <a className="mb-4 inline-block text-sm text-brand-600 underline" target="_blank" rel="noopener noreferrer"
+          href={`https://github.com/projnanda/nanda-index-v2/issues/new?${new URLSearchParams({ title: "Broken discovery entry", body: `Identifier: ${traceLocator}\nFailed hop: ${[hop1, hop2, hop3, hop4].findIndex((hop) => hop.status === "error") + 1}\nPlease describe what happened. This report includes the identifier.` })}`}>
+          Report broken entry
+        </a>
       )}
 
       {/* Hops */}
@@ -262,9 +344,11 @@ export default function ResolvePage() {
 
             <HopCard
               n={1}
-              label="NANDA Index"
+              label={traceExample ? "Example Index" : "NANDA Index"}
               subtitle="Each entry points to the correct next discovery object for a given resource identifier."
               hop={hop1}
+              busy={resolving || talking}
+              onRetry={() => void runResolve(traceLocator, 1, traceExample)}
             />
 
             {hop1.status !== "idle" && (
@@ -276,6 +360,8 @@ export default function ResolvePage() {
                   label="Agent Source"
                   subtitle="The requester follows the discovery path specified by the entry."
                   hop={hop2}
+              busy={resolving || talking}
+              onRetry={() => void runResolve(traceLocator, 2, traceExample)}
                 />
 
                 {hop2.status !== "idle" && (
@@ -287,6 +373,8 @@ export default function ResolvePage() {
                       label="Agent Card"
                       subtitle="A2A Agent Cards define how to interact with individual agents."
                       hop={hop3}
+              busy={resolving || talking}
+              onRetry={() => void runResolve(traceLocator, 3, traceExample)}
                     />
 
                     {hop3.status !== "idle" && (
@@ -298,6 +386,8 @@ export default function ResolvePage() {
                           label="Talk with agent"
                           subtitle="Invoke the selected resource through its supported protocol."
                           hop={hop4}
+              busy={resolving || talking}
+              onRetry={() => void talkToAgent()}
                         >
                           {agentRunUrl && hop4.status !== "skipped" && (
                             <form onSubmit={onTalk} className="flex gap-2 mt-1">
@@ -333,7 +423,7 @@ export default function ResolvePage() {
             Enter a URN above to trace the resolution hops.
           </p>
           <p className="mt-2 font-mono text-xs text-slate-300">
-            e.g. urn:air:regentix.ai:agent:regentix-ceo
+            Choose a hosted demonstration above, or enter an identifier from Explore.
           </p>
         </div>
       )}

@@ -61,6 +61,18 @@ export const CONTRIBUTOR_QUOTES: readonly ContributorQuote[] = [
   },
   {
     text:
+      "In mission-critical environments, AI must do more than demonstrate intelligence—it must be reliable, accountable, and designed to support human decision-making. At Motorola Solutions, we're bringing AI into communications, video security, and command center workflows where these principles matter most. As intelligent systems become increasingly agentic, open initiatives like NandaIndex can help establish the discovery infrastructure needed for independently developed agents to find one another, while preserving the security, control, and trust these environments demand.",
+    attribution: "Dr. Mahesh Saptharishi, Executive Vice President and CTO, Motorola Solutions",
+    logo: null,
+  },
+  {
+    text:
+      "The future of the connected home isn't about adding more apps or devices—it's about making technology work together effortlessly for people. At TELUS, we're building intelligent, connected experiences that bring together entertainment, smart home devices, and digital services. As personal AI agents become the interface to these experiences, open initiatives like NandaIndex can help agents discover and interact across independent platforms, making connected living simpler, more useful, and more accessible.",
+    attribution: "Amit Nag, Vice President, Connected Products & Experiences, TELUS",
+    logo: null,
+  },
+  {
+    text:
       "The Neuro SAN framework at Cognizant enables networks of specialized AI agents to collaborate and solve complex enterprise problems. NandaIndex complements this vision by providing an open discovery and resolution layer, allowing agents built on different frameworks and platforms to find and collaborate with one another across organizational boundaries.",
     attribution: "Babak Hodjat, CTO, Cognizant",
     logo: CONTRIBUTOR_LOGOS["Cognizant"],

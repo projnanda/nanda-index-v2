@@ -14,6 +14,7 @@ import { registerOAuthPlugin } from './plugins/oauth.js';
 import { registerHealthRoute } from './routes/health.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerAccountVerificationRoutes } from './routes/account-verification.js';
+import { registerAccountSettingsRoutes } from './routes/account-settings.js';
 import { registerIndexRecordRoutes } from './routes/index-records.js';
 import { registerOrgRoutes } from './routes/orgs.js';
 import { registerOrgRecoveryRoute } from './routes/org-recovery.js';
@@ -74,6 +75,7 @@ export async function buildServer(options: BuildServerOptions = {}) {
   await registerHealthRoute(fastify);
   await registerAuthRoutes(fastify);
   await registerAccountVerificationRoutes(fastify);
+  await registerAccountSettingsRoutes(fastify);
   await registerIndexRecordRoutes(fastify);
   await registerOrgRoutes(fastify);
   await registerOrgRecoveryRoute(fastify);

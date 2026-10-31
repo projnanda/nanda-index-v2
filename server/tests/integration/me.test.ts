@@ -20,6 +20,7 @@ describe('GET /api/v1/me', () => {
       avatarUrl:   'https://example.com/avatar.png',
       provider:    'google',
       providerId:  'me-test-provider-id',
+      emailVerified: true,
     });
     userId = user.id;
     token  = fastify.jwt.sign({ userId, email: user.email, displayName: user.displayName });
