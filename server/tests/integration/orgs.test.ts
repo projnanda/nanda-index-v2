@@ -48,6 +48,7 @@ describe('Org management routes — protected CRUD', () => {
       avatarUrl:   null,
       provider:    'google',
       providerId:  'orgs-test-provider-id',
+      emailVerified: true,
     });
     userId = user.id;
     token  = await makeToken(fastify, userId, user.email);
@@ -59,6 +60,7 @@ describe('Org management routes — protected CRUD', () => {
       avatarUrl:   null,
       provider:    'github',
       providerId:  'orgs-member-test-provider-id',
+      emailVerified: true,
     });
     memberUserId = member.id;
     memberToken  = await makeToken(fastify, memberUserId, member.email);
@@ -164,7 +166,7 @@ describe('Org management routes — protected CRUD', () => {
     const sql = getSql();
     const otherUser = await upsertUser({
       email: 'other@example.com', displayName: null, avatarUrl: null,
-      provider: 'github', providerId: 'other-provider',
+      provider: 'github', providerId: 'other-provider', emailVerified: true,
     });
     await sql`
       INSERT INTO organizations (org_id, display_name, domain, contact_email, registry_url, verify_token, identifier)

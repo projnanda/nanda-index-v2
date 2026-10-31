@@ -2,6 +2,12 @@ import Image from "next/image";
 import { PageShell } from "@/components/PageShell";
 import { CONTRIBUTOR_QUOTES } from "@/lib/contributor-quotes";
 import { externalLinks } from "@/lib/site-data";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Contributors",
+  description: "Nanda Index is being designed, reviewed, and supported by a large collective.",
+};
 
 type Person = {
   name: string;
