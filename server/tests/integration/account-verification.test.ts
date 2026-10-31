@@ -114,7 +114,7 @@ describe('account email verification', () => {
     it('blocks every admin write route for an admin whose account is unverified, but not reads', async () => {
       const admin = await upsertUser({
         email: 'acctv-admin@example.com', displayName: null, avatarUrl: null,
-        provider: 'google', providerId: 'acctv-admin-provider-id',
+        provider: 'google', providerId: 'acctv-admin-provider-id', emailVerified: true,
       });
       const token = app.jwt.sign({ userId: admin.id, email: admin.email, displayName: null });
       const created = await app.inject({
@@ -208,7 +208,7 @@ describe('account email verification', () => {
     it('is a no-op for an already-verified account', async () => {
       const user = await upsertUser({
         email: 'acctv-oauth@example.com', displayName: null, avatarUrl: null,
-        provider: 'github', providerId: 'acctv-oauth-provider-id',
+        provider: 'github', providerId: 'acctv-oauth-provider-id', emailVerified: true,
       });
       const token = app.jwt.sign({ userId: user.id, email: user.email, displayName: null });
 
@@ -221,10 +221,10 @@ describe('account email verification', () => {
   });
 
   describe('OAuth accounts', () => {
-    it('marks provider-verified OAuth users as verified by default', async () => {
+    it('marks an OAuth user verified when the provider verified the email', async () => {
       const user = await upsertUser({
         email: 'acctv-google@example.com', displayName: null, avatarUrl: null,
-        provider: 'google', providerId: 'acctv-google-provider-id',
+        provider: 'google', providerId: 'acctv-google-provider-id', emailVerified: true,
       });
       expect(user.emailVerified).toBe(true);
     });

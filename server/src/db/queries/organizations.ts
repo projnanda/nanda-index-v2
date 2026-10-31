@@ -1,12 +1,18 @@
 import type postgres from 'postgres';
+import { createHash } from 'node:crypto';
 import { getSql } from '../client.js';
 import { CATALOG_MEDIA_TYPES, DEFAULT_MEDIA_TYPE, ENTERPRISE_MEDIA_TYPE, NANDA_MEDIA_TYPE, POINTER_ONLY_MEDIA_TYPE } from '../../lib/mediaTypes.js';
 
 /** Postgres type OID for `text` — the element type of org_id arrays bound as parameters. */
 const TEXT_OID = 25;
+
 import type { IndexRecord, Moderation, PublisherBlock, TrustManifest } from '../../types/api/index-record.js';
 import { NANDA_EXTENSION, type CatalogExtensions } from '../../lib/entryProfile.js';
 import type { IndexEntry } from '../../types/api/index-entry.js';
+
+function hashVerifyToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
 
 /** Domain type — camelCase (postgres.camel maps snake_case columns). */
 export interface Organization {
@@ -310,8 +316,9 @@ export async function countListedEntries(): Promise<number> {
  * Inserts a new organization with status='pending'.
  * Returns the inserted organization.
  */
-export async function insertOrganization(params: InsertOrgParams): Promise<Organization> {
-  const sql = getSql();
+export async function insertOrganization(
+  params: InsertOrgParams, sql: postgres.Sql | postgres.TransactionSql = getSql(),
+): Promise<Organization> {
   const rows = await sql<Organization[]>`
     INSERT INTO organizations
       (org_id, display_name, domain, contact_email, registry_url,
@@ -320,7 +327,7 @@ export async function insertOrganization(params: InsertOrgParams): Promise<Organ
        version, trust_manifest, representative_queries)
     VALUES
       (${params.orgId}, ${params.displayName}, ${params.domain ?? null}, ${params.contactEmail},
-       ${params.registryUrl ?? null}, ${params.verifyToken}, ${params.verifyTokenExpiresAt},
+       ${params.registryUrl ?? null}, ${hashVerifyToken(params.verifyToken)}, ${params.verifyTokenExpiresAt},
        ${params.ttlSeconds ?? 86400},
        ${params.identifier},
        ${params.mediaType ?? DEFAULT_MEDIA_TYPE},
@@ -412,9 +419,10 @@ export async function updateOrganization(
  */
 export async function markEmailVerifiedByToken(token: string): Promise<Organization | null> {
   const sql = getSql();
+  const tokenHash = hashVerifyToken(token);
   return sql.begin(async (tx) => {
     const [target] = await tx<{ identifier: string }[]>`
-      SELECT identifier FROM organizations WHERE verify_token = ${token}
+      SELECT identifier FROM organizations WHERE verify_token = ${tokenHash}
     `;
     if (target) await lockClaim(tx, target.identifier);
     const rows = await tx<Organization[]>`
@@ -427,7 +435,7 @@ export async function markEmailVerifiedByToken(token: string): Promise<Organizat
           WHEN domain IS NULL AND status = 'pending' THEN 'active'
           ELSE status END,
         updated_at               = NOW()
-      WHERE verify_token = ${token}
+      WHERE verify_token = ${tokenHash}
         AND verify_token_expires_at > NOW()
       RETURNING *
     `;
@@ -463,7 +471,7 @@ export async function renewVerifyToken(
   const latestPreviousExpiry = new Date(expiresAt.getTime() - cooldownMs);
   const rows = await sql<Organization[]>`
     UPDATE organizations SET
-      verify_token            = ${token},
+      verify_token            = ${hashVerifyToken(token)},
       verify_token_expires_at = ${expiresAt},
       updated_at              = NOW()
     WHERE org_id = ${orgId} AND NOT email_verified
