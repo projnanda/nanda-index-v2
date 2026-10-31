@@ -146,7 +146,9 @@ async function fetchRemoteJson(url: string): Promise<unknown> {
     headers: { Accept: "application/json" },
     cache: "no-store",
   });
-  return parseApiResponse<unknown>(res);
+  if (!res.ok) return parseApiResponse<unknown>(res);
+  // A 2xx body that is not JSON throws, so the next discovery step is tried.
+  return res.json();
 }
 
 /**
@@ -226,6 +228,36 @@ export async function resendAccountVerification(): Promise<{ ok: boolean; alread
 /** GET /api/v1/me — authenticated user profile + org memberships. */
 export async function getMe(): Promise<User> {
   return request<User>("/api/v1/me");
+}
+
+export interface AccountSettings extends User {
+  has_password: boolean;
+  auth_provider: "email" | "google" | "github";
+  deletion_blockers: { org_id: string; display_name: string }[];
+}
+
+export async function getAccountSettings(): Promise<AccountSettings> {
+  return request<AccountSettings>("/api/v1/me");
+}
+
+export async function updateProfile(displayName: string): Promise<{ token: string; display_name: string | null }> {
+  return request("/api/v1/me", { method: "PATCH", body: JSON.stringify({ display_name: displayName }) });
+}
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  await request("/auth/change-password", { method: "POST", body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }) });
+}
+
+export async function logoutAll(): Promise<void> {
+  await request("/auth/logout-all", { method: "POST" });
+}
+
+export async function requestAccountDeletion(): Promise<void> {
+  await request("/auth/request-account-deletion", { method: "POST" });
+}
+
+export async function deleteAccount(proof: { current_password?: string; deletion_code?: string }): Promise<void> {
+  await request("/api/v1/me", { method: "DELETE", body: JSON.stringify({ confirmation: "DELETE", ...proof }) });
 }
 
 /** POST /api/v1/orgs — create an org (requires auth). */
@@ -325,7 +357,8 @@ export async function fetchFactsUrl(url: string): Promise<unknown> {
     headers: { Accept: "application/json, */*" },
     cache: "no-store",
   });
-  return parseApiResponse(res);
+  if (!res.ok) return parseApiResponse(res);
+  return res.json();
 }
 
 /** @deprecated Use listIndexRecords. Kept for backwards compat during migration. */

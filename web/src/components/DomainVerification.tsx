@@ -1,5 +1,7 @@
 "use client";
 
+import { formatTimestamp } from "@/lib/formatTimestamp";
+
 import { useEffect, useState } from "react";
 import { ApiError, requestDomainChallenge, verifyDomain } from "@/lib/nanda-api";
 import type { DomainChallenge, IndexRecord } from "@/lib/nanda-types";
@@ -172,7 +174,7 @@ export function DomainVerification({
             <span className="font-mono">{challenge.record_name}.{challenge.domain}</span>.
           </p>
           <p className="text-[11px] text-amber-600">
-            This record stays the same until {new Date(challenge.expires_at).toLocaleString()} —
+            This record stays the same until {formatTimestamp(challenge.expires_at)} —
             you can leave and come back to check.
           </p>
           <button

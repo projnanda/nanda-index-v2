@@ -2,6 +2,12 @@ import Image from "next/image";
 import { PageShell } from "@/components/PageShell";
 import { CONTRIBUTOR_QUOTES } from "@/lib/contributor-quotes";
 import { externalLinks } from "@/lib/site-data";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Contributors",
+  description: "Nanda Index is being designed, reviewed, and supported by a large collective.",
+};
 
 type Person = {
   name: string;
@@ -128,8 +134,8 @@ export default function ContributorsPage() {
       <div className="max-w-3xl space-y-12">
         <div id="community-perspectives" className="scroll-mt-24">
           <Image
-            src="/contributors/contributor-logos-tab-11-v2.png"
-            alt="Contributor logos: Google, Cisco, Akamai Cloud, GSMA, Project NANDA, Cognizant, Commerce, Ericsson, HCLTech, Haven, Hexaware, Inkbox, Kyndryl, Maritime, Mitsubishi Electric, Nasiko, Nutanix, Ora, PayPal, TCS, TinyFish, WorkOS, Wipro, Wand AI, Suki, AGI House, L&T Technology Services, Nebius, and MIT Media Lab."
+            src="/contributors/contributor-logos-tab-11-v3.png"
+            alt="Contributor logos: Google, Cisco, Akamai Cloud, PayPal, AGI House, Cognizant, Commerce, Ericsson, GSMA, HCLTech, Hello Haven, Hexaware, Inkbox, Kyndryl, L&T Technology Services, Maritime, Mitsubishi Electric, Nasiko, Nebius, Nutanix, Ora, Suki, TCS, TinyFish, Wand AI, Wipro, WorkOS, MIT Media Lab, and Project NANDA."
             width={874}
             height={802}
             sizes="(min-width: 832px) 768px, calc(100vw - 64px)"

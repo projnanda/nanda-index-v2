@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { listIndexRecords } from "@/lib/nanda-api";
 import { JsonPanel } from "@/components/JsonPanel";
+import { PageShell } from "@/components/PageShell";
 import type { IndexCatalogEntry, TrustManifest } from "@/lib/nanda-types";
+import { identityStatus, entryCardStatus } from "@/lib/entryStatus";
 import { entryOps } from "@/lib/air";
 import { categoryOf, type Category } from "@/lib/entryCategory";
 
@@ -52,7 +54,7 @@ type Row = {
   date: string;
   description: string;
   tags: string[];
-  verified: boolean;
+  identity: ReturnType<typeof identityStatus>;
   version: string | null;
 };
 
@@ -81,7 +83,7 @@ function mapRow(record: IndexCatalogEntry): Row {
     date,
     description,
     tags,
-    verified: !!entryOps(record).emailVerified,
+    identity: identityStatus(record),
     version: record.version ?? null,
   };
 }
@@ -168,11 +170,10 @@ export default function ExplorePage() {
   })();
 
   return (
-    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-6">
-        <h2 className="font-display text-2xl font-bold text-ink-strong leading-tight">Explore</h2>
-      </div>
-
+    <PageShell
+      title="Explore"
+      description="Browse every entry listed in the index. Filter entries, or search by name, identifier, or domain."
+    >
       <div className="flex flex-col lg:flex-row gap-6">
         <FilterSidebar
           search={search}
@@ -246,7 +247,7 @@ export default function ExplorePage() {
       </div>
 
       <DetailDrawer record={selected} onClose={() => setSelected(null)} />
-    </main>
+    </PageShell>
   );
 }
 
@@ -322,37 +323,16 @@ function FilterSidebar(props: {
 function RegistryCard({ item, onSelect }: { item: Row; onSelect: () => void }) {
   return (
     <article
-      onClick={onSelect}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onSelect();
-        }
-      }}
-      className="bg-surface-light rounded-card border border-line/70 shadow-card p-4 hover:shadow-card-hover hover:border-line-strong transition cursor-pointer flex flex-col h-full gap-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-      role="button"
-      tabIndex={0}
+      className="relative bg-surface-light rounded-card border border-line/70 shadow-card p-4 hover:shadow-card-hover hover:border-line-strong transition flex flex-col h-full gap-3"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 min-w-0">
-            <h3 className="font-semibold text-ink-strong truncate">{item.name}</h3>
-            {item.verified && (
-              <span className="inline-flex flex-shrink-0" title="Verified">
-                <svg
-                  className="w-4 h-4 text-brand-500"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </span>
-            )}
+            <h3 className="font-semibold text-ink-strong truncate">
+              <button type="button" onClick={onSelect} className="text-left cursor-pointer after:absolute after:inset-0 after:rounded-card focus:outline-none focus-visible:after:ring-2 focus-visible:after:ring-brand-500">
+                {item.name}
+              </button>
+            </h3>
           </div>
           <div className="mt-0.5 text-xs text-ink-weak truncate">
             {item.version ? (
@@ -369,17 +349,22 @@ function RegistryCard({ item, onSelect }: { item: Row; onSelect: () => void }) {
           {item.badgeLabel}
         </span>
       </div>
+      <div className="space-y-1 text-xs text-ink-medium">
+        <p title="Identity proof checks control of an email address or domain. It does not test the card or runtime.">{item.identity.label}</p>
+        <p title={entryCardStatus(item.record).detail}>Card: {entryCardStatus(item.record).label}</p>
+        <p>Endpoint: Not checked</p>
+      </div>
       <p className="text-sm text-ink line-clamp-2 leading-relaxed">{item.description}</p>
-      <div className="flex flex-wrap gap-1.5 mt-auto">
+      <ul role="list" aria-label="Tags" className="flex flex-wrap gap-1.5 mt-auto">
         {item.tags.slice(0, 4).map((t) => (
-          <span
+          <li
             key={t}
             className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-surface-tag text-ink"
           >
             {t}
-          </span>
+          </li>
         ))}
-      </div>
+      </ul>
     </article>
   );
 }
@@ -473,16 +458,16 @@ function DetailDrawer({ record, onClose }: { record: IndexCatalogEntry | null; o
                   </p>
                 )}
                 {record.tags && record.tags.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
+                  <ul role="list" aria-label="Tags" className="mt-3 flex flex-wrap gap-1.5">
                     {record.tags.map((tag) => (
-                      <span
+                      <li
                         key={tag}
                         className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-surface-tag text-ink"
                       >
                         {tag}
-                      </span>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 )}
                 <dl className="mt-4 grid gap-2 text-sm text-ink">
                   <DetailRow label="Media type">
@@ -508,9 +493,14 @@ function DetailDrawer({ record, onClose }: { record: IndexCatalogEntry | null; o
                     )}
                   </DetailRow>
                   <DetailRow label="TTL">{entryOps(record).ttlSeconds}s</DetailRow>
-                  <DetailRow label="Email verified">
-                    {entryOps(record).emailVerified ? "Yes" : "No"}
+                  <DetailRow label="Identity">
+                    {identityStatus(record).label}. {identityStatus(record).checkedAt ? new Date(identityStatus(record).checkedAt!).toLocaleString(undefined, { timeZoneName: "short" }) : "Verification time not recorded."}
                   </DetailRow>
+                  <DetailRow label="Card check">
+                    {entryCardStatus(record).label}. {entryCardStatus(record).checkedAt ? new Date(entryCardStatus(record).checkedAt!).toLocaleString(undefined, { timeZoneName: "short" }) : "No check time recorded."}
+                    <p className="mt-1 text-xs text-ink-weak">{entryCardStatus(record).detail}</p>
+                  </DetailRow>
+                  <DetailRow label="Endpoint">Not checked. Identity proof and card checks do not establish runtime availability.</DetailRow>
                   <DetailRow label="Status">
                     <span className="capitalize">{entryOps(record).status}</span>
                   </DetailRow>

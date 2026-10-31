@@ -10,6 +10,9 @@ Requester → NANDA Index → Registry / Agent Card Host → Agent Runtime
 
 NANDA Index does not host agents. It tells you where to find them.
 
+The proposed [ownership and signed resolution contract](server/TRUST_CONTRACT.md)
+defines proof freshness, pointer validity, and acceptance tests for #61 and #92.
+
 A worked example of the whole chain lives in [`demo/`](demo/): an agent that
 searches the index for two organisations, follows each to the agent it needs by a
 different route, books a restaurant, and leaves a signed record. MIT-licensed,
@@ -279,7 +282,7 @@ interface IndexRecord {
 | ARD directory | `urn:air:<domain>:registry:<name>` | `urn:air:acme.com:registry:ard` |
 | Personal | `urn:air:host39.org:personal:<email>` | `urn:air:host39.org:personal:john@hotmail.com` |
 
-Identifiers follow ARD's `urn:air:<publisher-FQDN>:<namespace...>:<short-name>`. The publisher FQDN must be the domain you verified; personal identifiers are derived from your verified email. The retired `urn:ai:*` forms are rejected.
+Identifiers follow ARD's `urn:air:<publisher-FQDN>:<namespace...>:<short-name>`. The publisher FQDN must be the domain you verified; personal identifiers are derived from your verified email. Host39 is the naming authority for personal URNs. The personal entry publisher block represents that naming authority, not the card author or hosting provider; the card may be hosted at any public URL. The retired `urn:ai:*` forms are rejected.
 
 ---
 
@@ -408,6 +411,23 @@ curl "https://api.nandaindex.org/api/v1/resolve?locator=urn:air:acme.com:agent:f
 
 ---
 
+## Organization email verification upgrade (migration 020)
+
+`organizations.verify_token` stores a SHA-256 hex digest. Email links and API
+payloads are unchanged. Migration 020 clears outstanding tokens and expiry values;
+ownership proofs, memberships, and publication status are preserved. Old links
+require a new email via `POST /api/v1/orgs/:org_id/resend-verification`.
+
+Stop all old API instances before deploying. The entrypoint applies migration 020
+before serving requests. Mixed versions are unsupported because old code writes
+plaintext tokens. For rollback, stop all instances and clear outstanding tokens
+and expiry values before starting the old version; users must request new links.
+
+`POST /api/v1/verify-email` uses `AUTH_RATE_LIMIT_MAX` (default `10`) and
+`AUTH_RATE_LIMIT_WINDOW` (default `1 minute`) per client IP per API instance.
+Excess requests return `429` with `Retry-After` without consuming tokens. Client
+IP selection follows `TRUST_PROXY_HOPS`. GET remains a non-consuming redirect.
+
 ## Health Check
 
 ```bash
@@ -420,3 +440,11 @@ curl https://api.nandaindex.org/health
 ## License
 
 Apache License 2.0 — see [LICENSE](LICENSE).
+
+### Identity, card checks, and endpoint availability
+
+Email and DNS TXT verification prove control of the registered identity. They do not prove that a card or agent runtime works. Explore labels the proof type explicitly. Proof timestamps are shown when recorded; older email proofs have an unknown timestamp.
+
+Registration and a submitted card URL update run a server-side check for A2A and MCP JSON cards. The check uses the public-address outbound guard, pinned DNS, no redirects, a three-second deadline, and a 256 KiB response limit. Results and check times are stored in a server-owned database column. A2A legacy URL and modern supported-interface cards are checked for required discovery fields; MCP checks use the experimental Server Card core fields. Optional fields and protocol behavior are not certified. Unsupported artifacts and A2A custom protocol bindings show Not checked. A failed check warns the registrant and remains visible in Explore; it does not replace the identity activation requirement. Save the card URL again to recheck it.
+
+Endpoint availability remains Not checked. The card check never invokes the advertised runtime or follows nested URLs. Apply migration `022_card_checks_and_identity_timestamps.sql` before deploying this version; it leaves historical results unknown.

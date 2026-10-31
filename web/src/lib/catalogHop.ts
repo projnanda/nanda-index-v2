@@ -19,6 +19,11 @@ const SINGLE_RESOURCE_TYPES = new Set([
   "application/agentskill+zip",
 ]);
 
+/** True for media types whose URL is the card itself, not a catalog or registry. */
+export function isSingleResourceType(type: string | undefined): boolean {
+  return !!type && SINGLE_RESOURCE_TYPES.has(type);
+}
+
 export type HopShape = "entry" | "document";
 
 export interface HopStep {
