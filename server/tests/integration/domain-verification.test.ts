@@ -64,13 +64,13 @@ describe('Domain ownership verification — DNS TXT challenge', () => {
 
     const admin = await upsertUser({
       email: 'dv-admin@example.com', displayName: 'DV Admin', avatarUrl: null,
-      provider: 'google', providerId: 'dv-admin-id',
+      provider: 'google', providerId: 'dv-admin-id', emailVerified: true,
     });
     adminToken = fastify.jwt.sign({ userId: admin.id, email: admin.email, displayName: null });
 
     const member = await upsertUser({
       email: 'dv-member@example.com', displayName: 'DV Member', avatarUrl: null,
-      provider: 'github', providerId: 'dv-member-id',
+      provider: 'github', providerId: 'dv-member-id', emailVerified: true,
     });
     memberUserId = member.id;
     memberToken = fastify.jwt.sign({ userId: member.id, email: member.email, displayName: null });
