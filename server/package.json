@@ -15,7 +15,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "migrate": "tsx --env-file=.env src/db/migrate.ts",
+    "migrate": "tsx --env-file-if-exists=.env src/db/migrate.ts",
     "demo:seed": "DEMO_MODE=true tsx --env-file=.env scripts/seed-demo.ts",
     "demo:run": "DEMO_MODE=true tsx --env-file=.env scripts/demo-flow.ts"
   },
