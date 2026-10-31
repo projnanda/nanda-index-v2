@@ -1,4 +1,5 @@
 const TOKEN_KEY = "nanda_auth_token";
+const AUTH_CHANGE_EVENT = "nanda:auth-change";
 
 export function getAuthToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -7,10 +8,22 @@ export function getAuthToken(): string | null {
 
 export function setAuthToken(token: string): void {
   localStorage.setItem(TOKEN_KEY, token);
+  window.dispatchEvent(new Event(AUTH_CHANGE_EVENT));
 }
 
 export function clearAuthToken(): void {
   localStorage.removeItem(TOKEN_KEY);
+  window.dispatchEvent(new Event(AUTH_CHANGE_EVENT));
+}
+
+/** Notify the header after profile updates, sign-in, or sign-out in any tab. */
+export function subscribeAuthChanges(listener: () => void): () => void {
+  window.addEventListener(AUTH_CHANGE_EVENT, listener);
+  window.addEventListener("storage", listener);
+  return () => {
+    window.removeEventListener(AUTH_CHANGE_EVENT, listener);
+    window.removeEventListener("storage", listener);
+  };
 }
 
 interface JwtPayload {

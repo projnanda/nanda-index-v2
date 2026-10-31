@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { findUserById } from '../db/queries/users.js';
 import { findMembershipsByUserId } from '../db/queries/orgMemberships.js';
+import { findDeletionBlockers } from '../db/queries/accountSettings.js';
 import { apiErrorSchema } from '../types/api/common.js';
 import type { JwtPayload } from '../plugins/jwt.js';
 
@@ -22,6 +23,14 @@ export async function registerMeRoute(fastify: FastifyInstance): Promise<void> {
             email_verified: { type: 'boolean' },
             display_name: { type: ['string', 'null'] },
             avatar_url:   { type: ['string', 'null'] },
+            has_password: { type: 'boolean' },
+            auth_provider: { type: 'string', enum: ['email', 'google', 'github'] },
+            deletion_blockers: {
+              type: 'array',
+              items: { type: 'object', required: ['org_id', 'display_name'], properties: {
+                org_id: { type: 'string' }, display_name: { type: 'string' },
+              } },
+            },
             orgs: {
               type: 'array',
               items: {
@@ -54,6 +63,7 @@ export async function registerMeRoute(fastify: FastifyInstance): Promise<void> {
     }
 
     const memberships = await findMembershipsByUserId(user.id);
+    const blockers = await findDeletionBlockers(user.id);
 
     return reply.send({
       user_id:      user.id,
@@ -61,6 +71,9 @@ export async function registerMeRoute(fastify: FastifyInstance): Promise<void> {
       email_verified: user.emailVerified,
       display_name: user.displayName,
       avatar_url:   user.avatarUrl,
+      has_password: !!user.passwordHash,
+      auth_provider: user.provider,
+      deletion_blockers: blockers.map((org) => ({ org_id: org.orgId, display_name: org.displayName })),
       orgs: memberships.map(m => ({
         org_id:          m.orgId,
         display_name:    m.displayName,

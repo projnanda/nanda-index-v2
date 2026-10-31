@@ -1,4 +1,5 @@
 import { getSql } from '../client.js';
+import type { TransactionSql } from 'postgres';
 
 /** Domain type — camelCase (postgres.camel maps snake_case columns). */
 export interface User {
@@ -62,7 +63,23 @@ export async function findUserById(id: string): Promise<User | null> {
 }
 
 /**
- * Inserts a new user or updates display_name and avatar_url on conflict.
+ * Recheck account control in the transaction granting entry ownership.
+ * Writing the row also makes a SERIALIZABLE account deletion with an older
+ * snapshot retry after this grant commits, so it sees the new membership.
+ * A row lock alone would not refresh that deletion's snapshot.
+ */
+export async function lockVerifiedUserForOwnership(
+  tx: TransactionSql, userId: string, tokenVersion: number,
+): Promise<boolean> {
+  const rows = await tx`UPDATE users SET updated_at = clock_timestamp()
+    WHERE id = ${userId} AND email_verified AND token_version = ${tokenVersion}
+    RETURNING id`;
+  return rows.length > 0;
+}
+
+/**
+ * Inserts a new user or refreshes their provider profile on conflict.
+ * A name edited in Account settings is retained, including a deliberately cleared name.
  * Returns the upserted user.
  *
  * On conflict the account stays verified if the provider verifies the email
@@ -77,7 +94,7 @@ export async function upsertUser(params: UpsertUserParams): Promise<User> {
     ON CONFLICT (provider, provider_id)
       DO UPDATE SET
         email          = EXCLUDED.email,
-        display_name   = EXCLUDED.display_name,
+        display_name   = CASE WHEN users.display_name_customized THEN users.display_name ELSE EXCLUDED.display_name END,
         avatar_url     = EXCLUDED.avatar_url,
         email_verified = EXCLUDED.email_verified
                          OR (users.email_verified AND users.email = EXCLUDED.email),

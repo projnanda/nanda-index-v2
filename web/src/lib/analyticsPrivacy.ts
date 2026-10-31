@@ -7,7 +7,7 @@ import type { CaptureResult, CapturedNetworkRequest } from "posthog-js";
  * URL that does leave the browser loses its query string and fragment.
  */
 
-const PRIVATE_PATH_PREFIXES = ["/reset-password", "/auth/", "/verify-email", "/verify-account"];
+const PRIVATE_PATH_PREFIXES = ["/reset-password", "/auth/", "/verify-email", "/verify-account", "/dashboard/settings"];
 
 export function isPrivatePath(pathname: string): boolean {
   return PRIVATE_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
