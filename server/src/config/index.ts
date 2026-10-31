@@ -128,6 +128,16 @@ export interface OutboundConfig {
   readonly allowPrivateHosts: boolean;
 }
 
+export interface ExtensionsConfig {
+  /**
+   * 'open' (default) accepts any reverse-DNS namespace in `extensions`.
+   * 'anchored' accepts only `org.projectnanda` and the reverse-DNS form of
+   * the domain the entry proved. See README — turning it on is a policy
+   * change, and one entry on the live index does not satisfy it today.
+   */
+  readonly namespacePolicy: 'open' | 'anchored';
+}
+
 export interface LlmEnrichmentConfig {
   /** undefined = enrichment disabled; orgs are registered/updated without it. */
   readonly apiKey: string | undefined;
@@ -173,6 +183,7 @@ export interface Config {
   readonly apiBaseUrl: string;
   readonly federation: FederationConfig;
   readonly outbound: OutboundConfig;
+  readonly extensions: ExtensionsConfig;
   readonly llmEnrichment: LlmEnrichmentConfig;
   readonly analytics: AnalyticsConfig;
 }
@@ -300,6 +311,10 @@ export function buildConfig(): Config {
     },
     outbound: {
       allowPrivateHosts: optionalEnv('OUTBOUND_ALLOW_PRIVATE_HOSTS', 'false') === 'true',
+    },
+    extensions: {
+      namespacePolicy:
+        optionalEnv('EXTENSION_NAMESPACE_POLICY', 'open') === 'anchored' ? 'anchored' : 'open',
     },
     llmEnrichment: {
       apiKey: process.env['OPENAI_API_KEY'] || undefined,

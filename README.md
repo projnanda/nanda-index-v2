@@ -142,11 +142,49 @@ NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
 
 DB_MAX_CONNECTIONS=10
 
+# Extension namespaces — "open" (default) or "anchored". See "Extension
+# metadata" below; turning this on is a policy change, not a hardening step.
+EXTENSION_NAMESPACE_POLICY=open
+
 # Concierge demo at https://nandaindex.org/demo — all optional, defaults shown
 DEMO_BASE_URL=https://nandaindex.org/demo
 DEMO_RUN_LIMIT_PER_HOUR=3          # live runs per visitor per hour; 0 = unlimited
 DEMO_PUBLIC_INDEX_URL=https://api.nandaindex.org
 ```
+
+### Extension metadata
+
+`extensions` is where a registrant puts metadata the index itself does not
+model, keyed by reverse-DNS namespace as the AI Catalog format describes. It is
+published verbatim on every public read surface — `/api/v1/index/:org_id`,
+`/api/v1/index`, `/api/v1/search`, `/api/v1/resolve` and `/api/ard/agents` —
+so what goes in reaches every consumer that reads this index.
+
+Two rules apply to what you can put there, beyond the 16 KB and 6-level caps
+in `server/src/lib/jsonLimits.ts`.
+
+**Active-content URLs are rejected, always.** A value that begins
+`javascript:`, `vbscript:`, or `data:` followed by an HTML, SVG or XML media
+type is refused on create and on update, at any depth, including inside
+arrays. Control characters are stripped before the check, because browsers
+strip them too. The list is deliberately short: `data: 2026-01-01` and
+`about: the refunds agent` are ordinary metadata, and `data:image/png` is
+harmless, so none of them is affected. Markup is not filtered — `description`
+and `tags` have always been free text, and escaping belongs to whoever renders
+it.
+
+**Namespaces are open by default.** `EXTENSION_NAMESPACE_POLICY=anchored`
+restricts a registrant to `org.projectnanda` plus the reverse-DNS form of the
+domain they proved (`acme.com` → `com.acme`); an entry with no domain gets
+`org.projectnanda` only. This mirrors how identifiers already work — control
+of a domain is what entitles you to speak for it.
+
+It ships **off**, because it is a policy decision rather than a fix. Of the
+105 entries on the live index, 103 use only `org.projectnanda`, one uses the
+reverse-DNS of its own domain (which `anchored` accepts), and one publishes
+under a namespace belonging to neither — so switching this on would reject
+that registrant's next update. Decide what should happen to entries like it
+before turning it on.
 
 ### Concierge demo (`/demo`)
 
