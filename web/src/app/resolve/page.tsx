@@ -8,6 +8,7 @@ import type { ResolveResponse, CatalogEntry } from "@/lib/nanda-types";
 import { resolutionSummary, type HopStatus } from "@/lib/resolutionStatus";
 import { resolveExamples, type ExampleKind } from "@/lib/resolveExamples";
 import { cn } from "@/lib/utils";
+import { noUrlExplanation } from "@/lib/svcbPointer";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -163,7 +164,7 @@ export default function ResolvePage() {
     // ── Hop 2: Registry ───────────────────────────────────────────────────
     const { url: entryUrl, type: entryType } = indexData.entry;
     if (!entryUrl) {
-      setHop2({ status: "skipped", url: "No URL to follow — inline data or custom discovery path." });
+      setHop2({ status: "skipped", url: noUrlExplanation(indexData.entry) });
       setHop3({ status: "skipped" }); setHop4({ status: "skipped" });
       setResolving(false);
       setLatency(Math.round(performance.now() - t0));
