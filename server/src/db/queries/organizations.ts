@@ -316,8 +316,9 @@ export async function countListedEntries(): Promise<number> {
  * Inserts a new organization with status='pending'.
  * Returns the inserted organization.
  */
-export async function insertOrganization(params: InsertOrgParams): Promise<Organization> {
-  const sql = getSql();
+export async function insertOrganization(
+  params: InsertOrgParams, sql: postgres.Sql | postgres.TransactionSql = getSql(),
+): Promise<Organization> {
   const rows = await sql<Organization[]>`
     INSERT INTO organizations
       (org_id, display_name, domain, contact_email, registry_url,

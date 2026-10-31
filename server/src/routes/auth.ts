@@ -3,7 +3,6 @@ import {
   upsertUser,
   findUserByEmail,
   createUserWithPassword,
-  updateUserPassword,
   wasJustCreated,
   type User,
 } from '../db/queries/users.js';
@@ -16,13 +15,13 @@ import {
 import {
   createResetToken,
   findValidResetToken,
-  markResetTokenUsed,
+  completePasswordReset,
   hashResetToken,
 } from '../db/queries/passwordResetTokens.js';
 import { issueAccountVerifyToken } from '../db/queries/accountVerification.js';
 import { sendPasswordResetEmail, sendAccountVerificationEmail } from '../services/email.js';
 import { buildConfig } from '../config/index.js';
-import { createPasswordHasher } from '../lib/password.js';
+import { createPasswordHasher, newPasswordError, newPasswordSchema } from '../lib/password.js';
 import { apiErrorSchema } from '../types/api/common.js';
 
 const INVALID_CREDENTIALS = { error: 'UNAUTHORIZED', detail: 'invalid email or password' } as const;
@@ -186,12 +185,13 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
           additionalProperties: false,
           properties: {
             email:        { type: 'string', format: 'email', maxLength: 255 },
-            password:     { type: 'string', minLength: 8, maxLength: 128 },
+            password:     newPasswordSchema,
             display_name: { type: 'string', maxLength: 255 },
           },
         },
         response: {
           201: jwtResponseSchema,
+          400: apiErrorSchema,
           409: apiErrorSchema,
           429: apiErrorSchema,
         },
@@ -199,6 +199,10 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
     },
     async (request, reply) => {
       const { email, password, display_name } = request.body;
+      const passwordError = newPasswordError(password);
+      if (passwordError) {
+        return reply.code(400).send({ error: 'INVALID_PASSWORD', detail: `password ${passwordError}` });
+      }
 
       // A 409 here does confirm that an email is registered. That is hard to
       // avoid while sign-up returns a session straight away: it cannot hand
@@ -345,7 +349,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
           additionalProperties: false,
           properties: {
             token:    { type: 'string', minLength: 1, maxLength: 256 },
-            password: { type: 'string', minLength: 8, maxLength: 128 },
+            password: newPasswordSchema,
           },
         },
         response: {
@@ -357,6 +361,10 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
     },
     async (request, reply) => {
       const { token, password } = request.body;
+      const passwordError = newPasswordError(password);
+      if (passwordError) {
+        return reply.code(400).send({ error: 'INVALID_PASSWORD', detail: `password ${passwordError}` });
+      }
 
       const resetToken = await findValidResetToken(hashResetToken(token));
       if (!resetToken) {
@@ -364,8 +372,10 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
       }
 
       const passwordHash = await passwords.hash(password);
-      const user = await updateUserPassword(resetToken.userId, passwordHash);
-      await markResetTokenUsed(resetToken.id);
+      const user = await completePasswordReset(hashResetToken(token), passwordHash);
+      if (!user) {
+        return reply.code(400).send({ error: 'INVALID_TOKEN', detail: 'reset token is invalid or expired' });
+      }
       // Clear lockouts from every IP so the user can sign in immediately.
       await clearAllLoginFailures(user.email);
 
