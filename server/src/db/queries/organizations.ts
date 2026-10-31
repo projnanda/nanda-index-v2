@@ -1,3 +1,4 @@
+import type { CardValidation } from '../../services/cardValidation.js';
 import type postgres from 'postgres';
 import { createHash } from 'node:crypto';
 import { getSql } from '../client.js';
@@ -23,6 +24,8 @@ export interface Organization {
   contactEmail: string;
   registryUrl: string | null;
   emailVerified: boolean;
+  emailVerifiedAt?: Date | null;
+  cardValidation?: CardValidation | null;
   verifyToken: string | null;
   verifyTokenExpiresAt: Date | null;
   domainVerified: boolean;
@@ -56,6 +59,7 @@ export interface Organization {
 }
 
 export interface InsertOrgParams {
+  cardValidation?: CardValidation;
   orgId: string;
   displayName: string;
   domain?: string | null;
@@ -77,6 +81,7 @@ export interface InsertOrgParams {
 }
 
 export interface UpdateOrgParams {
+  cardValidation?: CardValidation;
   displayName?: string;
   domain?: string;
   identifier?: string;
@@ -107,6 +112,9 @@ export function toIndexRecord(org: Organization): IndexRecord {
     ttl_seconds:    org.ttlSeconds,
     status:         org.status,
     email_verified: org.emailVerified,
+    email_verified_at: org.emailVerifiedAt?.toISOString() ?? null,
+    domain_verified_at: org.domainVerifiedAt?.toISOString() ?? null,
+    card_validation: org.cardValidation ?? null,
     domain_verified: org.domainVerified,
     created_at:     org.createdAt.toISOString(),
     updated_at:     org.updatedAt.toISOString(),
@@ -154,6 +162,9 @@ export function toIndexEntry(org: Organization): IndexEntry {
         status:         org.status,
         ttlSeconds:     org.ttlSeconds,
         emailVerified:  org.emailVerified,
+        emailVerifiedAt: org.emailVerifiedAt?.toISOString() ?? null,
+        domainVerifiedAt: org.domainVerifiedAt?.toISOString() ?? null,
+        cardValidation: org.cardValidation ?? null,
         domainVerified: org.domainVerified,
         createdAt:      org.createdAt.toISOString(),
         domain:         org.domain,
@@ -324,7 +335,7 @@ export async function insertOrganization(
       (org_id, display_name, domain, contact_email, registry_url,
        verify_token, verify_token_expires_at, ttl_seconds,
        identifier, media_type, description, tags, publisher, extensions, entry_data,
-       version, trust_manifest, representative_queries)
+       version, trust_manifest, representative_queries, card_validation)
     VALUES
       (${params.orgId}, ${params.displayName}, ${params.domain ?? null}, ${params.contactEmail},
        ${params.registryUrl ?? null}, ${hashVerifyToken(params.verifyToken)}, ${params.verifyTokenExpiresAt},
@@ -338,7 +349,8 @@ export async function insertOrganization(
        ${params.entryData ? sql.json(JSON.parse(JSON.stringify(params.entryData))) : null},
        ${params.version ?? null},
        ${params.trustManifest ? sql.json(JSON.parse(JSON.stringify(params.trustManifest))) : null},
-       ${sql.array(params.representativeQueries ?? [])})
+       ${sql.array(params.representativeQueries ?? [])},
+       ${params.cardValidation ? sql.json(JSON.parse(JSON.stringify(params.cardValidation))) : null})
     RETURNING *
   `;
   return rows[0]!;
@@ -372,6 +384,7 @@ export async function updateOrganization(
     : null;
   const rows = await sql<Organization[]>`
     UPDATE organizations SET
+      card_validation  = COALESCE(${patch.cardValidation ? sql.json(JSON.parse(JSON.stringify(patch.cardValidation))) : null}, card_validation),
       display_name     = COALESCE(${patch.displayName ?? null}, display_name),
       domain           = COALESCE(${newDomain}, domain),
       identifier       = COALESCE(${patch.identifier ?? null}, identifier),
@@ -429,6 +442,7 @@ export async function markEmailVerifiedByToken(token: string): Promise<Organizat
       UPDATE organizations SET
         ever_proven              = (ever_proven OR domain IS NULL),
         email_verified           = TRUE,
+        email_verified_at        = NOW(),
         verify_token             = NULL,
         verify_token_expires_at  = NULL,
         status = CASE

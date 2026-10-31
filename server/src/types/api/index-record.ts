@@ -1,3 +1,4 @@
+import type { CardValidation } from '../../services/cardValidation.js';
 export interface PublisherBlock {
   identifier: string;
   displayName: string;
@@ -57,6 +58,9 @@ export interface IndexRecord {
   ttl_seconds: number;
   status: 'pending' | 'active' | 'suspended';
   email_verified: boolean;
+  email_verified_at?: string | null;
+  domain_verified_at?: string | null;
+  card_validation?: CardValidation | null;
   domain_verified: boolean;
   created_at: string;
   updated_at: string;
@@ -121,6 +125,9 @@ export const INDEX_RECORD_SCHEMA = {
     ttl_seconds:     { type: 'number' },
     status:          { type: 'string', enum: ['pending', 'active', 'suspended'] },
     email_verified:  { type: 'boolean' },
+    email_verified_at: { type: ['string', 'null'] },
+    domain_verified_at: { type: ['string', 'null'] },
+    card_validation: { type: ['object', 'null'], additionalProperties: true },
     domain_verified: { type: 'boolean' },
     created_at:      { type: 'string' },
     updated_at:      { type: 'string' },

@@ -3,6 +3,7 @@
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { cardStatus } from "@/lib/entryStatus";
 import { RegistrationBoundary } from "@/components/RegistrationBoundary";
 import { FieldLabel } from "@/components/FieldLabel";
 import { cardManagement } from "@/lib/cardManagement";
@@ -279,6 +280,11 @@ function SuccessScreen({ record, path }: { record: IndexRecord; path: HostingPat
           </p>
         </div>
       )}
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4">
+        <p className="text-sm font-semibold">Card check: {cardStatus(record.card_validation).label}</p>
+        <p className="mt-1 text-xs text-slate-600">{cardStatus(record.card_validation).detail}</p>
+        <p className="mt-1 text-xs text-slate-500">Endpoint availability has not been checked. Identity verification is a separate step.</p>
+      </div>
       <div className="grid gap-3 sm:grid-cols-2">
         {!isPersonal && (
           <Link href={`/dashboard/orgs/${record.org_id}`}

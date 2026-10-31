@@ -5,6 +5,7 @@ import { listIndexRecords } from "@/lib/nanda-api";
 import { JsonPanel } from "@/components/JsonPanel";
 import { PageShell } from "@/components/PageShell";
 import type { IndexCatalogEntry, TrustManifest } from "@/lib/nanda-types";
+import { identityStatus, entryCardStatus } from "@/lib/entryStatus";
 import { entryOps } from "@/lib/air";
 import { categoryOf, type Category } from "@/lib/entryCategory";
 
@@ -53,7 +54,7 @@ type Row = {
   date: string;
   description: string;
   tags: string[];
-  verified: boolean;
+  identity: ReturnType<typeof identityStatus>;
   version: string | null;
 };
 
@@ -82,7 +83,7 @@ function mapRow(record: IndexCatalogEntry): Row {
     date,
     description,
     tags,
-    verified: !!entryOps(record).emailVerified,
+    identity: identityStatus(record),
     version: record.version ?? null,
   };
 }
@@ -332,22 +333,6 @@ function RegistryCard({ item, onSelect }: { item: Row; onSelect: () => void }) {
                 {item.name}
               </button>
             </h3>
-            {item.verified && (
-              <span className="inline-flex flex-shrink-0" title="Verified">
-                <svg
-                  className="w-4 h-4 text-brand-500"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </span>
-            )}
           </div>
           <div className="mt-0.5 text-xs text-ink-weak truncate">
             {item.version ? (
@@ -363,6 +348,11 @@ function RegistryCard({ item, onSelect }: { item: Row; onSelect: () => void }) {
         >
           {item.badgeLabel}
         </span>
+      </div>
+      <div className="space-y-1 text-xs text-ink-medium">
+        <p title="Identity proof checks control of an email address or domain. It does not test the card or runtime.">{item.identity.label}</p>
+        <p title={entryCardStatus(item.record).detail}>Card: {entryCardStatus(item.record).label}</p>
+        <p>Endpoint: Not checked</p>
       </div>
       <p className="text-sm text-ink line-clamp-2 leading-relaxed">{item.description}</p>
       <ul role="list" aria-label="Tags" className="flex flex-wrap gap-1.5 mt-auto">
@@ -503,9 +493,14 @@ function DetailDrawer({ record, onClose }: { record: IndexCatalogEntry | null; o
                     )}
                   </DetailRow>
                   <DetailRow label="TTL">{entryOps(record).ttlSeconds}s</DetailRow>
-                  <DetailRow label="Email verified">
-                    {entryOps(record).emailVerified ? "Yes" : "No"}
+                  <DetailRow label="Identity">
+                    {identityStatus(record).label}. {identityStatus(record).checkedAt ? new Date(identityStatus(record).checkedAt!).toLocaleString(undefined, { timeZoneName: "short" }) : "Verification time not recorded."}
                   </DetailRow>
+                  <DetailRow label="Card check">
+                    {entryCardStatus(record).label}. {entryCardStatus(record).checkedAt ? new Date(entryCardStatus(record).checkedAt!).toLocaleString(undefined, { timeZoneName: "short" }) : "No check time recorded."}
+                    <p className="mt-1 text-xs text-ink-weak">{entryCardStatus(record).detail}</p>
+                  </DetailRow>
+                  <DetailRow label="Endpoint">Not checked. Identity proof and card checks do not establish runtime availability.</DetailRow>
                   <DetailRow label="Status">
                     <span className="capitalize">{entryOps(record).status}</span>
                   </DetailRow>
