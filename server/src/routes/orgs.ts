@@ -198,6 +198,19 @@ function withoutBlankDomain(body: UpdateOrgBody): UpdateOrgBody {
   return rest;
 }
 
+/**
+ * Enforces the https:// the validation message has always promised. http:// is
+ * allowed only alongside OUTBOUND_ALLOW_PRIVATE_HOSTS — the same development
+ * escape hatch that lets fan-out reach a registry on localhost. A card fetched
+ * over plaintext can be rewritten in transit, and its contents now feed the
+ * stored cardValidation result.
+ */
+function registryUrlSchemeError(registryUrl: string): string | null {
+  if (/^https:\/\//.test(registryUrl)) return null;
+  if (/^http:\/\//.test(registryUrl) && buildConfig().outbound.allowPrivateHosts) return null;
+  return 'registry_url must start with https://';
+}
+
 /** Checks the create body's hosting-path invariants; returns the first problem or null. */
 function validateCreateBody(body: CreateOrgBody, path: HostingPath): ApiError | null {
   if (path === 'personal' && body.domain) {
@@ -209,8 +222,9 @@ function validateCreateBody(body: CreateOrgBody, path: HostingPath): ApiError | 
   if (body.domain && !isFqdn(body.domain)) {
     return validationError('domain must be a valid hostname (e.g. acme.com)');
   }
-  if (!/^https?:\/\//.test(body.registry_url)) {
-    return validationError('registry_url must start with https://');
+  const schemeError = registryUrlSchemeError(body.registry_url);
+  if (schemeError) {
+    return validationError(schemeError);
   }
   return null;
 }
@@ -641,8 +655,11 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
         return reply.code(400).send({ error: 'VALIDATION', detail: 'domain must be a valid hostname (e.g. acme.com)' });
       }
     }
-    if (body.registry_url != null && !/^https?:\/\//.test(body.registry_url)) {
-      return reply.code(400).send({ error: 'VALIDATION', detail: 'registry_url must start with https://' });
+    if (body.registry_url != null) {
+      const schemeError = registryUrlSchemeError(body.registry_url);
+      if (schemeError) {
+        return reply.code(400).send({ error: 'VALIDATION', detail: schemeError });
+      }
     }
 
     let next: EntryProfile;
