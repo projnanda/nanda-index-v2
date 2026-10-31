@@ -322,21 +322,16 @@ function FilterSidebar(props: {
 function RegistryCard({ item, onSelect }: { item: Row; onSelect: () => void }) {
   return (
     <article
-      onClick={onSelect}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onSelect();
-        }
-      }}
-      className="bg-surface-light rounded-card border border-line/70 shadow-card p-4 hover:shadow-card-hover hover:border-line-strong transition cursor-pointer flex flex-col h-full gap-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-      role="button"
-      tabIndex={0}
+      className="relative bg-surface-light rounded-card border border-line/70 shadow-card p-4 hover:shadow-card-hover hover:border-line-strong transition flex flex-col h-full gap-3"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 min-w-0">
-            <h3 className="font-semibold text-ink-strong truncate">{item.name}</h3>
+            <h3 className="font-semibold text-ink-strong truncate">
+              <button type="button" onClick={onSelect} className="text-left cursor-pointer after:absolute after:inset-0 after:rounded-card focus:outline-none focus-visible:after:ring-2 focus-visible:after:ring-brand-500">
+                {item.name}
+              </button>
+            </h3>
             {item.verified && (
               <span className="inline-flex flex-shrink-0" title="Verified">
                 <svg
@@ -370,16 +365,16 @@ function RegistryCard({ item, onSelect }: { item: Row; onSelect: () => void }) {
         </span>
       </div>
       <p className="text-sm text-ink line-clamp-2 leading-relaxed">{item.description}</p>
-      <div className="flex flex-wrap gap-1.5 mt-auto">
+      <ul role="list" aria-label="Tags" className="flex flex-wrap gap-1.5 mt-auto">
         {item.tags.slice(0, 4).map((t) => (
-          <span
+          <li
             key={t}
             className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-surface-tag text-ink"
           >
             {t}
-          </span>
+          </li>
         ))}
-      </div>
+      </ul>
     </article>
   );
 }
@@ -473,16 +468,16 @@ function DetailDrawer({ record, onClose }: { record: IndexCatalogEntry | null; o
                   </p>
                 )}
                 {record.tags && record.tags.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
+                  <ul role="list" aria-label="Tags" className="mt-3 flex flex-wrap gap-1.5">
                     {record.tags.map((tag) => (
-                      <span
+                      <li
                         key={tag}
                         className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-surface-tag text-ink"
                       >
                         {tag}
-                      </span>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 )}
                 <dl className="mt-4 grid gap-2 text-sm text-ink">
                   <DetailRow label="Media type">
