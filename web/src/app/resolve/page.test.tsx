@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import ResolvePage from "./page";
 import { fetchAgentRecord, fetchFactsUrl, resolveAgent } from "@/lib/nanda-api";
@@ -10,7 +10,7 @@ vi.mock("@/lib/nanda-api", async () => {
 });
 const identifier = "urn:air:example.org:agent:demo";
 const index = { locator: identifier, publisher: "example.org", namespace: ["agent"], identifier: "demo", match: "publisher" as const, entry: { identifier, displayName: "Example", type: "application/ai-catalog+json", url: "https://example.org", tags: [], updatedAt: "2026-01-01", extensions: {} } };
-beforeEach(() => { vi.resetAllMocks(); vi.mocked(resolveAgent).mockResolvedValue(index); vi.mocked(fetchAgentRecord).mockResolvedValue({ identifier, displayName: "Example", mediaType: "application/a2a-agent-card+json", url: "https://example.org/card.json" }); });
+beforeEach(() => { window.history.replaceState(null, "", "/resolve"); vi.resetAllMocks(); vi.mocked(resolveAgent).mockResolvedValue(index); vi.mocked(fetchAgentRecord).mockResolvedValue({ identifier, displayName: "Example", mediaType: "application/a2a-agent-card+json", url: "https://example.org/card.json" }); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 async function submit() {
   render(<ResolvePage />);
@@ -77,4 +77,42 @@ it.each(["catalog", "smb", "personal"] as const)("runs the controlled %s preset 
   expect(resolveAgent).not.toHaveBeenCalled();
   expect(fetchFactsUrl).toHaveBeenCalledTimes(kind === "catalog" ? 2 : 1);
   expect(screen.getByRole("note").textContent).toContain("sample index");
+});
+
+it("restores a private identifier and ignores a pending trace after back navigation", async () => {
+  const urn = "urn:air:host39.org:personal:ada@example.org";
+  let finish!: (value: typeof index) => void;
+  vi.mocked(resolveAgent).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+  window.history.pushState(null, "", `/resolve#urn=${encodeURIComponent(urn)}`);
+  render(<ResolvePage />);
+  await waitFor(() => expect(resolveAgent).toHaveBeenCalledWith(urn));
+  expect(window.location.search).toBe("");
+  act(() => { window.history.back(); });
+  await screen.findByText("Enter a URN above to trace the resolution hops.");
+  await act(async () => { finish(index); });
+  expect(fetchAgentRecord).not.toHaveBeenCalled();
+});
+it("restores a shared preset as a demonstration without invoking its runtime", async () => {
+  const { exampleResponse, resolveExamples } = await import("@/lib/resolveExamples");
+  const preset = resolveExamples.find((example) => example.kind === "personal")!;
+  window.history.replaceState(null, "", `/resolve?example=personal#urn=${encodeURIComponent(preset.identifier)}`);
+  vi.mocked(fetchFactsUrl).mockImplementation(async () => exampleResponse("personal", ["index"], "https://index.example"));
+  vi.mocked(fetchAgentRecord).mockResolvedValue(exampleResponse("personal", ["card"], "https://index.example") as Awaited<ReturnType<typeof fetchAgentRecord>>);
+  const runtime = vi.fn(); vi.stubGlobal("fetch", runtime);
+  render(<ResolvePage />);
+  await screen.findByRole("button", { name: "Send" });
+  expect(resolveAgent).not.toHaveBeenCalled();
+  expect(runtime).not.toHaveBeenCalled();
+});
+it("keeps a shared preset on the controlled index when submitted again", async () => {
+  const { exampleResponse, resolveExamples } = await import("@/lib/resolveExamples");
+  const preset = resolveExamples.find((example) => example.kind === "smb")!;
+  window.history.replaceState(null, "", `/resolve?example=smb&urn=${encodeURIComponent(preset.identifier)}`);
+  vi.mocked(fetchFactsUrl).mockImplementation(async () => exampleResponse("smb", ["index"], "https://index.example"));
+  vi.mocked(fetchAgentRecord).mockResolvedValue(exampleResponse("smb", ["card"], "https://index.example") as Awaited<ReturnType<typeof fetchAgentRecord>>);
+  render(<ResolvePage />);
+  await screen.findByRole("button", { name: "Send" });
+  fireEvent.click(screen.getByRole("button", { name: "Resolve" }));
+  await waitFor(() => expect(fetchFactsUrl).toHaveBeenCalledTimes(2));
+  expect(resolveAgent).not.toHaveBeenCalled();
 });

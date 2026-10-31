@@ -2,49 +2,19 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { listIndexRecords } from "@/lib/nanda-api";
+import { discoveryLink, isPersonalValue, LINK_PRIVACY_NOTE, navigateDiscovery, pageNumber, selectedValues, useDiscoveryLocation } from "@/lib/discoveryLocation";
 import { JsonPanel } from "@/components/JsonPanel";
 import type { IndexCatalogEntry, TrustManifest } from "@/lib/nanda-types";
 import { entryOps } from "@/lib/air";
-import { categoryOf, type Category } from "@/lib/entryCategory";
+import { ownerOf, protocolOf, discoveryMethodOf, matchesFacets, OWNER_LABELS, PROTOCOL_LABELS, type Owner, type Protocol } from "@/lib/entryCategory";
 
 const PAGE_SIZE = 9;
 
-// ── Categories ──────────────────────────────────────────────────────────────
-// Which category an entry belongs to is decided in lib/entryCategory.ts.
-
-const CATEGORIES: { key: Category; label: string }[] = [
-  { key: "enterprise", label: "Enterprise" },
-  { key: "dns-svcb", label: "DNS SVCB" },
-  { key: "smb", label: "SMBs" },
-  { key: "personal", label: "Personal" },
-  { key: "mcp", label: "MCPs" },
-  { key: "skill", label: "Skills" },
-];
-
-const CATEGORY_LABEL: Record<Category, string> = {
-  enterprise: "Enterprise",
-  "dns-svcb": "DNS SVCB",
-  smb: "SMB",
-  personal: "Personal",
-  mcp: "MCP",
-  skill: "Skill",
-};
-
-// Soft, on-brand chip colors so each category reads at a glance.
-const CATEGORY_BADGE: Record<Category, string> = {
-  enterprise: "bg-brand-200 text-brand-700",
-  "dns-svcb": "bg-accent-teal text-accent-teal-ink",
-  smb: "bg-warning-soft text-warning",
-  personal: "bg-[#dcf5e6] text-[#0f7a45]",
-  mcp: "bg-[#e7e3fb] text-[#4b3aa6]",
-  skill: "bg-[#fde7ef] text-[#b4185a]",
-};
-
-const FALLBACK_BADGE = "bg-surface-tag text-ink";
-
 type Row = {
   record: IndexCatalogEntry;
-  category: Category | null;
+  owner: Owner | null;
+  protocol: Protocol | null;
+  discoveryMethod: string;
   badgeLabel: string;
   badgeClass: string;
   name: string;
@@ -57,7 +27,8 @@ type Row = {
 };
 
 function mapRow(record: IndexCatalogEntry): Row {
-  const category = categoryOf(record);
+  const owner = ownerOf(record);
+  const protocol = protocolOf(record);
   const name = record.displayName || entryOps(record).orgId;
   const date = record.updatedAt ? new Date(record.updatedAt).toLocaleDateString() : "";
   const description = record.description || record.identifier || entryOps(record).domain || "";
@@ -73,9 +44,11 @@ function mapRow(record: IndexCatalogEntry): Row {
 
   return {
     record,
-    category,
-    badgeLabel: category ? CATEGORY_LABEL[category] : "Agent",
-    badgeClass: category ? CATEGORY_BADGE[category] : FALLBACK_BADGE,
+    owner,
+    protocol,
+    discoveryMethod: discoveryMethodOf(record),
+    badgeLabel: protocol ? PROTOCOL_LABELS[protocol] : "Resource",
+    badgeClass: "bg-brand-200 text-brand-700",
     name,
     identifier: record.identifier,
     date,
@@ -91,15 +64,15 @@ export default function ExplorePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [search, setSearch] = useState("");
-  const [categoryFilters, setCategoryFilters] = useState<Set<Category>>(new Set());
-  const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState<IndexCatalogEntry | null>(null);
+  const { state } = useDiscoveryLocation();
+  const search = state.q ?? "";
+  const ownerFilters = useMemo(() => selectedValues(state.owner, OWNER_LABELS), [state.owner]);
+  const protocolFilters = useMemo(() => selectedValues(state.protocol, PROTOCOL_LABELS), [state.protocol]);
+  const page = pageNumber(state.page);
+  const selected = rows.find((row) => row.identifier === state.entry)?.record ?? null;
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
     listIndexRecords()
       .then((data) => {
         if (cancelled) return;
@@ -117,23 +90,11 @@ export default function ExplorePage() {
     };
   }, []);
 
-  function toggleCategory(value: Category) {
-    setCategoryFilters((prev) => {
-      const next = new Set(prev);
-      if (next.has(value)) next.delete(value);
-      else next.add(value);
-      return next;
-    });
-    setPage(1);
+  function toggleFacet(key: "owner" | "protocol", value: string, previous: ReadonlySet<string>) {
+    const next = new Set(previous);
+    if (next.has(value)) next.delete(value); else next.add(value);
+    navigateDiscovery({ [key]: [...next].sort().join(","), page: "" });
   }
-
-  const categoryCounts = useMemo(() => {
-    const counts = new Map<Category, number>();
-    rows.forEach((r) => {
-      if (r.category) counts.set(r.category, (counts.get(r.category) ?? 0) + 1);
-    });
-    return counts;
-  }, [rows]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -147,12 +108,12 @@ export default function ExplorePage() {
       ) {
         return false;
       }
-      if (categoryFilters.size > 0 && (!r.category || !categoryFilters.has(r.category))) {
+      if (!matchesFacets(r.record, ownerFilters, protocolFilters)) {
         return false;
       }
       return true;
     });
-  }, [rows, search, categoryFilters]);
+  }, [rows, search, ownerFilters, protocolFilters]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -176,18 +137,13 @@ export default function ExplorePage() {
       <div className="flex flex-col lg:flex-row gap-6">
         <FilterSidebar
           search={search}
-          onSearchChange={(v) => {
-            setSearch(v);
-            setPage(1);
-          }}
-          categoryFilters={categoryFilters}
-          categoryCounts={categoryCounts}
-          onToggleCategory={toggleCategory}
-          onClear={() => {
-            setCategoryFilters(new Set());
-            setSearch("");
-            setPage(1);
-          }}
+          onSearchChange={(q) => navigateDiscovery({ q, page: "" }, true)}
+          rows={rows}
+          ownerFilters={ownerFilters}
+          protocolFilters={protocolFilters}
+          onToggleOwner={(value) => toggleFacet("owner", value, ownerFilters)}
+          onToggleProtocol={(value) => toggleFacet("protocol", value, protocolFilters)}
+          onClear={() => navigateDiscovery({ owner: "", protocol: "", q: "", page: "" })}
         />
 
         <div className="flex-1 min-w-0">
@@ -228,7 +184,7 @@ export default function ExplorePage() {
                   <RegistryCard
                     key={item.record.identifier}
                     item={item}
-                    onSelect={() => setSelected(item.record)}
+                    onSelect={() => navigateDiscovery({ entry: item.identifier })}
                   />
                 ))}
               </div>
@@ -236,16 +192,18 @@ export default function ExplorePage() {
               <Pagination
                 page={currentPage}
                 total={totalPages}
-                onPrev={() => setPage((p) => Math.max(1, p - 1))}
-                onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
-                onGoto={(p) => setPage(p)}
+                onPrev={() => navigateDiscovery({ page: String(Math.max(1, currentPage - 1)) })}
+                onNext={() => navigateDiscovery({ page: String(Math.min(totalPages, currentPage + 1)) })}
+                onGoto={(p) => navigateDiscovery({ page: String(p) })}
               />
             </>
           )}
         </div>
       </div>
 
-      <DetailDrawer record={selected} onClose={() => setSelected(null)} />
+      {(isPersonalValue(search) || isPersonalValue(state.entry ?? "")) && <p className="mt-4 text-xs text-ink-medium">{LINK_PRIVACY_NOTE}</p>}
+      {!loading && !error && state.entry && !selected && <p role="status" className="mt-4 text-sm text-ink-medium">This shared entry is not available in the index.</p>}
+      <DetailDrawer record={selected} onClose={() => navigateDiscovery({ entry: "" })} />
     </main>
   );
 }
@@ -253,12 +211,14 @@ export default function ExplorePage() {
 function FilterSidebar(props: {
   search: string;
   onSearchChange: (v: string) => void;
-  categoryFilters: Set<Category>;
-  categoryCounts: Map<Category, number>;
-  onToggleCategory: (v: Category) => void;
+  rows: Row[];
+  ownerFilters: Set<Owner>;
+  protocolFilters: Set<Protocol>;
+  onToggleOwner: (v: Owner) => void;
+  onToggleProtocol: (v: Protocol) => void;
   onClear: () => void;
 }) {
-  const hasActive = props.categoryFilters.size > 0 || props.search.trim().length > 0;
+  const hasActive = props.ownerFilters.size > 0 || props.protocolFilters.size > 0 || props.search.trim().length > 0;
   return (
     <aside className="lg:w-64 flex-shrink-0">
       <div className="bg-surface-strong rounded-card border border-line p-4 space-y-5 sticky top-24">
@@ -279,32 +239,10 @@ function FilterSidebar(props: {
           />
         </div>
 
-        <div>
-          <span className="block text-xs font-semibold uppercase tracking-wide text-ink-medium mb-2">
-            Category
-          </span>
-          <div className="space-y-1.5">
-            {CATEGORIES.map(({ key, label }) => (
-              <label
-                key={key}
-                className="flex items-center justify-between gap-2 text-sm text-ink cursor-pointer"
-              >
-                <span className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={props.categoryFilters.has(key)}
-                    onChange={() => props.onToggleCategory(key)}
-                    className="rounded border-line-strong text-brand-500 focus:ring-brand-500"
-                  />
-                  <span>{label}</span>
-                </span>
-                <span className="text-xs text-ink-weak tabular-nums">
-                  {props.categoryCounts.get(key) ?? 0}
-                </span>
-              </label>
-            ))}
-          </div>
-        </div>
+        <FacetGroup label="Owner" labels={OWNER_LABELS} selected={props.ownerFilters} onToggle={props.onToggleOwner}
+          count={(key) => props.rows.filter((row) => row.owner === key).length} />
+        <FacetGroup label="Protocol" labels={PROTOCOL_LABELS} selected={props.protocolFilters} onToggle={props.onToggleProtocol}
+          count={(key) => props.rows.filter((row) => row.protocol === key).length} />
 
         {hasActive && (
           <button
@@ -316,6 +254,27 @@ function FilterSidebar(props: {
         )}
       </div>
     </aside>
+  );
+}
+
+function FacetGroup<T extends string>({ label, labels, selected, onToggle, count }: {
+  label: string; labels: Record<T, string>; selected: Set<T>; onToggle: (value: T) => void; count: (value: T) => number;
+}) {
+  return (
+    <fieldset>
+      <legend className="block text-xs font-semibold uppercase tracking-wide text-ink-medium mb-2">{label}</legend>
+      <div className="space-y-1.5">
+        {(Object.keys(labels) as T[]).map((key) => (
+          <label key={key} className="flex items-center justify-between gap-2 text-sm text-ink cursor-pointer">
+            <span className="flex items-center gap-2">
+              <input type="checkbox" checked={selected.has(key)} onChange={() => onToggle(key)} className="rounded border-line-strong text-brand-500 focus:ring-brand-500" />
+              <span>{labels[key]}</span>
+            </span>
+            <span className="text-xs text-ink-weak tabular-nums">{count(key)}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
   );
 }
 
@@ -369,6 +328,10 @@ function RegistryCard({ item, onSelect }: { item: Row; onSelect: () => void }) {
           {item.badgeLabel}
         </span>
       </div>
+      <div className="flex flex-wrap gap-2 text-xs text-ink-medium">
+        {item.owner && <span>{OWNER_LABELS[item.owner]}</span>}
+        <span className="rounded-full bg-surface-tag px-2 py-0.5">{item.discoveryMethod}</span>
+      </div>
       <p className="text-sm text-ink line-clamp-2 leading-relaxed">{item.description}</p>
       <div className="flex flex-wrap gap-1.5 mt-auto">
         {item.tags.slice(0, 4).map((t) => (
@@ -405,9 +368,9 @@ function DetailDrawer({ record, onClose }: { record: IndexCatalogEntry | null; o
     };
   }, [open, onClose]);
 
-  const category = record ? categoryOf(record) : null;
-  const badgeClass = category ? CATEGORY_BADGE[category] : FALLBACK_BADGE;
-  const badgeLabel = category ? CATEGORY_LABEL[category] : "Agent";
+  const protocol = record ? protocolOf(record) : null;
+  const badgeClass = "bg-brand-200 text-brand-700";
+  const badgeLabel = protocol ? PROTOCOL_LABELS[protocol] : "Resource";
 
   return (
     <div
@@ -463,6 +426,8 @@ function DetailDrawer({ record, onClose }: { record: IndexCatalogEntry | null; o
             </div>
 
             <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+              <a href={discoveryLink("/resolve", { urn: record.identifier })} className="inline-block rounded-control bg-brand-600 px-3 py-2 text-sm font-medium text-white">Resolve this identifier</a>
+              {isPersonalValue(record.identifier) && <p className="text-xs text-ink-medium">{LINK_PRIVACY_NOTE}</p>}
               <div className="bg-surface-light rounded-card border border-line p-5 shadow-card">
                 {entryOps(record).domain && (
                   <p className="text-sm text-ink-medium break-all">{entryOps(record).domain}</p>
@@ -485,6 +450,8 @@ function DetailDrawer({ record, onClose }: { record: IndexCatalogEntry | null; o
                   </div>
                 )}
                 <dl className="mt-4 grid gap-2 text-sm text-ink">
+                  <DetailRow label="Owner">{ownerOf(record) ? OWNER_LABELS[ownerOf(record)!] : "Unspecified"}</DetailRow>
+                  <DetailRow label="Discovery">{discoveryMethodOf(record)}</DetailRow>
                   <DetailRow label="Media type">
                     <span className="font-mono text-xs">{record.type ?? "-"}</span>
                   </DetailRow>

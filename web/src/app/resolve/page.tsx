@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { PageShell } from "@/components/PageShell";
 import { ApiError, resolveAgent, fetchAgentRecord, fetchFactsUrl } from "@/lib/nanda-api";
 import type { ResolveResponse, CatalogEntry } from "@/lib/nanda-types";
 import { resolutionSummary, type HopStatus } from "@/lib/resolutionStatus";
 import { resolveExamples, type ExampleKind } from "@/lib/resolveExamples";
+import { isPersonalValue, LINK_PRIVACY_NOTE, navigateDiscovery, useDiscoveryLocation } from "@/lib/discoveryLocation";
 import { cn } from "@/lib/utils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -102,11 +103,18 @@ function hopError(error: unknown): string {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function ResolvePage() {
-  const [locator, setLocator]   = useState("");
+  const { state } = useDiscoveryLocation();
+  const locator = (state.urn ?? "").trim();
+  // Only the exact named fixture may use its controlled sample index.
+  const example = resolveExamples.find((item) => item.kind === state.example && item.identifier === locator)?.kind ?? null;
+  return <ResolveTrace key={JSON.stringify([locator, example])} initialLocator={locator} initialExample={example} />;
+}
+
+function ResolveTrace({ initialLocator, initialExample }: { initialLocator: string; initialExample: ExampleKind | null }) {
+  const [locator, setLocator]   = useState(initialLocator);
   const [traceLocator, setTraceLocator] = useState("");
   const [traceExample, setTraceExample] = useState<ExampleKind | null>(null);
   const generation = useRef(0);
-  useEffect(() => () => { generation.current += 1; }, []);
   const [resolving, setResolving] = useState(false);
   const [latency, setLatency]   = useState<number | null>(null);
 
@@ -122,7 +130,14 @@ export default function ResolvePage() {
 
   async function onResolve(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
-    await runResolve(locator);
+    startResolve(locator, locator.trim() === initialLocator ? initialExample : null);
+  }
+
+  function startResolve(value: string, example: ExampleKind | null = null) {
+    const urn = value.trim();
+    if (!urn) return;
+    navigateDiscovery({ urn, example: example ?? "" });
+    if (urn === initialLocator && example === initialExample) void runResolve(urn, 1, example);
   }
 
   async function runResolve(value: string, from: 1 | 2 | 3 = 1, example: ExampleKind | null = null) {
@@ -274,6 +289,12 @@ export default function ResolvePage() {
     }
   }
 
+  const restoreTrace = useEffectEvent((urn: string, example: ExampleKind | null) => { void runResolve(urn, 1, example); });
+  useEffect(() => {
+    if (initialLocator) restoreTrace(initialLocator, initialExample);
+    return () => { generation.current += 1; };
+  }, [initialLocator, initialExample]);
+
   const anyActive = [hop1, hop2, hop3, hop4].some((h) => h.status !== "idle");
 
   return (
@@ -305,12 +326,13 @@ export default function ResolvePage() {
           {resolveExamples.map((example) => (
             <button key={example.kind} type="button" disabled={resolving || talking}
               className="rounded-full border border-slate-300 px-3 py-1.5 text-sm disabled:opacity-50"
-              onClick={() => { setLocator(example.identifier); void runResolve(example.identifier, 1, example.kind); }}>
+              onClick={() => startResolve(example.identifier, example.kind)}>
               {example.label}
             </button>
           ))}
         </div>
       </div>
+      {isPersonalValue(traceLocator) && <p className="mb-4 text-xs text-slate-600">{LINK_PRIVACY_NOTE}</p>}
       {traceExample && <p role="note" className="mb-4 text-sm text-slate-600">Demonstration trace: the first hop uses a controlled sample index. Results do not describe a registered production entry.</p>}
 
       {latency !== null && (

@@ -440,3 +440,9 @@ curl https://api.nandaindex.org/health
 ## License
 
 Apache License 2.0 — see [LICENSE](LICENSE).
+
+### Shareable discovery views
+
+Explore links retain `q`, independent `owner` and `protocol` selections (comma-separated), `page`, and the selected entry's `entry` identifier. The detail drawer links directly to Resolve. Discover links retain `q` or `locator` and `mode`; Resolve links retain `urn` and, for hosted demonstrations, `example`. Opening a Discover or Resolve link runs its discovery requests. Runtime requests still require pressing Send. Browser back and forward restore the previous view.
+
+Email searches and personal identifiers are stored in the link fragment (`#`), not the page query string. Fragments stay out of page HTTP requests, but remain visible in browser history and shared links. Search and resolution still send the entered value to the API. Legacy links containing personal query values are rewritten in the browser; that cannot remove their initial page request from existing logs. Google Analytics receives only origin and path; PostHog scrubs query strings and fragments from event, link, replay and network URLs, and masks inputs and text. These links are shareable state, not private storage.

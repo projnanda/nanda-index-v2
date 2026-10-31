@@ -153,3 +153,17 @@ describe("scrubNetworkRequest", () => {
     expect(scrubNetworkRequest(pageUrl)).toEqual({ name: "https://nandaindex.org/auth/callback" });
   });
 });
+
+it("strips shared personal fragments from analytics, replay links and page recording", () => {
+  const fragment = "#urn=urn%3Aair%3Ahost39.org%3Apersonal%3Aada%40example.org";
+  const scrubbed = scrubEvent(event({ properties: {
+    $current_url: `https://nandaindex.org/resolve${fragment}`,
+    $elements: [{ attr__href: `/resolve${fragment}` }],
+    $el_text: "urn:air:host39.org:personal:ada@example.org",
+  } }), "/resolve");
+  expect(scrubbed?.properties.$current_url).toBe("https://nandaindex.org/resolve");
+  expect(scrubbed?.properties.$elements).toEqual([{ attr__href: "/resolve" }]);
+  expect(JSON.stringify(scrubbed)).not.toContain("ada");
+  expect(scrubReplayAttribute("href", `/resolve${fragment}`)).toBe("/resolve");
+  expect(scrubNetworkRequest({ name: `https://nandaindex.org/resolve${fragment}` } as CapturedNetworkRequest).name).toBe("https://nandaindex.org/resolve");
+});
