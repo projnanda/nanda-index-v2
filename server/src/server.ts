@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'url';
-import Fastify from 'fastify';
+import Fastify, { type FastifyServerOptions } from 'fastify';
 import { buildConfig } from './config/index.js';
+import { serializeRequest } from './lib/logRedaction.js';
 import { registerErrorHandler } from './plugins/errorHandler.js';
 import { registerHelmet } from './plugins/helmet.js';
 import { registerCors } from './plugins/cors.js';
@@ -28,8 +29,34 @@ import { registerResolveRoute } from './routes/resolve.js';
 
 const MAX_BODY_BYTES = 64 * 1024;
 
+/**
+ * Logger options, with the request serializer that keeps query-string secrets
+ * out of the log (lib/logRedaction.ts). The serializer is set here rather than
+ * per route so a route added later is covered without anyone remembering to.
+ */
+function buildLoggerOptions(
+  nodeEnv: string,
+  logger: BuildServerOptions['logger'],
+): FastifyServerOptions['logger'] {
+  if (logger === false) return false;
+  const base = {
+    level: nodeEnv === 'production' ? 'info' : 'debug',
+    serializers: { req: serializeRequest },
+  };
+  // `true` means "the default logger"; an object is a test or an operator
+  // supplying its own options, which must not be able to drop the serializer.
+  return typeof logger === 'object' && logger !== null
+    ? { ...logger, ...base, serializers: { ...logger.serializers, ...base.serializers } }
+    : base;
+}
+
 export interface BuildServerOptions {
-  logger?: boolean;
+  /**
+   * `false` silences the logger (what most integration tests pass). Anything
+   * else is merged into the logger options, so a test can supply a destination
+   * stream and assert on what was actually written.
+   */
+  logger?: boolean | FastifyServerOptions['logger'];
 }
 
 /**
@@ -50,10 +77,7 @@ export async function buildServer(options: BuildServerOptions = {}) {
     // Only the configured number of hops is trusted, so a client reaching the
     // API directly cannot pick its own address via X-Forwarded-For.
     ...(config.trustProxyHops > 0 ? { trustProxy: config.trustProxyHops } : {}),
-    logger:
-      options.logger === false
-        ? false
-        : { level: config.nodeEnv === 'production' ? 'info' : 'debug' },
+    logger: buildLoggerOptions(config.nodeEnv, options.logger),
   });
 
   // Error handler first — wraps all subsequent plugin/route errors
