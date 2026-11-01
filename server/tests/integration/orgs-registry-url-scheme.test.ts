@@ -113,3 +113,127 @@ describe('registry_url scheme validation', () => {
     expect(await stored()).toHaveLength(0);
   });
 });
+
+/**
+ * Review on #135: the first version checked the scheme on every PUT, and the
+ * dashboard resends registry_url on every save. An owner whose entry was
+ * registered before the rule — stored http:// — could no longer edit their
+ * description, and the error named a field they had not touched.
+ */
+describe('registry_url on an entry that predates the https rule', () => {
+  let fastify: FastifyInstance;
+  let token: string;
+  const legacyId = 'registry-url-legacy-test';
+  const legacyUrl = 'http://registry-url-legacy.example.com/catalog.json';
+  const privateHosts = process.env['OUTBOUND_ALLOW_PRIVATE_HOSTS'];
+
+  const update = (payload: Record<string, unknown>) => fastify.inject({
+    method: 'PUT', url: `/api/v1/orgs/${legacyId}`,
+    headers: { authorization: `Bearer ${token}` },
+    payload,
+  });
+
+  beforeAll(async () => {
+    ({ fastify } = await buildServer({ logger: false }));
+    await fastify.ready();
+    const user = await upsertUser({
+      email: 'registry-url-legacy@example.com', displayName: null, avatarUrl: null,
+      provider: 'google', providerId: 'registry-url-legacy-provider', emailVerified: true,
+    });
+    token = fastify.jwt.sign({ userId: user.id, email: user.email, displayName: null });
+  });
+
+  beforeEach(async () => {
+    process.env['OUTBOUND_ALLOW_PRIVATE_HOSTS'] = 'true';
+    await getSql()`DELETE FROM organizations WHERE org_id = ${legacyId}`;
+    await fastify.inject({
+      method: 'POST', url: '/api/v1/orgs',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        org_id: legacyId, display_name: 'Legacy', domain: 'registry-url-legacy.example.com',
+        contact_email: 'owner@registry-url-legacy.example.com', registry_url: legacyUrl,
+      },
+    });
+    // From here on the server behaves as production does.
+    process.env['OUTBOUND_ALLOW_PRIVATE_HOSTS'] = 'false';
+  });
+
+  afterAll(async () => {
+    if (privateHosts === undefined) delete process.env['OUTBOUND_ALLOW_PRIVATE_HOSTS'];
+    else process.env['OUTBOUND_ALLOW_PRIVATE_HOSTS'] = privateHosts;
+    await fastify.close();
+    await closeSql();
+  });
+
+  it('lets the owner edit other fields without touching the URL', async () => {
+    expect((await update({ description: 'Changed description' })).statusCode).toBe(200);
+  });
+
+  it('lets the owner resend the stored http:// value unchanged', async () => {
+    // This is what the dashboard actually sends on every save.
+    const res = await update({ description: 'Changed again', registry_url: legacyUrl });
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('still refuses a change to a different http:// URL', async () => {
+    const res = await update({ registry_url: 'http://registry-url-legacy.example.com/moved.json' });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ detail: 'registry_url must start with https://' });
+  });
+
+  it('accepts a change to https://', async () => {
+    const res = await update({ registry_url: 'https://registry-url-legacy.example.com/catalog.json' });
+
+    expect(res.statusCode).toBe(200);
+  });
+});
+
+describe('registry_url shapes the prefix test used to let through', () => {
+  let fastify: FastifyInstance;
+  let token: string;
+  const orgId = 'registry-url-shape-test';
+
+  const create = (registryUrl: string) => fastify.inject({
+    method: 'POST', url: '/api/v1/orgs',
+    headers: { authorization: `Bearer ${token}` },
+    payload: {
+      org_id: orgId, display_name: 'Shape', domain: 'registry-url-shape.example.com',
+      contact_email: 'owner@registry-url-shape.example.com', registry_url: registryUrl,
+    },
+  });
+
+  beforeAll(async () => {
+    ({ fastify } = await buildServer({ logger: false }));
+    await fastify.ready();
+    const user = await upsertUser({
+      email: 'registry-url-shape@example.com', displayName: null, avatarUrl: null,
+      provider: 'google', providerId: 'registry-url-shape-provider', emailVerified: true,
+    });
+    token = fastify.jwt.sign({ userId: user.id, email: user.email, displayName: null });
+  });
+
+  beforeEach(async () => {
+    await getSql()`DELETE FROM organizations WHERE org_id = ${orgId}`;
+  });
+
+  afterAll(async () => {
+    await fastify.close();
+    await closeSql();
+  });
+
+  it.each([
+    { label: 'no authority', value: 'https://' },
+    { label: 'an empty authority', value: 'https:///evil.example.com/x' },
+    { label: 'a space in the host', value: 'https://exa mple.com/x' },
+    { label: 'a backslash authority', value: 'https://\\evil.example.com/x' },
+  ])('refuses $label', async ({ value }) => {
+    expect((await create(value)).statusCode).toBe(400);
+  });
+
+  it('accepts an uppercase scheme, matching the web form', async () => {
+    // The web regex is /i; the server used to be case-sensitive and 400 here.
+    expect((await create('HTTPS://registry-url-shape.example.com/catalog.json')).statusCode).toBe(201);
+  });
+});
