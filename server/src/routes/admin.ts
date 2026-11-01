@@ -27,7 +27,7 @@ interface BulkModerationBody {
  */
 export async function registerAdminRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.post<{ Params: { org_id: string }; Body: { moderation: Moderation } }>('/api/v1/admin/orgs/:org_id/moderation', {
-    preHandler: [fastify.authenticate, requireOperator],
+    preValidation: [fastify.authenticate, requireOperator],
     schema: {
       tags: ['admin'],
       summary: 'Set an entry\'s operator moderation (none | hidden | takedown)',
@@ -58,7 +58,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance): Promise<voi
   });
 
   fastify.post<{ Body: BulkModerationBody }>('/api/v1/admin/orgs/moderation-bulk', {
-    preHandler: [fastify.authenticate, requireOperator],
+    preValidation: [fastify.authenticate, requireOperator],
     schema: {
       tags: ['admin'],
       summary: 'Set operator moderation on every entry whose org_id starts with a prefix',
