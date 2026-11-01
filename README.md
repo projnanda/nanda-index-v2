@@ -152,6 +152,24 @@ DEMO_RUN_LIMIT_PER_HOUR=3          # live runs per visitor per hour; 0 = unlimit
 DEMO_PUBLIC_INDEX_URL=https://api.nandaindex.org
 ```
 
+### What the API logs
+
+The API logs one line per request. The URL in that line has its query-string
+values masked unless the parameter is named in `LOGGABLE_QUERY_PARAMS`
+(`server/src/lib/logRedaction.ts`) — so `?q=`, `?locator=`, paging and filter
+values are logged, and anything else reads `name=[redacted]`.
+
+This is an allowlist, not a list of known secrets. Two credentials travel in
+query strings — the org verification token on `GET /api/v1/verify-email` and the
+OAuth authorization code on the provider callbacks — and a route added later
+could introduce a third, so a parameter is logged only once someone has decided
+it is safe to log. If you add a parameter whose value belongs in the log, add
+its name to that list; until then it is masked. Matching is exact, so `TOKEN` is
+masked even though `token` would be too.
+
+Logged URLs are truncated at 512 characters, which is far more than any real
+request and keeps a long query string from bloating the log.
+
 ### Extension metadata
 
 `extensions` is where a registrant puts metadata the index itself does not
@@ -489,3 +507,11 @@ curl https://api.nandaindex.org/health
 ## License
 
 Apache License 2.0 — see [LICENSE](LICENSE).
+
+### Identity, card checks, and endpoint availability
+
+Email and DNS TXT verification prove control of the registered identity. They do not prove that a card or agent runtime works. Explore labels the proof type explicitly. Proof timestamps are shown when recorded; older email proofs have an unknown timestamp.
+
+Registration and a submitted card URL update run a server-side check for A2A and MCP JSON cards. The check uses the public-address outbound guard, pinned DNS, no redirects, a three-second deadline, and a 256 KiB response limit. Results and check times are stored in a server-owned database column. A2A legacy URL and modern supported-interface cards are checked for required discovery fields; MCP checks use the experimental Server Card core fields. Optional fields and protocol behavior are not certified. Unsupported artifacts and A2A custom protocol bindings show Not checked. A failed check warns the registrant and remains visible in Explore; it does not replace the identity activation requirement. Save the card URL again to recheck it.
+
+Endpoint availability remains Not checked. The card check never invokes the advertised runtime or follows nested URLs. Apply migration `022_card_checks_and_identity_timestamps.sql` before deploying this version; it leaves historical results unknown.
