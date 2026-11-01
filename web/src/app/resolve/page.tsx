@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { PageShell } from "@/components/PageShell";
-import { ApiError, resolveAgent, fetchAgentRecord, fetchFactsUrl } from "@/lib/nanda-api";
+import { ApiError, resolveAgent, fetchRegistryHop, fetchFactsUrl } from "@/lib/nanda-api";
+import { CatalogEntryNotFound, isSingleResourceType, planRegistryHop } from "@/lib/catalogHop";
 import type { ResolveResponse, CatalogEntry } from "@/lib/nanda-types";
 import { resolutionSummary, type HopStatus } from "@/lib/resolutionStatus";
 import { resolveExamples, type ExampleKind } from "@/lib/resolveExamples";
@@ -161,7 +162,6 @@ export default function ResolvePage() {
 
     // ── Hop 2: Registry ───────────────────────────────────────────────────
     const { url: entryUrl, type: entryType } = indexData.entry;
-
     if (!entryUrl) {
       setHop2({ status: "skipped", url: "No URL to follow — inline data or custom discovery path." });
       setHop3({ status: "skipped" }); setHop4({ status: "skipped" });
@@ -170,29 +170,38 @@ export default function ResolvePage() {
       return;
     }
 
-    const isDirectCard = entryType === "application/a2a-agent-card+json" ||
-      entryType === "application/mcp-server-card+json" ||
-      entryType === "application/agentskill+zip";
-    const h2url = isDirectCard
-      ? entryUrl
-      : `${entryUrl.replace(/\/+$/, "")}/agents/${indexData.identifier}`;
+    const isDirectCard = isSingleResourceType(entryType);
+    const h2url = planRegistryHop(indexData).steps[0]!.url;
 
     if (from <= 2) setHop2({ status: "loading", url: `GET ${h2url}` });
 
     let catalogEntry = hop2.data as CatalogEntry;
     if (from <= 2) try {
-      catalogEntry = await fetchAgentRecord(entryUrl, indexData.identifier, entryType);
+      const hop = await fetchRegistryHop(indexData);
       if (!current()) return;
+      if (hop.kind === "catalog") {
+        // The identifier names the catalog itself: its entries are the result.
+        const count = hop.document.entries.length;
+        setHop2({ status: "ok", url: `GET ${hop.url}`, data: hop.document });
+        setHop3({ status: "skipped",
+          url: `This identifier names a catalog of ${count} entr${count === 1 ? "y" : "ies"}. Resolve one of their identifiers to continue.` });
+        setHop4({ status: "skipped" });
+        setResolving(false);
+        setLatency(Math.round(performance.now() - t0));
+        return;
+      }
+      catalogEntry = hop.entry;
       if (!catalogEntry || typeof catalogEntry !== "object" || Array.isArray(catalogEntry)) {
         throw new InvalidDiscoveryResponse("The source response must be a JSON object containing a catalog entry or card.");
       }
       if (catalogEntry.url !== undefined && typeof catalogEntry.url !== "string") {
         throw new InvalidDiscoveryResponse("The source response contains an invalid card URL.");
       }
-      setHop2({ status: "ok", url: `GET ${h2url}`, data: catalogEntry });
+      setHop2({ status: "ok", url: `GET ${hop.url}`, data: catalogEntry });
     } catch (err) {
       if (!current()) return;
-      setHop2({ status: "error", url: h2url, error: hopError(err) });
+      setHop2({ status: "error", url: h2url,
+        error: err instanceof CatalogEntryNotFound ? err.message : hopError(err) });
       setHop3({ status: "skipped" }); setHop4({ status: "skipped" });
       setResolving(false);
       setLatency(Math.round(performance.now() - t0));

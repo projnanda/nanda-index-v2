@@ -55,11 +55,82 @@ function isRemoteCatalogDocument(body: unknown): body is RemoteCatalogDocument {
   );
 }
 
+/** A registry_url naming a catalog document itself (…/ai-catalog.json), not a registry API base. */
+export function isCatalogDocumentUrl(url: string): boolean {
+  try {
+    return new URL(url).pathname.toLowerCase().endsWith('.json');
+  } catch {
+    return false;
+  }
+}
+
+/** The publisher's static catalog at its origin's well-known path. */
+export function wellKnownCatalogUrl(url: string): string {
+  return `${new URL(url).origin}/.well-known/ai-catalog.json`;
+}
+
+/** Query words too common to tell one catalog entry from another. */
+const STOP_WORDS = new Set(['a', 'an', 'and', 'agent', 'agents', 'find', 'for', 'help', 'i', 'me', 'my', 'need', 'the', 'to', 'want', 'with']);
+
 /**
- * Fetches up to `perOrgLimit` agent candidates from one enterprise org's
- * registry_url (a nanda-registry instance). Never throws — network errors,
- * timeouts, non-2xx responses, and malformed JSON all resolve to `null` so
- * one flaky registry can't fail the whole fan-out.
+ * Filters a static catalog's entries the way a registry's /agents/search
+ * would: an entry matches when its name, identifier, description or tags
+ * contain a query word (a trailing plural "s" is ignored), most matches first.
+ */
+export function searchCatalogEntries(entries: RemoteCatalogEntry[], query: string): RemoteCatalogEntry[] {
+  const terms = query.toLowerCase().split(/[^a-z0-9]+/)
+    .filter((t) => t.length > 1 && !STOP_WORDS.has(t))
+    .map((t) => (t.length > 3 && t.endsWith('s') ? t.slice(0, -1) : t));
+  if (terms.length === 0) return [];
+  return entries
+    .map((entry) => {
+      const haystack = [entry.displayName, entry.identifier, entry.description ?? '', ...(entry.tags ?? [])]
+        .join(' ').toLowerCase();
+      return { entry, score: terms.filter((t) => haystack.includes(t)).length };
+    })
+    .filter(({ score }) => score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map(({ entry }) => entry);
+}
+
+/**
+ * GETs one catalog-shaped response ({ entries: [...] }) and keeps only
+ * well-formed entries anchored to this org's own domain. Never throws:
+ * network errors, non-2xx responses and malformed JSON resolve to `null`.
+ */
+async function fetchCatalogEntries(
+  url: string,
+  org: RankedOrganization,
+  signal: AbortSignal,
+  urlGuard: UrlGuard,
+): Promise<RemoteCatalogEntry[] | null> {
+  try {
+    // registry_url is registrant-controlled: refuse internal hosts, connect
+    // only to the addresses the guard checked (no DNS rebinding), and refuse
+    // redirects so a public host can't bounce us to an internal one.
+    const guardedFetch = await urlGuard(url);
+    const res = await guardedFetch(url, { signal, redirect: 'error' });
+    if (!res.ok) return null;
+
+    // The response is the registrant's to shape: read a bounded amount.
+    const body = await readCappedJson(res);
+    if (!isRemoteCatalogDocument(body)) return null;
+
+    return body.entries
+      .map((raw) => sanitizeRemoteEntry(raw, org.domain))
+      .filter((entry): entry is RemoteCatalogEntry => entry !== null);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetches up to `perOrgLimit` agent candidates from one enterprise org.
+ * registry_url takes two shapes: a static catalog document (…/ai-catalog.json),
+ * searched locally; or a registry API base, asked via /agents/search, falling
+ * back to the origin's /.well-known/ai-catalog.json when the publisher serves
+ * no search API. `null` only when no shape answers, so one flaky registry
+ * can't fail the whole fan-out. One timeout covers every attempt.
  */
 async function fetchAgentSearch(
   org: RankedOrganization,
@@ -68,26 +139,23 @@ async function fetchAgentSearch(
   perOrgLimit: number,
   urlGuard: UrlGuard,
 ): Promise<RemoteCatalogEntry[] | null> {
+  const registryUrl = org.registryUrl;
+  if (!registryUrl) return null;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const fromDocument = async (url: string) => {
+    const entries = await fetchCatalogEntries(url, org, controller.signal, urlGuard);
+    return entries && searchCatalogEntries(entries, query);
+  };
   try {
-    const url = `${org.registryUrl}/agents/search?q=${encodeURIComponent(query)}`;
-    // registry_url is registrant-controlled: refuse internal hosts, connect
-    // only to the addresses the guard checked (no DNS rebinding), and refuse
-    // redirects so a public host can't bounce us to an internal one.
-    const guardedFetch = await urlGuard(url);
-    const res = await guardedFetch(url, { signal: controller.signal, redirect: 'error' });
-    if (!res.ok) return null;
-
-    // The response is the registrant's to shape: read a bounded amount and
-    // keep only well-formed entries anchored to this org's own domain.
-    const body = await readCappedJson(res);
-    if (!isRemoteCatalogDocument(body)) return null;
-
-    return body.entries
-      .map((raw) => sanitizeRemoteEntry(raw, org.domain))
-      .filter((entry): entry is RemoteCatalogEntry => entry !== null)
-      .slice(0, perOrgLimit);
+    if (isCatalogDocumentUrl(registryUrl)) {
+      return (await fromDocument(registryUrl))?.slice(0, perOrgLimit) ?? null;
+    }
+    const searchUrl = `${registryUrl.replace(/\/+$/, '')}/agents/search?q=${encodeURIComponent(query)}`;
+    const viaApi = await fetchCatalogEntries(searchUrl, org, controller.signal, urlGuard);
+    if (viaApi) return viaApi.slice(0, perOrgLimit);
+    if (controller.signal.aborted) return null;
+    return (await fromDocument(wellKnownCatalogUrl(registryUrl)))?.slice(0, perOrgLimit) ?? null;
   } catch {
     return null;
   } finally {
