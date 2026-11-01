@@ -158,17 +158,48 @@ const DATA_MARKUP_SCHEME =
  */
 const CONTROL_CHARS = /[\u0000-\u001f\u007f]/g;
 
-function isActiveContentUrl(value: string): boolean {
+/**
+ * Keys whose value a consumer will plausibly hand to an `href`. Suffix matches
+ * cover the namespaced keys the catalog actually uses, such as `runtime.url`.
+ */
+function isUrlShapedKey(key: string): boolean {
+  const names = ['url', 'uri', 'href', 'link', 'src'];
+  const matches = (k: string): boolean => names.some((name) => k === name || k.endsWith(name));
+  const lower = key.toLowerCase();
+  // Plurals count: `links: [...]` is as much a list of links as `link` is one.
+  return matches(lower) || (lower.endsWith('s') && matches(lower.slice(0, -1)));
+}
+
+/**
+ * Review on #133 found the first version rejecting ordinary metadata: a skills
+ * list entry of `"JavaScript: React"`, or `"JavaScript: ES2022, TypeScript"`,
+ * matched the scheme test and came back 400. That is the same over-blocking
+ * this file already rules out for `data:`, so the test is now two-tier.
+ *
+ * Under a URL-shaped key the strict test applies — a value there is going to
+ * be rendered as a link, and prose is not expected. Anywhere else the scheme
+ * must be followed immediately by its payload, with no space: `javascript:alert(1)`
+ * is refused, `JavaScript: React` is left alone.
+ *
+ * The gap that leaves is `javascript: alert(1)`, with a space, under a key
+ * that is not URL-shaped — a browser would still run it. Closing it would mean
+ * refusing the prose above, and a directory that rejects a skills list is a
+ * defect too. The error message names the key so a registrant can tell which
+ * rule they hit.
+ */
+function isActiveContentUrl(value: string, urlShaped: boolean): boolean {
   const bare = value.replace(CONTROL_CHARS, '');
-  return SCRIPT_SCHEME.test(bare) || DATA_MARKUP_SCHEME.test(bare);
+  if (DATA_MARKUP_SCHEME.test(bare)) return true;
+  if (!SCRIPT_SCHEME.test(bare)) return false;
+  return urlShaped || !/^\s*(?:javascript|vbscript)\s*:\s/i.test(bare);
 }
 
 function validateExtensionValues(extensions: CatalogExtensions | undefined): void {
   if (extensions === undefined) return;
 
-  const walk = (value: unknown, path: string): void => {
+  const walk = (value: unknown, path: string, urlShaped: boolean): void => {
     if (typeof value === 'string') {
-      if (isActiveContentUrl(value)) {
+      if (isActiveContentUrl(value, urlShaped)) {
         throw new EntryProfileError(
           `${path} must not be a javascript:, vbscript: or data:text/html URL`,
         );
@@ -176,15 +207,25 @@ function validateExtensionValues(extensions: CatalogExtensions | undefined): voi
       return;
     }
     if (Array.isArray(value)) {
-      value.forEach((item, index) => walk(item, `${path}[${index}]`));
+      // An array inherits its key: `links: ["javascript:…"]` is still a link.
+      value.forEach((item, index) => walk(item, `${path}[${index}]`, urlShaped));
       return;
     }
     if (value !== null && typeof value === 'object') {
-      for (const [key, item] of Object.entries(value)) walk(item, `${path}.${key}`);
+      for (const [key, item] of Object.entries(value)) {
+        // Keys are published too, and a consumer that renders a key as a link
+        // is no less exposed than one that renders a value.
+        if (isActiveContentUrl(key, true)) {
+          throw new EntryProfileError(
+            `${path} must not use a javascript:, vbscript: or data:text/html URL as a key`,
+          );
+        }
+        walk(item, `${path}.${key}`, isUrlShapedKey(key));
+      }
     }
   };
 
-  walk(extensions, 'extensions');
+  walk(extensions, 'extensions', false);
 }
 
 /**

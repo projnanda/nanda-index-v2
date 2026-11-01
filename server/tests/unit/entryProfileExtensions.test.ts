@@ -204,3 +204,67 @@ describe('extensions — namespace policy', () => {
     });
   });
 });
+
+/**
+ * Review on #133: the first version of the scheme test rejected ordinary
+ * metadata — a skills list beginning an entry with "JavaScript:" came back
+ * 400. The test is now two-tier, strict under a URL-shaped key and relaxed
+ * for prose elsewhere. These pin that boundary down from both sides.
+ */
+describe('extensions — prose that merely starts with a scheme name', () => {
+  it('accepts a skills list entry of "JavaScript: React"', () => {
+    expect(withExtensions({ 'com.example': { skills: ['JavaScript: React'] } })).not.toThrow();
+  });
+
+  it('accepts "JavaScript: ES2022, TypeScript" as a free-text value', () => {
+    expect(withExtensions({ 'com.example': { languages: 'JavaScript: ES2022, TypeScript' } })).not.toThrow();
+  });
+
+  it('still rejects a payload with no space after the scheme, under any key', () => {
+    expect(withExtensions({ 'com.example': { skills: ['javascript:alert(1)'] } }))
+      .toThrow(EntryProfileError);
+  });
+
+  it('is strict under a URL-shaped key, space or not', () => {
+    // A value here is going to be handed to an href; prose is not expected.
+    expect(withExtensions({ 'com.example': { homepageUrl: 'javascript: alert(1)' } }))
+      .toThrow(EntryProfileError);
+    expect(withExtensions({ 'com.example': { 'runtime.url': 'javascript: alert(1)' } }))
+      .toThrow(EntryProfileError);
+    expect(withExtensions({ 'com.example': { href: 'vbscript: msgbox(1)' } }))
+      .toThrow(EntryProfileError);
+  });
+
+  it('carries the key down into arrays, so a list of links stays strict', () => {
+    expect(withExtensions({ 'com.example': { links: ['javascript: alert(1)'] } }))
+      .toThrow(EntryProfileError);
+  });
+
+  it('leaves the data: rules alone — markup refused, prose kept', () => {
+    expect(withExtensions({ 'com.example': { note: 'data:text/html,<script>x</script>' } }))
+      .toThrow(EntryProfileError);
+    expect(withExtensions({ 'com.example': { updated: 'data: 2026-01-01' } })).not.toThrow();
+  });
+});
+
+describe('extensions — object keys', () => {
+  it('rejects an active-content URL used as a key', () => {
+    expect(withExtensions({ 'com.example': { 'javascript:alert(1)': 'x' } }))
+      .toThrow(EntryProfileError);
+  });
+
+  it('says the problem was a key, not a value', () => {
+    expect(withExtensions({ 'com.example': { 'javascript:alert(1)': 'x' } }))
+      .toThrow(/as a key/);
+  });
+
+  it('rejects a key nested deeper down', () => {
+    expect(withExtensions({ 'com.example': { meta: { 'vbscript:msgbox(1)': 'x' } } }))
+      .toThrow(EntryProfileError);
+  });
+
+  it('leaves ordinary keys alone', () => {
+    expect(withExtensions({ 'com.example': { 'runtime.url': 'https://example.com/run' } }))
+      .not.toThrow();
+  });
+});

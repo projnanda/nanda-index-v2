@@ -198,6 +198,24 @@ const DEV_JWT_SECRET = 'dev-secret-change-in-production';
 const DEV_COOKIE_SECRET = 'dev-cookie-secret-change-in-production';
 const MIN_JWT_SECRET_LENGTH = 32;
 
+/**
+ * Anything that is not exactly `anchored` means `open`. That is deliberate —
+ * the policy fails open rather than locking registrants out of a misread env
+ * var — but it used to be silent, so `Anchored` or a trailing space turned off
+ * a policy the operator believed was on. Unrecognised values now say so.
+ */
+function readNamespacePolicy(): 'anchored' | 'open' {
+  const raw = optionalEnv('EXTENSION_NAMESPACE_POLICY', 'open');
+  if (raw === 'anchored') return 'anchored';
+  if (raw !== 'open') {
+    console.warn(
+      `WARNING: EXTENSION_NAMESPACE_POLICY="${raw}" is not recognised — using "open". ` +
+      'The only value that enables namespace anchoring is exactly "anchored".',
+    );
+  }
+  return 'open';
+}
+
 export function buildConfig(): Config {
   const rawSigningKey = process.env['SIGNING_PRIVATE_KEY'];
   const nodeEnv = optionalEnv('NODE_ENV', 'development');
@@ -313,8 +331,7 @@ export function buildConfig(): Config {
       allowPrivateHosts: optionalEnv('OUTBOUND_ALLOW_PRIVATE_HOSTS', 'false') === 'true',
     },
     extensions: {
-      namespacePolicy:
-        optionalEnv('EXTENSION_NAMESPACE_POLICY', 'open') === 'anchored' ? 'anchored' : 'open',
+      namespacePolicy: readNamespacePolicy(),
     },
     llmEnrichment: {
       apiKey: process.env['OPENAI_API_KEY'] || undefined,
