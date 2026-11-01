@@ -88,15 +88,23 @@ function truncate(value: string): string {
 }
 
 /**
- * Replaces Fastify's default `req` serializer. Same fields it emits, so
- * existing log consumers keep working; only `url` changes.
+ * Replaces Fastify's default `req` serializer, emitting the same fields it
+ * does — method, url, version, host, remoteAddress, remotePort — so existing
+ * log consumers keep working; only `url` changes.
+ *
+ * `remoteAddress` is `request.ip`, matching Fastify, not
+ * `request.socket.remoteAddress`. Behind Caddy those differ: the socket holds
+ * the proxy's address, while `request.ip` honours the trusted-hop count the
+ * server is built with. Logging the socket would make every visitor look like
+ * the proxy, which is the correlation the per-IP rate limits depend on.
  */
 export function serializeRequest(request: FastifyRequest): Record<string, unknown> {
   return {
     method: request.method,
     url: redactUrl(request.url),
+    version: request.headers?.['accept-version'],
     host: request.host,
-    remoteAddress: request.socket?.remoteAddress,
+    remoteAddress: request.ip,
     remotePort: request.socket?.remotePort,
   };
 }

@@ -164,25 +164,39 @@ describe('serializeRequest', () => {
   const request = {
     method: 'GET',
     url: '/api/v1/verify-email?token=SECRET',
+    headers: { 'accept-version': '1.x' },
     host: 'api.nandaindex.org',
+    // `ip` is what Fastify logs; behind a trusted proxy it is the visitor,
+    // while the socket holds the proxy. They differ here on purpose.
+    ip: '198.51.100.9',
     socket: { remoteAddress: '203.0.113.7', remotePort: 54321 },
   };
 
   it('emits the same fields as Fastify’s default serializer, with the URL redacted', () => {
-    // The field set is load-bearing: log consumers read these names.
+    // The field set is load-bearing: log consumers read these names. Fastify's
+    // own serializer emits method, url, version, host, remoteAddress and
+    // remotePort — see fastify/lib/logger-pino.js — so dropping one is a
+    // silent regression for anyone parsing these lines.
     expect(serializeRequest(request as never)).toEqual({
       method: 'GET',
       url: `/api/v1/verify-email?token=${REDACTED}`,
+      version: '1.x',
       host: 'api.nandaindex.org',
-      remoteAddress: '203.0.113.7',
+      remoteAddress: '198.51.100.9',
       remotePort: 54321,
     });
   });
 
-  it('survives a request with no socket', () => {
-    const { socket: _socket, ...noSocket } = request;
-    expect(serializeRequest(noSocket as never)).toMatchObject({
-      remoteAddress: undefined,
+  it('logs the visitor address rather than the proxy socket', () => {
+    // Behind Caddy these differ, and the per-IP rate limits are keyed on the
+    // visitor. Logging the socket would make every visitor look like the proxy.
+    expect(serializeRequest(request as never)).toMatchObject({ remoteAddress: '198.51.100.9' });
+  });
+
+  it('survives a request with no socket or version header', () => {
+    const { socket: _socket, headers: _headers, ...bare } = request;
+    expect(serializeRequest(bare as never)).toMatchObject({
+      version: undefined,
       remotePort: undefined,
     });
   });

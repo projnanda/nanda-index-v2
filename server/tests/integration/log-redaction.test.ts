@@ -105,3 +105,90 @@ async function buildServerLoggerKeepsRedaction(loggerOptions: object): Promise<s
   await fastify.close();
   return captured.join('');
 }
+
+/**
+ * The `req` serializer only covers the `incoming request` line. Anything that
+ * logs `request.url` itself has to redact it itself, and the error and
+ * not-found paths are both reached with the credential still in the query
+ * string — a duplicate parameter is enough to force one, so this is
+ * trivially reachable by anyone.
+ */
+describe('request log redaction on the error paths', () => {
+  let fastify: FastifyInstance;
+  let written: string;
+  const lines: string[] = [];
+
+  const sink = new Writable({
+    write(chunk, _encoding, callback) {
+      lines.push(String(chunk));
+      callback();
+    },
+  });
+
+  let notFoundBody: string;
+
+  beforeAll(async () => {
+    const built = await buildServer({ logger: { stream: sink } });
+    fastify = built.fastify;
+
+    // The only way to reach the >= 500 branch of the error handler on demand.
+    fastify.get('/__test__/boom', async () => {
+      throw new Error('deliberate failure');
+    });
+    await fastify.ready();
+
+    // 400: a duplicate parameter fails schema validation before the route runs.
+    await fastify.inject({
+      method: 'GET', url: '/api/v1/verify-email?token=CANARY_DUPLICATE_A&token=CANARY_DUPLICATE_B',
+    });
+    // 400: malformed body, with the credential still on the query string.
+    await fastify.inject({
+      method: 'POST', url: '/api/v1/verify-email?token=CANARY_BAD_JSON',
+      headers: { 'content-type': 'application/json' }, payload: '{nope',
+    });
+    // 415: unsupported media type.
+    await fastify.inject({
+      method: 'POST', url: '/api/v1/verify-email?token=CANARY_BAD_TYPE',
+      headers: { 'content-type': 'text/plain' }, payload: 'x',
+    });
+    // 500: the error handler's other branch.
+    await fastify.inject({ method: 'GET', url: '/__test__/boom?token=CANARY_FIVE_HUNDRED' });
+    // 404: a verification link mangled in transit still carries its token.
+    const notFound = await fastify.inject({
+      method: 'GET', url: '/api/v1/verify-emai?token=CANARY_NOT_FOUND',
+    });
+    notFoundBody = notFound.body;
+
+    written = lines.join('');
+  });
+
+  afterAll(async () => {
+    await fastify.close();
+  });
+
+  it('wrote the error lines, so the assertions below are meaningful', () => {
+    expect(written).toContain('request error');
+    expect(written).toContain('route not found');
+  });
+
+  it('redacts the token on a 400 from schema validation', () => {
+    expect(written).not.toContain('CANARY_DUPLICATE_A');
+    expect(written).not.toContain('CANARY_DUPLICATE_B');
+  });
+
+  it('redacts the token on a 400 from a malformed body and a 415', () => {
+    expect(written).not.toContain('CANARY_BAD_JSON');
+    expect(written).not.toContain('CANARY_BAD_TYPE');
+  });
+
+  it('redacts the token on a 500', () => {
+    expect(written).not.toContain('CANARY_FIVE_HUNDRED');
+  });
+
+  it('redacts the token on an unknown route, and does not echo it back', () => {
+    expect(written).not.toContain('CANARY_NOT_FOUND');
+    // Fastify's built-in fallback puts the raw URL in both the log line and
+    // the response body; the replacement handler must do neither.
+    expect(notFoundBody).not.toContain('CANARY_NOT_FOUND');
+  });
+});

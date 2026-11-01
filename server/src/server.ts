@@ -33,6 +33,10 @@ const MAX_BODY_BYTES = 64 * 1024;
  * Logger options, with the request serializer that keeps query-string secrets
  * out of the log (lib/logRedaction.ts). The serializer is set here rather than
  * per route so a route added later is covered without anyone remembering to.
+ *
+ * `base` is spread last deliberately: a caller-supplied `level` is overridden,
+ * because the serializer and the environment's level are a pair we do not want
+ * a test or an operator to half-replace. Pass `logger: false` to silence it.
  */
 function buildLoggerOptions(
   nodeEnv: string,
