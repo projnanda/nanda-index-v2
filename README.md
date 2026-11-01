@@ -148,6 +148,24 @@ DEMO_RUN_LIMIT_PER_HOUR=3          # live runs per visitor per hour; 0 = unlimit
 DEMO_PUBLIC_INDEX_URL=https://api.nandaindex.org
 ```
 
+### What the API logs
+
+The API logs one line per request. The URL in that line has its query-string
+values masked unless the parameter is named in `LOGGABLE_QUERY_PARAMS`
+(`server/src/lib/logRedaction.ts`) — so `?q=`, `?locator=`, paging and filter
+values are logged, and anything else reads `name=[redacted]`.
+
+This is an allowlist, not a list of known secrets. Two credentials travel in
+query strings — the org verification token on `GET /api/v1/verify-email` and the
+OAuth authorization code on the provider callbacks — and a route added later
+could introduce a third, so a parameter is logged only once someone has decided
+it is safe to log. If you add a parameter whose value belongs in the log, add
+its name to that list; until then it is masked. Matching is exact, so `TOKEN` is
+masked even though `token` would be too.
+
+Logged URLs are truncated at 512 characters, which is far more than any real
+request and keeps a long query string from bloating the log.
+
 ### Concierge demo (`/demo`)
 
 `docker compose up` also starts the concierge demo (`demo/`), served by Caddy at
