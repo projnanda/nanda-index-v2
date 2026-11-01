@@ -252,8 +252,32 @@ function registryUrlError(registryUrl: string): string | null {
  * OUTBOUND_ALLOW_PRIVATE_HOSTS turns the check off, the same way it already
  * allows plaintext and lets fan-out reach a registry on localhost.
  */
+const INTERNAL_ONLY_SUFFIXES = ['.localhost', '.local', '.internal', '.home.arpa'];
+
+/**
+ * Names reserved for use inside a single network. Address classification
+ * cannot catch these, because resolution depends on who is asking:
+ * `metadata.google.internal` does not resolve from a machine outside GCP, so
+ * the lookup below lets it pass, and it resolves to 169.254.169.254 for every
+ * consumer that does run there. A name that only means something inside a
+ * network has no meaning in a directory published to everyone, so it is
+ * refused by name rather than by address.
+ */
+function isInternalOnlyHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/\.$/, '');
+  return host === 'localhost' || INTERNAL_ONLY_SUFFIXES.some((suffix) => host.endsWith(suffix));
+}
+
 async function registryUrlReachabilityError(registryUrl: string): Promise<string | null> {
   if (buildConfig().outbound.allowPrivateHosts) return null;
+  try {
+    const host = new URL(registryUrl).hostname.replace(/^\[|\]$/g, '');
+    if (isInternalOnlyHost(host)) {
+      return 'registry_url must be a public internet address — private, loopback, link-local and cloud metadata addresses are refused';
+    }
+  } catch {
+    // Shape is already checked by registryUrlError; fall through to the guard.
+  }
   try {
     await assertPublicHttpUrl(registryUrl);
     return null;

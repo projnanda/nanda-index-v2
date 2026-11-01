@@ -62,6 +62,22 @@ describe('registry_url must be a public address', () => {
     expect(await getSql()`SELECT 1 FROM organizations WHERE org_id = ${orgId}`).toHaveLength(0);
   });
 
+  it.each([
+    { label: 'cloud metadata by name', value: 'https://metadata.google.internal/computeMetadata/v1/' },
+    { label: 'localhost by name', value: 'https://localhost:5433/catalog.json' },
+    { label: 'a .local mDNS name', value: 'https://printer.local/catalog.json' },
+    { label: 'a .internal name', value: 'https://db.svc.internal/catalog.json' },
+    { label: 'a .home.arpa name', value: 'https://nas.home.arpa/catalog.json' },
+  ])('refuses $label even when it does not resolve here', async ({ value }) => {
+    // Resolution depends on who asks. metadata.google.internal does not
+    // resolve from outside GCP, and points at 169.254.169.254 for every
+    // consumer that runs there — so the address check alone would publish it.
+    const res = await create(value);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().detail).toContain('public internet address');
+  });
+
   it('accepts a hostname that does not resolve yet', async () => {
     // Registering before DNS exists is ordinary: a new domain, a staged
     // launch, a propagation window. Refusing it would also make every
