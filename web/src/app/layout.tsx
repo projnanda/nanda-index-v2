@@ -4,6 +4,7 @@ import { Analytics } from "@/components/Analytics";
 import { ConsentBanner } from "@/components/ConsentBanner";
 import { PostHogAnalytics } from "@/components/PostHogAnalytics";
 import { DEFAULT_POSTHOG_HOST, posthogHosts } from "@/lib/posthogHosts";
+import { SITE_DESCRIPTION, SITE_TITLE, TITLE_TEMPLATE } from "@/lib/site-metadata";
 import "./globals.css";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
@@ -21,14 +22,17 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "NANDA Index - a global switchboard for the agentic web",
-  description:
-    "NandaIndex is a federated index of AI Catalog-formatted resolution records.",
+  // Pages set their own title; the template adds the site name. The default
+  // is the homepage's title and is used only where no page title exists.
+  title: {
+    default: SITE_TITLE,
+    template: TITLE_TEMPLATE,
+  },
+  description: SITE_DESCRIPTION,
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://nandaindex.org"),
+  // No explicit Open Graph title or description: each page's own values are
+  // used, so shared links show the page rather than the site.
   openGraph: {
-    title: "NANDA Index - a global switchboard for the agentic web",
-    description:
-      "NandaIndex is a federated index of AI Catalog-formatted resolution records.",
     type: "website",
   },
 };

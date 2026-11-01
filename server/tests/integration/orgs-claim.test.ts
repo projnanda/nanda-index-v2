@@ -46,9 +46,9 @@ describe('Recovery of an orphaned domain or personal entry', () => {
     const sql = getSql();
     await sql`DELETE FROM organizations WHERE org_id LIKE 'recovery-%'`;
     const owner = await upsertUser({ email: 'recovery-owner@example.com', displayName: null,
-      avatarUrl: null, provider: 'github', providerId: 'recovery-owner' });
+      avatarUrl: null, provider: 'github', providerId: 'recovery-owner', emailVerified: true });
     const other = await upsertUser({ email: 'recovery-other@example.com', displayName: null,
-      avatarUrl: null, provider: 'github', providerId: 'recovery-other' });
+      avatarUrl: null, provider: 'github', providerId: 'recovery-other', emailVerified: true });
     ownerId = owner.id; otherId = other.id;
     ownerToken = app.jwt.sign({ userId: owner.id, email: owner.email, displayName: null, tokenVersion: owner.tokenVersion });
     otherToken = app.jwt.sign({ userId: other.id, email: other.email, displayName: null, tokenVersion: other.tokenVersion });
@@ -300,7 +300,7 @@ describe('Recovery of an orphaned domain or personal entry', () => {
 
   async function extraAccount(name: string) {
     const user = await upsertUser({ email: `recovery-${name}@example.com`, displayName: null,
-      avatarUrl: null, provider: 'github', providerId: `recovery-${name}` });
+      avatarUrl: null, provider: 'github', providerId: `recovery-${name}`, emailVerified: true });
     return app.jwt.sign({ userId: user.id, email: user.email, displayName: null, tokenVersion: user.tokenVersion });
   }
 

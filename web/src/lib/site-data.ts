@@ -15,7 +15,7 @@ export const externalLinks = {
   github: "https://github.com/projnanda/nanda-index-v2",
   // Self-hosted PDF served by Caddy directly (see Caddyfile).
   // Update the version when replacing the PDF to refresh cached downloads.
-  paper: "https://nandaindex.org/paper.pdf?v=988e28a041d2",
+  paper: "https://nandaindex.org/paper.pdf?v=069ea34a2038",
   ietfDraft: "https://datatracker.ietf.org/doc/draft-raskar-agentic-web-federated-resolution/01/",
   ardSpec: "https://agenticresourcediscovery.org/",
   host39: "https://host39.org",

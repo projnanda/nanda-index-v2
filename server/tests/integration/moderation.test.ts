@@ -59,11 +59,13 @@ describe('Operator moderation (hidden / takedown)', () => {
 
     const operator = await upsertUser({
       email: OPERATOR_EMAIL, displayName: 'Op', avatarUrl: null, provider: 'google', providerId: 'mod-operator-pid',
+      emailVerified: true,
     });
     operatorToken = fastify.jwt.sign({ userId: operator.id, email: operator.email, displayName: null });
 
     const owner = await upsertUser({
       email: 'mod-owner@example.com', displayName: 'Owner', avatarUrl: null, provider: 'github', providerId: 'mod-owner-pid',
+      emailVerified: true,
     });
     ownerId = owner.id;
     ownerToken = fastify.jwt.sign({ userId: owner.id, email: owner.email, displayName: null });

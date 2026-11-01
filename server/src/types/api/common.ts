@@ -1,6 +1,7 @@
 export interface ApiError {
   error: string;
   detail?: string;
+  field?: string;
   endpoint?: string;
 }
 
@@ -11,6 +12,7 @@ export const apiErrorSchema = {
   properties: {
     error:    { type: 'string' },
     detail:   { type: 'string' },
+    field:    { type: 'string' },
     endpoint: { type: 'string' },
   },
 } as const;

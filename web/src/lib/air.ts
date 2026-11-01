@@ -8,7 +8,7 @@ import type { CatalogExtensions, HostingPath, IndexCatalogEntry, OrgStatus } fro
 
 export const NANDA_EXTENSION = "org.projectnanda";
 
-/** Third-party card host that anchors identifiers for domain-less individuals. */
+/** Naming authority that anchors identifiers for domain-less individuals; card hosting is independent. */
 export const PERSONAL_CARD_HOST = "host39.org";
 
 const SEGMENT_LITERAL_RE = /^[a-z0-9._~!$&'()*+,;=@-]$/;

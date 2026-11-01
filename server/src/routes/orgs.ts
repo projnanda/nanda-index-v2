@@ -1,7 +1,10 @@
+import { validateRegistrationCard } from '../services/cardValidation.js';
+import { allowAnyUrl, publicUrlGuard } from '../lib/outboundUrl.js';
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { findByOrgId, findProvenByDomain, findProvenByIdentifier, countUnprovenOrgsForUser, insertOrganization, updateOrganization, suspendOrganization, reactivateOrganization, deleteOrganization, issueDomainChallenge, markDomainVerified, renewVerifyToken, toIndexRecord, type Organization } from '../db/queries/organizations.js';
-import { insertMembership, checkMembership } from '../db/queries/orgMemberships.js';
+import { findByOrgId, findProvenByDomain, findProvenByIdentifier, countUnprovenOrgsForUser, updateOrganization, suspendOrganization, reactivateOrganization, deleteOrganization, issueDomainChallenge, markDomainVerified, renewVerifyToken, toIndexRecord, type Organization } from '../db/queries/organizations.js';
+import { checkMembership } from '../db/queries/orgMemberships.js';
+import { createOwnedOrganization } from '../db/queries/organizationRegistration.js';
 import { sendVerificationEmail } from '../services/email.js';
 import { generateRepresentativeQueries } from '../services/llmEnrichment.js';
 import { buildConfig } from '../config/index.js';
@@ -169,11 +172,11 @@ interface UpdateOrgBody {
 
 interface ApiError {
   status: 400 | 409;
-  body: { error: string; detail: string };
+  body: { error: string; detail: string; field?: string };
 }
 
 const validationError = (detail: string): ApiError => ({ status: 400, body: { error: 'VALIDATION', detail } });
-const conflictError = (detail: string): ApiError => ({ status: 409, body: { error: 'CONFLICT', detail } });
+const conflictError = (detail: string, field?: string): ApiError => ({ status: 409, body: { error: 'CONFLICT', detail, ...(field ? { field } : {}) } });
 
 /**
  * A blank domain means "no domain": the entry is then anchored to host39 (personal)
@@ -220,13 +223,13 @@ function validateCreateBody(body: CreateOrgBody, path: HostingPath): ApiError | 
  * cannot block MIT.
  */
 async function findConflict(identifier: string, domain: string | null, selfOrgId?: string): Promise<ApiError | null> {
-  const byIdentifier = await findProvenByIdentifier(identifier);
-  if (byIdentifier && byIdentifier.orgId !== selfOrgId) {
-    return conflictError(`identifier "${identifier}" is already registered`);
-  }
   const byDomain = domain ? await findProvenByDomain(domain) : null;
   if (byDomain && byDomain.orgId !== selfOrgId) {
-    return conflictError(`domain "${domain}" is already registered`);
+    return conflictError(`domain "${domain}" is already registered`, 'domain');
+  }
+  const byIdentifier = await findProvenByIdentifier(identifier);
+  if (byIdentifier && byIdentifier.orgId !== selfOrgId) {
+    return conflictError(`identifier "${identifier}" is already registered`, 'identifier');
   }
   return null;
 }
@@ -235,7 +238,7 @@ async function findConflict(identifier: string, domain: string | null, selfOrgId
 async function findSlugConflict(orgId: string): Promise<ApiError | null> {
   const holder = await findByOrgId(orgId);
   if (!holder) return null;
-  if (!isAbandonedClaim(holder)) return conflictError(`org_id "${orgId}" is already taken`);
+  if (!isAbandonedClaim(holder)) return conflictError(`org_id "${orgId}" is already taken`, 'org_id');
   await deleteOrganization(holder.orgId);
   return null;
 }
@@ -245,7 +248,14 @@ function isUniqueViolation(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: unknown }).code === '23505';
 }
 
-const RACE_CONFLICT = conflictError('identifier or domain was registered concurrently — retry');
+function raceConflict(err: unknown): ApiError {
+  const constraint = (err as { constraint_name?: string }).constraint_name;
+  const field = constraint === 'organizations_org_id_key' ? 'org_id'
+    : constraint === 'uq_organizations_verified_domain' || constraint === 'organizations_domain_key' ? 'domain'
+    : constraint === 'uq_organizations_proven_identifier' || constraint === 'organizations_identifier_key' ? 'identifier'
+    : undefined;
+  return conflictError(field ? `${field} was registered concurrently; choose another value` : 'Registration conflicts with another entry; check its identifier and domain.', field);
+}
 
 /** Current stored entry as an EntryProfile, for updateEntryProfile. */
 function profileOf(org: Organization): EntryProfile {
@@ -363,6 +373,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       },
       response: {
         201: INDEX_RECORD_SCHEMA,
+        401: apiErrorSchema,
         409: apiErrorSchema,
         400: apiErrorSchema,
         403: apiErrorSchema,
@@ -408,9 +419,12 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       buildConfig().llmEnrichment,
     );
 
-    let org: Organization;
+    const cardValidation = await validateRegistrationCard(body.registry_url, profile.mediaType, {
+      guard: buildConfig().outbound.allowPrivateHosts ? allowAnyUrl : publicUrlGuard,
+    });
+    let org: Organization | null;
     try {
-      org = await insertOrganization({
+      org = await createOwnedOrganization({
         orgId:                body.org_id,
         displayName:          body.display_name,
         domain:               body.domain?.toLowerCase() ?? null,
@@ -429,13 +443,19 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
         version:              body.version,
         trustManifest:        body.trust_manifest,
         representativeQueries,
-      });
+        cardValidation,
+      }, user.userId, user.tokenVersion ?? 0);
     } catch (err) {
-      if (isUniqueViolation(err)) return reply.code(RACE_CONFLICT.status).send(RACE_CONFLICT.body);
+      if (isUniqueViolation(err)) {
+        const conflict = raceConflict(err);
+        return reply.code(conflict.status).send(conflict.body);
+      }
       throw err;
     }
 
-    await insertMembership(user.userId, org.orgId, 'admin');
+    if (!org) {
+      return reply.code(401).send({ error: 'UNAUTHORIZED', detail: 'session expired; please sign in again' });
+    }
     await sendVerificationEmail(body.contact_email, verifyToken, body.org_id);
     fastify.analytics.capture('entry_registered', {
       hosting_path: path,
@@ -625,11 +645,17 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       return reply.code(400).send({ error: 'VALIDATION', detail: 'registry_url must start with https://' });
     }
 
-    const next = updateEntryProfile(profileOf(current), {
-      domain: body.domain,
-      publisherDisplayName: body.publisher?.displayName,
-      extensions: body.extensions,
-    });
+    let next: EntryProfile;
+    try {
+      next = updateEntryProfile(profileOf(current), {
+        domain: body.domain,
+        publisherDisplayName: body.publisher?.displayName,
+        extensions: body.extensions,
+      });
+    } catch (err) {
+      if (err instanceof EntryProfileError) return reply.code(400).send(validationError(err.message).body);
+      throw err;
+    }
     const conflict = await findConflict(next.identifier, body.domain?.toLowerCase() ?? null, current.orgId);
     if (conflict) return reply.code(conflict.status).send(conflict.body);
 
@@ -648,6 +674,11 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
           )
         : undefined;
 
+    const cardValidation = body.registry_url !== undefined
+      ? await validateRegistrationCard(body.registry_url, current.mediaType, {
+          guard: buildConfig().outbound.allowPrivateHosts ? allowAnyUrl : publicUrlGuard,
+        })
+      : undefined;
     let updated: Organization | null;
     try {
       updated = await updateOrganization(request.params.org_id, {
@@ -665,9 +696,13 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
         // No ?? null here: undefined (omitted) must stay distinct from null (clear).
         trustManifest:   body.trust_manifest,
         representativeQueries,
+        cardValidation,
       });
     } catch (err) {
-      if (isUniqueViolation(err)) return reply.code(RACE_CONFLICT.status).send(RACE_CONFLICT.body);
+      if (isUniqueViolation(err)) {
+        const conflict = raceConflict(err);
+        return reply.code(conflict.status).send(conflict.body);
+      }
       throw err;
     }
     if (!updated) {

@@ -1,7 +1,13 @@
 import { PageShell } from "@/components/PageShell";
+import Link from "next/link";
 import { DEFAULT_POSTHOG_HOST } from "@/lib/posthogHosts";
 
-export const metadata = { title: "Privacy - NANDA Index" };
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Privacy",
+  description: "What NANDA Index collects and why.",
+};
 
 const gaId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 const posthogKey = process.env.NEXT_PUBLIC_POSTHOG_KEY;
@@ -75,8 +81,13 @@ export default function PrivacyPage() {
         <section>
           <h2 className="mb-2 font-display text-base font-semibold text-ink-strong">Contact</h2>
           <p>
-            To ask about or remove your data, delete your entries from the dashboard or contact the
-            NANDA Index team via the project&apos;s GitHub repository.
+            You can edit your display name, change your password, sign out every device, or delete
+            your account in <Link href="/dashboard/settings" className="text-brand-600 underline">Account settings</Link>.
+            Account deletion removes your profile, sign-in email, memberships, and account tokens.
+            You must first delete entries for which you are the only administrator. Shared entries
+            remain published with their existing public and contact data, including any email addresses
+            in those records. To ask about other data, contact the NANDA Index team via the
+            project&apos;s GitHub repository.
           </p>
         </section>
       </div>

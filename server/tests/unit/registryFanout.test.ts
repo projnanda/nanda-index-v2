@@ -1,5 +1,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { fanOutAgentSearch } from '../../src/services/registryFanout.js';
+import {
+  fanOutAgentSearch, isCatalogDocumentUrl, searchCatalogEntries, wellKnownCatalogUrl,
+} from '../../src/services/registryFanout.js';
 import { allowAnyUrl, OutboundUrlError } from '../../src/lib/outboundUrl.js';
 import type { RankedOrganization } from '../../src/db/queries/organizations.js';
 
@@ -267,5 +269,99 @@ describe('fanOutAgentSearch', () => {
     const result = await fanOutAgentSearch(orgs, 'query', { urlGuard: allowAnyUrl, concurrency: 2 });
     expect(result.unreachable).toEqual(['ent-a']);
     expect(result.candidates.map((c) => c.org.orgId).sort()).toEqual(['ent-b', 'smb-c']);
+  });
+});
+
+describe('fanOutAgentSearch — static catalog documents (#52)', () => {
+  const card = 'application/a2a-agent-card+json';
+  const catalog = (entries: unknown[]) =>
+    new Response(JSON.stringify({ specVersion: '1.0', entries }), { status: 200 });
+
+  it('searches a registry_url that is itself a catalog document locally, never appending /agents/search', async () => {
+    const org = makeOrg({
+      orgId: 'static-doc', domain: 'static.example.com',
+      registryUrl: 'https://static.example.com/.well-known/ai-catalog.json',
+    });
+    const fetchMock = vi.fn(async (url: string) => {
+      expect(url).toBe('https://static.example.com/.well-known/ai-catalog.json');
+      return catalog([
+        { identifier: 'flights', displayName: 'Flight Booking', mediaType: card, url: 'https://static.example.com/flights' },
+        { identifier: 'hotels', displayName: 'Hotel Desk', mediaType: card, url: 'https://static.example.com/hotels' },
+      ]);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fanOutAgentSearch([org], 'Find flight booking agents', { urlGuard: allowAnyUrl });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result.unreachable).toEqual([]);
+    expect(result.candidates.map((c) => c.entry.identifier)).toEqual(['flights']);
+  });
+
+  it('falls back to the origin\'s well-known catalog when a registry base has no /agents/search', async () => {
+    const org = makeOrg({ orgId: 'no-api', domain: 'noapi.example.com', registryUrl: 'https://noapi.example.com' });
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.startsWith('https://noapi.example.com/agents/search')) return new Response('not found', { status: 404 });
+      expect(url).toBe('https://noapi.example.com/.well-known/ai-catalog.json');
+      return catalog([{ identifier: 'verifier', displayName: 'Verifier', mediaType: card,
+        url: 'https://noapi.example.com/cards/verifier.json', tags: ['identity'] }]);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fanOutAgentSearch([org], 'identity verifier', { urlGuard: allowAnyUrl });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result.unreachable).toEqual([]);
+    expect(result.candidates.map((c) => c.entry.identifier)).toEqual(['verifier']);
+  });
+
+  it('reports a reachable static catalog with no matching entries as reachable, with no candidates', async () => {
+    const org = makeOrg({ orgId: 'static-miss', domain: 'miss.example.com',
+      registryUrl: 'https://miss.example.com/ai-catalog.json' });
+    vi.stubGlobal('fetch', vi.fn(async () =>
+      catalog([{ identifier: 'mail', displayName: 'Mail Agent', mediaType: card, url: 'https://miss.example.com/mail' }])));
+
+    const result = await fanOutAgentSearch([org], 'flight booking', { urlGuard: allowAnyUrl });
+
+    expect(result.unreachable).toEqual([]);
+    expect(result.candidates).toEqual([]);
+  });
+
+  it('still marks an org unreachable when neither the search API nor the well-known catalog answers', async () => {
+    const org = makeOrg({ orgId: 'dead', registryUrl: 'https://dead.example.com/registry' });
+    const fetchMock = vi.fn(async (_url: string) => new Response('gone', { status: 404 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fanOutAgentSearch([org], 'flights', { urlGuard: allowAnyUrl });
+
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      'https://dead.example.com/registry/agents/search?q=flights',
+      'https://dead.example.com/.well-known/ai-catalog.json',
+    ]);
+    expect(result.unreachable).toEqual(['dead']);
+  });
+});
+
+describe('catalog URL helpers', () => {
+  it('tells a catalog document from a registry API base', () => {
+    expect(isCatalogDocumentUrl('https://noinfra.ai/.well-known/ai-catalog.json')).toBe(true);
+    expect(isCatalogDocumentUrl('https://x.example.com/catalog.JSON?v=2')).toBe(true);
+    expect(isCatalogDocumentUrl('https://travel26.net/api')).toBe(false);
+    expect(isCatalogDocumentUrl('https://solara.associates')).toBe(false);
+    expect(isCatalogDocumentUrl('not a url')).toBe(false);
+  });
+
+  it('derives the well-known catalog from any URL on the origin', () => {
+    expect(wellKnownCatalogUrl('https://travel26.net/api/')).toBe('https://travel26.net/.well-known/ai-catalog.json');
+    expect(wellKnownCatalogUrl('https://solara.associates')).toBe('https://solara.associates/.well-known/ai-catalog.json');
+  });
+
+  it('ranks entries by query words matched, ignoring stop words and plurals', () => {
+    const entry = (identifier: string, displayName: string, description?: string) =>
+      ({ identifier, displayName, mediaType: 'application/a2a-agent-card+json', url: `https://x/${identifier}`, description });
+    const entries = [entry('hotels', 'Hotel Desk'), entry('flights', 'Flight Booking'), entry('alerts', 'Travel Alerts', 'flight delays')];
+
+    expect(searchCatalogEntries(entries, 'Find flight booking agents').map((e) => e.identifier)).toEqual(['flights', 'alerts']);
+    expect(searchCatalogEntries(entries, 'find agents')).toEqual([]);
   });
 });

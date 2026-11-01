@@ -6,7 +6,7 @@
  * e.g. urn:air:skyblue.com:agent:refunds, urn:air:example.com:catalog:root.
  * Every NANDA Index entry is keyed on one of these — the publisher FQDN is the
  * ownership anchor (proven via DNS TXT challenge), so it must be a real FQDN.
- * Individuals without a domain are anchored to their card host instead
+ * Individuals without a domain are anchored to the Host39 naming authority
  * (urn:air:host39.org:personal:<email>), with the email carried as the
  * entry's `subjectAccount` extension. The email is used verbatim (lowercased,
  * percent-encoding only what a URN segment can't hold), so the mapping is
@@ -21,7 +21,7 @@ export interface ParsedAirUrn {
   readonly shortName: string;
 }
 
-/** The third-party card host that anchors identifiers for domain-less individuals. */
+/** The naming authority for domain-less identifiers, independent of card hosting. */
 export const PERSONAL_CARD_HOST = {
   domain: 'host39.org',
   displayName: 'Host39',

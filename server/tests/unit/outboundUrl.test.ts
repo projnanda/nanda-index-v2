@@ -107,6 +107,26 @@ describe('pinned outbound fetch (DNS-rebinding defence)', () => {
     await expect(guard('https://evil.example.com/agents')).rejects.toBeInstanceOf(OutboundUrlError);
   });
 
+  it.each(['64:ff9b::127.0.0.1', '64:ff9b:1::a00:1', '2002:7f00:1::', '2001:0:4136:e378:8000:63bf:80ff:fffe'])(
+    'rejects a redirect to %s before following it', async (address) => {
+      const requests = vi.fn();
+      const server = createServer((_request, response) => {
+        requests();
+        response.writeHead(302, { location: `http://[${address}]/internal` });
+        response.end();
+      });
+      await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+      const { port } = server.address() as AddressInfo;
+      try {
+        await expect(pinnedFetch(['127.0.0.1'])(`http://no-dns.invalid:${port}/`, { redirect: 'error' }))
+          .rejects.toMatchObject({ cause: { message: 'unexpected redirect' } });
+        expect(requests).toHaveBeenCalledOnce();
+      } finally {
+        await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+      }
+    },
+  );
+
   it('publicUrlGuardWith returns a fetch pinned to the addresses it validated, resolving only once', async () => {
     const lookup = vi.fn<HostLookup>().mockResolvedValue(['93.184.216.34']);
     const guarded = await publicUrlGuardWith(lookup)('https://ok.example.com/agents');

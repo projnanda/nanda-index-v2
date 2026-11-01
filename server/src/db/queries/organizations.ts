@@ -1,12 +1,19 @@
+import type { CardValidation } from '../../services/cardValidation.js';
 import type postgres from 'postgres';
+import { createHash } from 'node:crypto';
 import { getSql } from '../client.js';
 import { CATALOG_MEDIA_TYPES, DEFAULT_MEDIA_TYPE, ENTERPRISE_MEDIA_TYPE, NANDA_MEDIA_TYPE, POINTER_ONLY_MEDIA_TYPE } from '../../lib/mediaTypes.js';
 
 /** Postgres type OID for `text` — the element type of org_id arrays bound as parameters. */
 const TEXT_OID = 25;
+
 import type { IndexRecord, Moderation, PublisherBlock, TrustManifest } from '../../types/api/index-record.js';
 import { NANDA_EXTENSION, type CatalogExtensions } from '../../lib/entryProfile.js';
 import type { IndexEntry } from '../../types/api/index-entry.js';
+
+function hashVerifyToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
 
 /** Domain type — camelCase (postgres.camel maps snake_case columns). */
 export interface Organization {
@@ -17,6 +24,8 @@ export interface Organization {
   contactEmail: string;
   registryUrl: string | null;
   emailVerified: boolean;
+  emailVerifiedAt?: Date | null;
+  cardValidation?: CardValidation | null;
   verifyToken: string | null;
   verifyTokenExpiresAt: Date | null;
   domainVerified: boolean;
@@ -50,6 +59,7 @@ export interface Organization {
 }
 
 export interface InsertOrgParams {
+  cardValidation?: CardValidation;
   orgId: string;
   displayName: string;
   domain?: string | null;
@@ -71,6 +81,7 @@ export interface InsertOrgParams {
 }
 
 export interface UpdateOrgParams {
+  cardValidation?: CardValidation;
   displayName?: string;
   domain?: string;
   identifier?: string;
@@ -101,6 +112,9 @@ export function toIndexRecord(org: Organization): IndexRecord {
     ttl_seconds:    org.ttlSeconds,
     status:         org.status,
     email_verified: org.emailVerified,
+    email_verified_at: org.emailVerifiedAt?.toISOString() ?? null,
+    domain_verified_at: org.domainVerifiedAt?.toISOString() ?? null,
+    card_validation: org.cardValidation ?? null,
     domain_verified: org.domainVerified,
     created_at:     org.createdAt.toISOString(),
     updated_at:     org.updatedAt.toISOString(),
@@ -148,6 +162,9 @@ export function toIndexEntry(org: Organization): IndexEntry {
         status:         org.status,
         ttlSeconds:     org.ttlSeconds,
         emailVerified:  org.emailVerified,
+        emailVerifiedAt: org.emailVerifiedAt?.toISOString() ?? null,
+        domainVerifiedAt: org.domainVerifiedAt?.toISOString() ?? null,
+        cardValidation: org.cardValidation ?? null,
         domainVerified: org.domainVerified,
         createdAt:      org.createdAt.toISOString(),
         domain:         org.domain,
@@ -310,17 +327,18 @@ export async function countListedEntries(): Promise<number> {
  * Inserts a new organization with status='pending'.
  * Returns the inserted organization.
  */
-export async function insertOrganization(params: InsertOrgParams): Promise<Organization> {
-  const sql = getSql();
+export async function insertOrganization(
+  params: InsertOrgParams, sql: postgres.Sql | postgres.TransactionSql = getSql(),
+): Promise<Organization> {
   const rows = await sql<Organization[]>`
     INSERT INTO organizations
       (org_id, display_name, domain, contact_email, registry_url,
        verify_token, verify_token_expires_at, ttl_seconds,
        identifier, media_type, description, tags, publisher, extensions, entry_data,
-       version, trust_manifest, representative_queries)
+       version, trust_manifest, representative_queries, card_validation)
     VALUES
       (${params.orgId}, ${params.displayName}, ${params.domain ?? null}, ${params.contactEmail},
-       ${params.registryUrl ?? null}, ${params.verifyToken}, ${params.verifyTokenExpiresAt},
+       ${params.registryUrl ?? null}, ${hashVerifyToken(params.verifyToken)}, ${params.verifyTokenExpiresAt},
        ${params.ttlSeconds ?? 86400},
        ${params.identifier},
        ${params.mediaType ?? DEFAULT_MEDIA_TYPE},
@@ -331,7 +349,8 @@ export async function insertOrganization(params: InsertOrgParams): Promise<Organ
        ${params.entryData ? sql.json(JSON.parse(JSON.stringify(params.entryData))) : null},
        ${params.version ?? null},
        ${params.trustManifest ? sql.json(JSON.parse(JSON.stringify(params.trustManifest))) : null},
-       ${sql.array(params.representativeQueries ?? [])})
+       ${sql.array(params.representativeQueries ?? [])},
+       ${params.cardValidation ? sql.json(JSON.parse(JSON.stringify(params.cardValidation))) : null})
     RETURNING *
   `;
   return rows[0]!;
@@ -365,6 +384,7 @@ export async function updateOrganization(
     : null;
   const rows = await sql<Organization[]>`
     UPDATE organizations SET
+      card_validation  = COALESCE(${patch.cardValidation ? sql.json(JSON.parse(JSON.stringify(patch.cardValidation))) : null}, card_validation),
       display_name     = COALESCE(${patch.displayName ?? null}, display_name),
       domain           = COALESCE(${newDomain}, domain),
       identifier       = COALESCE(${patch.identifier ?? null}, identifier),
@@ -412,22 +432,24 @@ export async function updateOrganization(
  */
 export async function markEmailVerifiedByToken(token: string): Promise<Organization | null> {
   const sql = getSql();
+  const tokenHash = hashVerifyToken(token);
   return sql.begin(async (tx) => {
     const [target] = await tx<{ identifier: string }[]>`
-      SELECT identifier FROM organizations WHERE verify_token = ${token}
+      SELECT identifier FROM organizations WHERE verify_token = ${tokenHash}
     `;
     if (target) await lockClaim(tx, target.identifier);
     const rows = await tx<Organization[]>`
       UPDATE organizations SET
         ever_proven              = (ever_proven OR domain IS NULL),
         email_verified           = TRUE,
+        email_verified_at        = NOW(),
         verify_token             = NULL,
         verify_token_expires_at  = NULL,
         status = CASE
           WHEN domain IS NULL AND status = 'pending' THEN 'active'
           ELSE status END,
         updated_at               = NOW()
-      WHERE verify_token = ${token}
+      WHERE verify_token = ${tokenHash}
         AND verify_token_expires_at > NOW()
       RETURNING *
     `;
@@ -463,7 +485,7 @@ export async function renewVerifyToken(
   const latestPreviousExpiry = new Date(expiresAt.getTime() - cooldownMs);
   const rows = await sql<Organization[]>`
     UPDATE organizations SET
-      verify_token            = ${token},
+      verify_token            = ${hashVerifyToken(token)},
       verify_token_expires_at = ${expiresAt},
       updated_at              = NOW()
     WHERE org_id = ${orgId} AND NOT email_verified

@@ -7,6 +7,7 @@ import { Suspense } from "react";
 import { PageShell } from "@/components/PageShell";
 import { ApiError, loginWithPassword, registerWithPassword, getAuthProviders } from "@/lib/nanda-api";
 import { setAuthToken } from "@/lib/auth";
+import { NEW_PASSWORD_GUIDANCE, newPasswordError } from "@/lib/passwordRules";
 
 const API_BASE = process.env.NEXT_PUBLIC_NANDA_INDEX_API_URL ?? "";
 
@@ -42,6 +43,11 @@ function LoginPageInner() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const passwordError = mode === "register" ? newPasswordError(password) : null;
+    if (passwordError) {
+      setError(passwordError);
+      return;
+    }
     setLoading(true);
     setError(null);
 
@@ -145,11 +151,15 @@ function LoginPageInner() {
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={8}
+              autoComplete={mode === "register" ? "new-password" : "current-password"}
+              aria-describedby={mode === "register" ? "password-guidance" : undefined}
               className={inputClass}
             />
 
+            {mode === "register" && <p id="password-guidance" className="text-xs text-ink-medium">{NEW_PASSWORD_GUIDANCE}</p>}
+
             {error && (
-              <p className="rounded-control border border-[#b42318]/30 bg-[#fef3f2] px-4 py-2.5 text-sm text-[#b42318]">
+              <p role="alert" className="rounded-control border border-[#b42318]/30 bg-[#fef3f2] px-4 py-2.5 text-sm text-[#b42318]">
                 {error}
               </p>
             )}

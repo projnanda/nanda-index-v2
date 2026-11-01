@@ -1,5 +1,6 @@
 import { randomBytes, createHash } from 'node:crypto';
 import { getSql } from '../client.js';
+import type { User } from './users.js';
 
 /** Domain type — camelCase (postgres.camel maps snake_case columns). */
 export interface PasswordResetToken {
@@ -63,4 +64,25 @@ export async function markResetTokenUsed(id: string): Promise<void> {
   await sql`
     UPDATE password_reset_tokens SET used_at = NOW() WHERE id = ${id}
   `;
+}
+
+/** Consume a reset and invalidate all competing resets in the password transaction. */
+export async function completePasswordReset(tokenHash: string, passwordHash: string): Promise<User | null> {
+  return getSql().begin(async (tx) => {
+    const [candidate] = await tx<PasswordResetToken[]>`SELECT * FROM password_reset_tokens
+      WHERE token_hash = ${tokenHash} AND used_at IS NULL AND expires_at > clock_timestamp() LIMIT 1`;
+    if (!candidate) return null;
+    // All password mutations lock the account before its tokens. Recheck the
+    // token afterward: another reset or a signed-in change may have consumed it.
+    const [account] = await tx`SELECT id FROM users WHERE id = ${candidate.userId} FOR UPDATE`;
+    if (!account) return null;
+    const [valid] = await tx`SELECT id FROM password_reset_tokens WHERE id = ${candidate.id}
+      AND used_at IS NULL AND expires_at > clock_timestamp() FOR UPDATE`;
+    if (!valid) return null;
+    const [user] = await tx<User[]>`UPDATE users SET password_hash = ${passwordHash},
+      token_version = token_version + 1, updated_at = NOW() WHERE id = ${candidate.userId} RETURNING *`;
+    await tx`DELETE FROM password_reset_tokens WHERE user_id = ${candidate.userId}`;
+    await tx`DELETE FROM account_deletion_tokens WHERE user_id = ${candidate.userId}`;
+    return user ?? null;
+  });
 }

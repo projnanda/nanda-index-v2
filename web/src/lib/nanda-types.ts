@@ -1,3 +1,9 @@
+export interface CardValidation {
+  status: "valid" | "invalid" | "unavailable" | "not_checked";
+  checkedAt: string | null;
+  detail: string;
+}
+
 export type OrgStatus = "active" | "pending" | "suspended";
 
 export interface PublisherBlock {
@@ -55,6 +61,9 @@ export interface IndexRecord {
   ttl_seconds: number;
   status: OrgStatus;
   email_verified: boolean;
+  email_verified_at?: string | null;
+  domain_verified_at?: string | null;
+  card_validation?: CardValidation | null;
   domain_verified: boolean;
   created_at: string;
   updated_at: string;

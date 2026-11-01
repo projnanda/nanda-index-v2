@@ -86,12 +86,17 @@ export default function DashboardPage() {
             <p className="font-semibold text-ink-strong">{user.display_name ?? user.email}</p>
             <p className="text-sm text-ink-medium">{user.email}</p>
           </div>
+          <div className="flex flex-wrap items-center justify-end gap-3">
+          <Link href="/dashboard/settings" className="text-sm font-medium text-brand-600 underline">
+            Account settings
+          </Link>
           <button
             onClick={signOut}
             className="inline-flex items-center justify-center h-9 rounded-control border-2 border-line bg-surface-light px-3 text-sm font-medium text-ink hover:border-line-strong transition"
           >
             Sign out
           </button>
+          </div>
         </div>
 
         {/* Organizations */}
