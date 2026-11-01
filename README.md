@@ -194,13 +194,17 @@ it.
 The `javascript:` and `vbscript:` tests have two tiers, because the scheme
 names are also ordinary English. Under a URL-shaped key — `url`, `uri`,
 `href`, `link`, `src`, or anything ending in one, singular or plural — any
-form is refused: a value there is going to be rendered as a link. Under any
-other key the scheme must be followed immediately by its payload, so
-`javascript:alert(1)` is refused while a skills list entry of
-`JavaScript: React` is left alone. That does leave `javascript: alert(1)`,
-with a space, accepted under a key that is not URL-shaped. Closing it would
-mean rejecting the skills list, and an index that refuses ordinary metadata is
-a defect of its own. Object keys are checked as well, strictly.
+form is refused: a value there is going to be rendered as a link. Strictness
+is inherited, so everything nested under such a key stays strict, including
+`links: [{ "target": … }]`.
+
+Under any other key one narrow exemption applies, for prose that merely opens
+with a scheme name. After the colon there must be whitespace, and then nothing
+that can call, assign, terminate, quote, subscript or percent-encode. A skills
+list entry of `JavaScript: React`, or `JavaScript: Node.js, Deno & Bun`, is
+left alone; `javascript: alert(1)`, `javascript: %61lert%281%29` and
+`javascript: onerror=alert;throw 1` are all refused. Object keys get the same
+treatment as values.
 
 **Namespaces are open by default.** `EXTENSION_NAMESPACE_POLICY=anchored`
 restricts a registrant to `org.projectnanda` plus the reverse-DNS form of the

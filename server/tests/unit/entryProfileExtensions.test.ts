@@ -268,3 +268,64 @@ describe('extensions — object keys', () => {
       .not.toThrow();
   });
 });
+
+const NBSP = String.fromCharCode(160);
+
+/**
+ * Re-review on #133: the first prose exemption keyed on "is there a space
+ * after the colon", which turned out to exempt every payload that bothered to
+ * add one. The exemption is now defined by what a payload needs — brackets,
+ * assignment, terminators, quotes, percent-encoding — so these stay refused
+ * while the prose below stays accepted.
+ */
+describe('extensions — the prose exemption cannot be used as a bypass', () => {
+  const bypasses: ReadonlyArray<readonly [string, string]> = [
+    ['a plain space', 'javascript: alert(1)'],
+    ['a non-breaking space', `javascript:${NBSP}alert(1)`],
+    ['percent-encoding the call', 'javascript: %61lert%281%29'],
+    ['a tagged template call', 'javascript: alert`1`'],
+    ['a comment before the call', 'javascript:  /**/alert(1)'],
+    ['assignment and a throw', 'javascript: onerror=alert;throw 1'],
+  ];
+
+  it.each(bypasses)('refuses %s, under a key that is not URL-shaped', (_label, value) => {
+    expect(withExtensions({ 'com.example': { skills: [value] } })).toThrow(EntryProfileError);
+  });
+
+  it('still accepts prose with punctuation that cannot execute', () => {
+    expect(withExtensions({ 'com.example': { languages: 'JavaScript: Node.js, Deno & Bun' } }))
+      .not.toThrow();
+  });
+});
+
+describe('extensions — URL-shaped strictness is inherited, not reset', () => {
+  it('refuses a payload inside an array of link objects', () => {
+    // The most natural way to write a list of links, and the shape that
+    // escaped the check entirely before strictness was inherited.
+    expect(withExtensions({
+      'com.example': { links: [{ label: 'x', target: 'javascript: alert(1)' }] },
+    })).toThrow(EntryProfileError);
+  });
+
+  it('refuses a payload inside an object of links', () => {
+    expect(withExtensions({ 'com.example': { links: { home: 'javascript: alert(1)' } } }))
+      .toThrow(EntryProfileError);
+  });
+
+  it('leaves an ordinary link alone', () => {
+    expect(withExtensions({
+      'com.example': { links: [{ label: 'Home', target: 'https://example.com' }] },
+    })).not.toThrow();
+  });
+});
+
+describe('extensions — prose keys', () => {
+  it('accepts a key that merely opens with a scheme name', () => {
+    expect(withExtensions({ 'com.example': { 'JavaScript: notes': 'tooling' } })).not.toThrow();
+  });
+
+  it('still refuses a key that could execute', () => {
+    expect(withExtensions({ 'com.example': { 'javascript: alert(1)': 'x' } }))
+      .toThrow(/as a key/);
+  });
+});

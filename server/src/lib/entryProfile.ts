@@ -171,27 +171,31 @@ function isUrlShapedKey(key: string): boolean {
 }
 
 /**
- * Review on #133 found the first version rejecting ordinary metadata: a skills
- * list entry of `"JavaScript: React"`, or `"JavaScript: ES2022, TypeScript"`,
- * matched the scheme test and came back 400. That is the same over-blocking
- * this file already rules out for `data:`, so the test is now two-tier.
+ * The exemption for prose that merely opens with a scheme name.
  *
- * Under a URL-shaped key the strict test applies — a value there is going to
- * be rendered as a link, and prose is not expected. Anywhere else the scheme
- * must be followed immediately by its payload, with no space: `javascript:alert(1)`
- * is refused, `JavaScript: React` is left alone.
+ * The first attempt allowed anything with a space after the colon, which
+ * re-review on #133 showed was no check at all: `javascript: alert(1)`,
+ * a non-breaking space, `javascript: %61lert%281%29`, a backtick call and
+ * `javascript:  /**\/alert(1)` all got through, and a browser runs every one.
  *
- * The gap that leaves is `javascript: alert(1)`, with a space, under a key
- * that is not URL-shaped — a browser would still run it. Closing it would mean
- * refusing the prose above, and a directory that rejects a skills list is a
- * defect too. The error message names the key so a registrant can tell which
- * rule they hit.
+ * So the exemption is now defined by what a payload needs rather than by
+ * spacing. After the colon there must be whitespace, and then nothing that
+ * can call, assign, terminate, quote, subscript or percent-encode. Prose
+ * passes — `JavaScript: ES2022, TypeScript`, `JavaScript: Node.js, Deno & Bun`
+ * — while anything that could execute does not.
+ */
+const PROSE_AFTER_SCHEME = /^\s*(?:javascript|vbscript)\s*:\s+[^()=`;%\\'"{}[\]<>]*$/i;
+
+/**
+ * Under a URL-shaped key nothing is exempt: a value there is going to be
+ * handed to an `href`, and prose is not expected. Everywhere else the prose
+ * exemption above applies, to keys as well as values.
  */
 function isActiveContentUrl(value: string, urlShaped: boolean): boolean {
   const bare = value.replace(CONTROL_CHARS, '');
   if (DATA_MARKUP_SCHEME.test(bare)) return true;
   if (!SCRIPT_SCHEME.test(bare)) return false;
-  return urlShaped || !/^\s*(?:javascript|vbscript)\s*:\s/i.test(bare);
+  return urlShaped || !PROSE_AFTER_SCHEME.test(bare);
 }
 
 function validateExtensionValues(extensions: CatalogExtensions | undefined): void {
@@ -214,13 +218,18 @@ function validateExtensionValues(extensions: CatalogExtensions | undefined): voi
     if (value !== null && typeof value === 'object') {
       for (const [key, item] of Object.entries(value)) {
         // Keys are published too, and a consumer that renders a key as a link
-        // is no less exposed than one that renders a value.
-        if (isActiveContentUrl(key, true)) {
+        // is no less exposed than one that renders a value. Prose keys such as
+        // `"JavaScript: notes"` get the same exemption values do.
+        if (isActiveContentUrl(key, false)) {
           throw new EntryProfileError(
             `${path} must not use a javascript:, vbscript: or data:text/html URL as a key`,
           );
         }
-        walk(item, `${path}.${key}`, isUrlShapedKey(key));
+        // Strictness is inherited, not reset: once inside `links`, every
+        // nested object and array below it stays strict. Without this,
+        // `{"links":[{"target":"javascript: alert(1)"}]}` — the most natural
+        // way to write a list of links — escaped the check entirely.
+        walk(item, `${path}.${key}`, urlShaped || isUrlShapedKey(key));
       }
     }
   };

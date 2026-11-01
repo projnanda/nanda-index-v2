@@ -204,10 +204,16 @@ const MIN_JWT_SECRET_LENGTH = 32;
  * var — but it used to be silent, so `Anchored` or a trailing space turned off
  * a policy the operator believed was on. Unrecognised values now say so.
  */
+let namespacePolicyWarned = false;
+
 function readNamespacePolicy(): 'anchored' | 'open' {
   const raw = optionalEnv('EXTENSION_NAMESPACE_POLICY', 'open');
   if (raw === 'anchored') return 'anchored';
-  if (raw !== 'open') {
+  // buildConfig() runs per request on several routes, so without this the
+  // warning repeats for the life of the process — re-review on #133 counted
+  // 283 copies after about 150 requests.
+  if (raw !== 'open' && !namespacePolicyWarned) {
+    namespacePolicyWarned = true;
     console.warn(
       `WARNING: EXTENSION_NAMESPACE_POLICY="${raw}" is not recognised — using "open". ` +
       'The only value that enables namespace anchoring is exactly "anchored".',
