@@ -11,6 +11,7 @@ import { ApiError, getIndexRecord, searchIndexRecords, resolveAgent, fetchRegist
 import { CatalogEntryNotFound } from "@/lib/catalogHop";
 import type { IndexRecord, IndexCatalogEntry, SearchResponse, ResolveResponse, CatalogEntry, CatalogDocument, AgenticSearchResponse } from "@/lib/nanda-types";
 import { entryOps } from "@/lib/air";
+import { noUrlExplanation } from "@/lib/svcbPointer";
 
 // urn:air:<publisher-FQDN>:<namespace...>:<short-name>
 const URN_RE = /^urn:air:[^:\s]+(:[^:\s]+){2,}$/i;
@@ -108,7 +109,7 @@ export default function QueryPage() {
         let catalog: CatalogDocument | undefined;
         let agentError: string | undefined;
         if (!indexData.entry.url) {
-          agentError = "This entry has no URL to follow (inline data or custom discovery).";
+          agentError = noUrlExplanation(indexData.entry);
         } else {
           try {
             const hop = await fetchRegistryHop(indexData);
