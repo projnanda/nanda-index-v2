@@ -136,7 +136,7 @@ The JSON fixture contains public key, payload, canonical bytes and signature;
 it was generated with Node's crypto API independently of repository signing
 helpers. No private key is retained. Consumers can reuse it for compatibility.
 
-Run with Node 20 and a disposable migrated PostgreSQL database:
+Run with Node 22 and a disposable migrated PostgreSQL database:
 
 ```sh
 # Set DATABASE_URL for the disposable database; from server/:
