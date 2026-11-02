@@ -3,7 +3,6 @@ import { afterEach, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import NewOrgPage from "./page";
-import { REGISTRY_URL_ERROR } from "@/lib/org-validation";
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn(), back: vi.fn() }) }));
 vi.mock("@/hooks/useRequireAuth", () => ({ useRequireAuth: () => {} }));
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -19,8 +18,7 @@ it("uses the shared URL validation before leaving the catalog step", async () =>
   fireEvent.change(url, { target: { value: "https://?" } });
   await userEvent.click(screen.getByRole("button", { name: "Continue →" }));
   expect(url.getAttribute("aria-invalid")).toBe("true");
-  // registry_url is https-only (#75), so the catalog step says https:// only.
-  expect(document.getElementById(url.getAttribute("aria-describedby")!)!.textContent).toBe(REGISTRY_URL_ERROR);
+  expect(document.getElementById(url.getAttribute("aria-describedby")!)!.textContent).toBe("Enter a valid URL starting with http:// or https://.");
   expect(screen.queryByRole("button", { name: "Register" })).toBeNull();
 });
 
