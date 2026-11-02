@@ -95,15 +95,17 @@ export async function registerAccountVerificationRoutes(fastify: FastifyInstance
       return reply.send({ ok: true, already_verified: true });
     }
 
-    const token = await issueAccountVerifyToken(user.id);
-    if (!token) {
+    const issued = await issueAccountVerifyToken(user.id);
+    if (!issued) {
       return reply.code(429).send({
         error: 'RESEND_COOLDOWN',
         detail: 'a verification email was sent recently; please wait a minute before requesting another',
       });
     }
 
-    await sendAccountVerificationEmail(user.email, token);
+    // The address the token is bound to, not user.email read above: an OAuth
+    // sign-in may have changed the email in between.
+    await sendAccountVerificationEmail(issued.email, issued.token);
     return reply.send({ ok: true });
   });
 }

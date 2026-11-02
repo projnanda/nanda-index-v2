@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import {
   upsertUser,
@@ -7,11 +8,13 @@ import {
   type User,
 } from '../db/queries/users.js';
 import {
-  isLoginLocked,
+  loginLock,
   recordLoginFailure,
   clearLoginFailures,
   clearAllLoginFailures,
+  lockoutPolicy,
 } from '../db/queries/loginFailures.js';
+import { clientNetworkKey } from '../lib/clientNetwork.js';
 import {
   createResetToken,
   findValidResetToken,
@@ -19,17 +22,63 @@ import {
   hashResetToken,
 } from '../db/queries/passwordResetTokens.js';
 import { issueAccountVerifyToken } from '../db/queries/accountVerification.js';
+import {
+  createLoginExchangeCode,
+  consumeLoginExchangeCode,
+  LOGIN_EXCHANGE_CODE_TTL_SECONDS,
+} from '../db/queries/loginExchangeCodes.js';
 import { sendPasswordResetEmail, sendAccountVerificationEmail } from '../services/email.js';
-import { buildConfig } from '../config/index.js';
+import { buildConfig, type Config } from '../config/index.js';
 import { createPasswordHasher, newPasswordError, newPasswordSchema } from '../lib/password.js';
 import { apiErrorSchema } from '../types/api/common.js';
 
 const INVALID_CREDENTIALS = { error: 'UNAUTHORIZED', detail: 'invalid email or password' } as const;
+/** 429 text per lock. Both depend only on the submitted email, never on
+ *  whether an account exists, so neither enumerates accounts. */
+const LOCK_DETAIL = {
+  network: 'too many failed sign-in attempts from this network; try again later',
+  account: 'too many failed sign-in attempts for this account; try again later or reset your password',
+} as const;
+const INVALID_LOGIN_CODE = {
+  error:  'INVALID_CODE',
+  detail: 'sign-in link is invalid or expired; please sign in again',
+} as const;
 
-/** Signs a session JWT carrying the user's current token_version (see plugins/jwt.ts). */
-function signSession(reply: FastifyReply, user: User, expiresIn: string): Promise<string> {
+/** HttpOnly cookie binding an OAuth sign-in code to the browser that finished the flow. */
+const LOGIN_NONCE_COOKIE = 'nanda_login_nonce';
+const LOGIN_EXCHANGE_PATH = '/auth/exchange';
+
+function loginNonceCookieOptions(config: Config) {
+  return {
+    path:     LOGIN_EXCHANGE_PATH,
+    httpOnly: true,
+    // Lax: sent on the web app's same-site fetch (nandaindex.org →
+    // api.nandaindex.org), never on a cross-site POST.
+    sameSite: 'lax',
+    secure:   config.nodeEnv === 'production',
+    maxAge:   LOGIN_EXCHANGE_CODE_TTL_SECONDS,
+  } as const;
+}
+
+/**
+ * Signs a session JWT carrying the user's current token_version and a session
+ * id (see plugins/jwt.ts). A token re-issued for an existing session passes
+ * that session's id, so signing out revokes both.
+ */
+export function signSession(
+  reply: FastifyReply,
+  user: User,
+  expiresIn: string,
+  sessionId: string = randomUUID(),
+): Promise<string> {
   return reply.jwtSign(
-    { userId: user.id, email: user.email, displayName: user.displayName, tokenVersion: user.tokenVersion },
+    {
+      userId: user.id,
+      email: user.email,
+      displayName: user.displayName,
+      tokenVersion: user.tokenVersion,
+      jti: sessionId,
+    },
     { expiresIn },
   );
 }
@@ -69,7 +118,12 @@ interface GitHubEmail {
  *   1. Exchange code for access token via @fastify/oauth2
  *   2. Fetch user profile from provider API
  *   3. Upsert user in DB
- *   4. Sign JWT and redirect to frontend /auth/callback?token=<jwt>
+ *   4. Redirect to frontend /auth/callback?code=<one-time code>, with the
+ *      code's nonce in an HttpOnly cookie; the web app POSTs the code to
+ *      /auth/exchange (sending the cookie) and gets the JWT in the body.
+ *      No JWT is ever put in a URL, and a code only works in the browser
+ *      that finished the OAuth flow, so a link carrying an attacker's code
+ *      cannot sign a victim in to the attacker's account.
  *
  * Decorator names: fastify.oauth2Google, fastify.oauth2Github
  * (matches the `oauth2X` template literal type from @fastify/oauth2)
@@ -96,6 +150,13 @@ export function googleEmailVerified(profile: { verified_email?: unknown }): bool
 export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void> {
   const config = buildConfig();
   const passwords = createPasswordHasher(config.auth.maxConcurrentHashes);
+
+  /** Sends the browser to the web app with a one-time code (see above). */
+  async function finishOAuthSignIn(reply: FastifyReply, user: User): Promise<FastifyReply> {
+    const { code, nonce } = await createLoginExchangeCode(user);
+    reply.setCookie(LOGIN_NONCE_COOKIE, nonce, loginNonceCookieOptions(config));
+    return reply.redirect(`${config.frontendUrl}/auth/callback?code=${code}`);
+  }
 
   // Per-route throttle for auth mutations (login/register/forgot/reset).
   // The rate-limit plugin runs in opt-in mode (global: false), so only routes
@@ -163,14 +224,50 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
       });
       if (wasJustCreated(user)) fastify.analytics.capture('user_signed_up', { method: 'google' });
 
-      const token = await signSession(reply, user, config.jwt.expiresIn);
-
-      return reply.redirect(`${config.frontendUrl}/auth/callback?token=${token}`);
+      return await finishOAuthSignIn(reply, user);
     } catch (err) {
       fastify.log.error(err, 'Google OAuth callback error');
       return reply.redirect(`${config.frontendUrl}/login?error=${oauthErrorCode(err)}`);
     }
   });
+
+  // Swap the one-time code from an OAuth callback for a session JWT. Needs
+  // the nonce cookie set by that callback, so only the browser that finished
+  // the OAuth flow can use the code.
+  fastify.post<{ Body: { code: string } }>(
+    LOGIN_EXCHANGE_PATH,
+    {
+      config: authRateLimit,
+      schema: {
+        tags: ['auth'],
+        summary: 'Exchange an OAuth sign-in code for a session token',
+        body: {
+          type: 'object',
+          required: ['code'],
+          additionalProperties: false,
+          properties: {
+            code: { type: 'string', minLength: 1, maxLength: 128 },
+          },
+        },
+        response: {
+          200: jwtResponseSchema,
+          400: apiErrorSchema,
+          429: apiErrorSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const nonce = request.cookies[LOGIN_NONCE_COOKIE];
+      const user = nonce ? await consumeLoginExchangeCode(request.body.code, nonce) : null;
+      // A failed attempt leaves the cookie alone: a planted link must not be
+      // able to cancel the sign-in this browser has in flight.
+      if (!user) return reply.code(400).send(INVALID_LOGIN_CODE);
+
+      reply.clearCookie(LOGIN_NONCE_COOKIE, loginNonceCookieOptions(config));
+      const token = await signSession(reply, user, config.jwt.expiresIn);
+      return reply.code(200).send({ token });
+    },
+  );
 
   // Email/password registration
   fastify.post<{ Body: { email: string; password: string; display_name?: string } }>(
@@ -222,8 +319,8 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
       // dashboard can show the "verify your email" prompt. Org writes stay
       // blocked (requireVerifiedAccount) until the link is used.
       try {
-        const verifyToken = await issueAccountVerifyToken(user.id);
-        if (verifyToken) await sendAccountVerificationEmail(user.email, verifyToken);
+        const issued = await issueAccountVerifyToken(user.id);
+        if (issued) await sendAccountVerificationEmail(issued.email, issued.token);
       } catch (err) {
         // Sign-up still succeeds; the user can resend from the dashboard.
         fastify.log.error(err, 'failed to send account verification email');
@@ -259,16 +356,17 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
     },
     async (request, reply) => {
       const { email, password } = request.body;
-      const ip = request.ip;
+      const network = clientNetworkKey(request.ip);
 
-      // Soft lockout per (email, client IP): an attacker's failures lock only
-      // the attacker's IP, never the real owner signing in from elsewhere.
+      // Soft lockout per (email, client network): an attacker's failures lock
+      // only the attacker's network, never the real owner signing in from
+      // elsewhere. A looser account-wide limit caps guesses spread over many
+      // networks, but only refuses networks that have themselves failed for
+      // this email, so a clean network still gets in (see loginFailures.ts).
       // Checked before the user lookup so known and unknown emails behave alike.
-      if (await isLoginLocked(email, ip)) {
-        return reply.code(429).send({
-          error:  'TOO_MANY_ATTEMPTS',
-          detail: 'too many failed sign-in attempts from this network; try again later',
-        });
+      const lock = await loginLock(email, network);
+      if (lock) {
+        return reply.code(429).send({ error: 'TOO_MANY_ATTEMPTS', detail: LOCK_DETAIL[lock] });
       }
 
       // Unknown emails and OAuth-only accounts still pay for one compare, so
@@ -276,15 +374,12 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
       const user = await findUserByEmail(email);
       const valid = await passwords.verify(password, user?.passwordHash);
       if (!user || !valid) {
-        await recordLoginFailure(email, ip, {
-          maxAttempts:    config.auth.maxLoginAttempts,
-          lockoutMinutes: config.auth.lockoutMinutes,
-        });
+        await recordLoginFailure(email, network, lockoutPolicy(config));
         return reply.code(401).send(INVALID_CREDENTIALS);
       }
 
-      // Successful login clears this IP's accumulated failures / lock.
-      await clearLoginFailures(email, ip);
+      // Successful login clears this network's accumulated failures / lock.
+      await clearLoginFailures(email, network);
 
       const token = await signSession(reply, user, config.jwt.expiresIn);
       return reply.code(200).send({ token });
@@ -376,7 +471,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
       if (!user) {
         return reply.code(400).send({ error: 'INVALID_TOKEN', detail: 'reset token is invalid or expired' });
       }
-      // Clear lockouts from every IP so the user can sign in immediately.
+      // Clear lockouts from every network so the user can sign in immediately.
       await clearAllLoginFailures(user.email);
 
       return reply.code(200).send({ ok: true });
@@ -432,9 +527,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
       });
       if (wasJustCreated(user)) fastify.analytics.capture('user_signed_up', { method: 'github' });
 
-      const token = await signSession(reply, user, config.jwt.expiresIn);
-
-      return reply.redirect(`${config.frontendUrl}/auth/callback?token=${token}`);
+      return await finishOAuthSignIn(reply, user);
     } catch (err) {
       fastify.log.error(err, 'GitHub OAuth callback error');
       return reply.redirect(`${config.frontendUrl}/login?error=${oauthErrorCode(err)}`);

@@ -75,6 +75,9 @@ export interface AuthConfig {
   readonly maxLoginAttempts: number;
   /** How long an account stays locked after hitting the threshold. */
   readonly lockoutMinutes: number;
+  /** Failed logins for one email, from every network together, before each
+   *  further attempt waits out a lock of lockoutMinutes. */
+  readonly maxAccountLoginAttempts: number;
   /** Lifetime of a password-reset token. */
   readonly resetTokenTtlMinutes: number;
   /**
@@ -200,6 +203,7 @@ export interface Config {
 const DEV_JWT_SECRET = 'dev-secret-change-in-production';
 const DEV_COOKIE_SECRET = 'dev-cookie-secret-change-in-production';
 const MIN_JWT_SECRET_LENGTH = 32;
+const MIN_COOKIE_SECRET_LENGTH = 32;
 /** SMTP_URL value that prints emails (live reset/verification links) to stdout. */
 const EMAIL_LOG_MODE = 'log';
 
@@ -248,6 +252,10 @@ export function buildConfig(): Config {
       console.error('FATAL: COOKIE_SECRET must be set in production — do not use the default dev secret');
       process.exit(1);
     }
+    if (cookieSecret.length < MIN_COOKIE_SECRET_LENGTH) {
+      console.error(`FATAL: COOKIE_SECRET must be at least ${MIN_COOKIE_SECRET_LENGTH} characters in production`);
+      process.exit(1);
+    }
     // Log mode writes live password-reset and verification tokens to stdout,
     // i.e. into docker logs. Only an explicit opt-in may run production that way.
     if (smtpUrl === EMAIL_LOG_MODE && process.env['ALLOW_EMAIL_LOG_IN_PRODUCTION'] !== 'true') {
@@ -294,6 +302,9 @@ export function buildConfig(): Config {
       ),
       lockoutMinutes: parsePositiveInt(
         'AUTH_LOCKOUT_MINUTES', optionalEnv('AUTH_LOCKOUT_MINUTES', '15'),
+      ),
+      maxAccountLoginAttempts: parsePositiveInt(
+        'AUTH_MAX_ACCOUNT_LOGIN_ATTEMPTS', optionalEnv('AUTH_MAX_ACCOUNT_LOGIN_ATTEMPTS', '50'),
       ),
       resetTokenTtlMinutes: parsePositiveInt(
         'AUTH_RESET_TOKEN_TTL_MINUTES', optionalEnv('AUTH_RESET_TOKEN_TTL_MINUTES', '60'),

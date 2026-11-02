@@ -13,6 +13,8 @@ export interface User {
   emailVerified: boolean;
   /** SHA-256 of the outstanding account-verification token (never the raw token). */
   emailVerifyToken: string | null;
+  /** The address the outstanding verification token was mailed to. */
+  emailVerifyTokenEmail: string | null;
   emailVerifyTokenExpiresAt: Date | null;
   emailVerifySentAt: Date | null;
   /** Embedded in session JWTs; bumping it revokes every older session. */
@@ -85,6 +87,10 @@ export async function lockVerifiedUserForOwnership(
  * On conflict the account stays verified if the provider verifies the email
  * now, or if it was already verified for this same address (e.g. via our own
  * verification link). A changed, unverified address drops the flag.
+ *
+ * A changed address also drops any pending verification link (and its resend
+ * cooldown): the link was mailed to the old address and proves nothing about
+ * the new one.
  */
 export async function upsertUser(params: UpsertUserParams): Promise<User> {
   const sql = getSql();
@@ -98,6 +104,10 @@ export async function upsertUser(params: UpsertUserParams): Promise<User> {
         avatar_url     = EXCLUDED.avatar_url,
         email_verified = EXCLUDED.email_verified
                          OR (users.email_verified AND users.email = EXCLUDED.email),
+        email_verify_token            = CASE WHEN users.email = EXCLUDED.email THEN users.email_verify_token END,
+        email_verify_token_email      = CASE WHEN users.email = EXCLUDED.email THEN users.email_verify_token_email END,
+        email_verify_token_expires_at = CASE WHEN users.email = EXCLUDED.email THEN users.email_verify_token_expires_at END,
+        email_verify_sent_at          = CASE WHEN users.email = EXCLUDED.email THEN users.email_verify_sent_at END,
         updated_at     = NOW()
     RETURNING *
   `;

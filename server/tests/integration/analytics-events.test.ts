@@ -89,7 +89,7 @@ describe('Analytics events from account and entry routes', () => {
       email: `${EMAIL_PREFIX}verify@example.com`, displayName: null, avatarUrl: null,
       provider: 'google', providerId: 'analytics-events-verify', emailVerified: false,
     });
-    const token = await issueAccountVerifyToken(user.id);
+    const token = (await issueAccountVerifyToken(user.id))?.token;
 
     const bad = await fastify.inject({ method: 'POST', url: '/auth/verify-account', payload: { token: 'nope' } });
     const good = await fastify.inject({ method: 'POST', url: '/auth/verify-account', payload: { token } });

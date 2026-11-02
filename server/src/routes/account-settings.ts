@@ -3,10 +3,12 @@ import { buildConfig } from '../config/index.js';
 import { createPasswordHasher, newPasswordError, newPasswordSchema } from '../lib/password.js';
 import { findUserById, type User } from '../db/queries/users.js';
 import {
-  isLoginLocked,
+  loginLock,
   recordLoginFailure,
   clearLoginFailures,
+  lockoutPolicy,
 } from '../db/queries/loginFailures.js';
+import { clientNetworkKey } from '../lib/clientNetwork.js';
 import {
   AccountSettingsError,
   changeAccountPassword,
@@ -16,7 +18,9 @@ import {
   revokeAccountSessions,
   updateAccountProfile,
 } from '../db/queries/accountSettings.js';
+import { revokeSession } from '../db/queries/revokedSessions.js';
 import { sendAccountDeletionEmail } from '../services/email.js';
+import { signSession } from './auth.js';
 import { apiErrorSchema } from '../types/api/common.js';
 
 const okSchema = {
@@ -54,20 +58,21 @@ export async function registerAccountSettingsRoutes(app: FastifyInstance): Promi
     user: User,
     password: string | undefined,
   ): Promise<void> {
-    if (await isLoginLocked(user.email, request.ip))
+    // The caller already holds a session, so only the per-network limit
+    // applies here; the account-wide one guards sign-in, where it could
+    // otherwise be turned against the owner.
+    const network = clientNetworkKey(request.ip);
+    if (await loginLock(user.email, network, { accountWide: false }))
       throw new AccountSettingsError(
         429,
         'TOO_MANY_ATTEMPTS',
         'too many password attempts; try again later',
       );
     if (!password || !(await passwords.verify(password, user.passwordHash))) {
-      await recordLoginFailure(user.email, request.ip, {
-        maxAttempts: config.auth.maxLoginAttempts,
-        lockoutMinutes: config.auth.lockoutMinutes,
-      });
+      await recordLoginFailure(user.email, network, lockoutPolicy(config), { accountWide: false });
       throw new AccountSettingsError(403, 'INVALID_PASSWORD', 'the current password is incorrect');
     }
-    await clearLoginFailures(user.email, request.ip);
+    await clearLoginFailures(user.email, network);
   }
   function failure(error: unknown, reply: FastifyReply) {
     if (!(error instanceof AccountSettingsError)) throw error;
@@ -115,15 +120,9 @@ export async function registerAccountSettingsRoutes(app: FastifyInstance): Promi
           version(request),
           request.body.display_name,
         );
-        const token = await reply.jwtSign(
-          {
-            userId: user.id,
-            email: user.email,
-            displayName: user.displayName,
-            tokenVersion: user.tokenVersion,
-          },
-          { expiresIn: config.jwt.expiresIn },
-        );
+        // Same session, so the renewed token keeps its id and signing out
+        // revokes it together with the one it replaces.
+        const token = await signSession(reply, user, config.jwt.expiresIn, request.user.jti);
         return reply.send({ token, display_name: user.displayName });
       } catch (error) {
         return failure(error, reply);
@@ -166,6 +165,35 @@ export async function registerAccountSettingsRoutes(app: FastifyInstance): Promi
           user.passwordHash,
           await passwords.hash(request.body.new_password),
         );
+        return reply.send({ ok: true });
+      } catch (error) {
+        return failure(error, reply);
+      }
+    },
+  );
+
+  app.post(
+    '/auth/logout',
+    {
+      ...options,
+      schema: {
+        tags: ['auth'],
+        summary: 'Sign out this session',
+        response: { ...errorResponses, 200: okSchema },
+      },
+    },
+    async (request, reply) => {
+      const { userId, jti, iat, exp } = request.user;
+      try {
+        // Keep the id on file until any token re-issued for this session
+        // (at the latest now, with the same lifetime) has expired.
+        if (jti && iat !== undefined && exp !== undefined) {
+          await revokeSession(jti, userId, new Date((exp + (exp - iat)) * 1000));
+        } else {
+          // A token from before sessions had ids can only be revoked with
+          // every other session of the account.
+          await revokeAccountSessions(userId, version(request));
+        }
         return reply.send({ ok: true });
       } catch (error) {
         return failure(error, reply);

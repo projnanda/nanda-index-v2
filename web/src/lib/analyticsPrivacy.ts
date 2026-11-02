@@ -2,9 +2,9 @@ import type { CaptureResult, CapturedNetworkRequest } from "posthog-js";
 
 /**
  * What analytics may never see. Some pages carry a secret in their URL — a
- * password-reset token (/reset-password?token=…), a session JWT
- * (/auth/callback?token=…) — so no analytics tool loads on them, and every
- * URL that does leave the browser loses its query string and fragment.
+ * password-reset token (/reset-password?token=…), a one-time OAuth sign-in
+ * code (/auth/callback?code=…) — so no analytics tool loads on them, and
+ * every URL that does leave the browser loses its query string and fragment.
  */
 
 // Sign-in and account pages are never measured either (see /privacy): the

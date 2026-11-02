@@ -3,6 +3,8 @@ import type { FastifyInstance } from 'fastify';
 import { buildServer } from '../../src/server.js';
 import { getSql, closeSql } from '../../src/db/client.js';
 import { upsertUser, findUserByEmail } from '../../src/db/queries/users.js';
+import { issueAccountVerifyToken, consumeAccountVerifyToken } from '../../src/db/queries/accountVerification.js';
+import { isOperator } from '../../src/services/operators.js';
 
 const PW = 'correct-horse-battery';
 const ORG_PREFIX = 'acctv-';
@@ -236,6 +238,117 @@ describe('account email verification', () => {
         provider: 'github', providerId: 'acctv-gh-unverified-id', emailVerified: false,
       });
       expect(user.emailVerified).toBe(false);
+    });
+  });
+
+  // A link proves the mailbox it was sent to, and nothing else. An OAuth sign-in
+  // that changes the account's email must not let the old link verify the new one.
+  describe('link bound to the address it was sent to', () => {
+    const PROVIDER_ID = 'acctv-email-change-id';
+    const ADMIN = 'acctv-operator@example.com';
+
+    async function signInWith(email: string) {
+      return upsertUser({
+        email, displayName: null, avatarUrl: null,
+        provider: 'github', providerId: PROVIDER_ID, emailVerified: false,
+      });
+    }
+
+    async function cleanup() {
+      await getSql()`DELETE FROM users WHERE provider_id = ${PROVIDER_ID}`;
+    }
+
+    beforeEach(cleanup);
+    afterAll(cleanup);
+
+    it('does not verify (or make an operator of) an address the link was never sent to', async () => {
+      const previousAdmins = process.env.ADMIN_EMAILS;
+      process.env.ADMIN_EMAILS = ADMIN;
+      try {
+        const user = await signInWith('acctv-attacker@example.com');
+        const token = (await issueAccountVerifyToken(user.id))?.token;
+        expect(token).toEqual(expect.any(String));
+
+        // Same GitHub identity, now reporting an unverified admin address.
+        const changed = await signInWith(ADMIN);
+        expect(changed.email).toBe(ADMIN);
+        expect(changed.emailVerifyToken).toBeNull();
+
+        const res = await verifyAccount(app, token!);
+        expect(res.statusCode).toBe(400);
+        const after = await findUserByEmail(ADMIN);
+        expect(after?.emailVerified).toBe(false);
+        expect(await isOperator(user.id)).toBe(false);
+      } finally {
+        if (previousAdmins === undefined) delete process.env.ADMIN_EMAILS;
+        else process.env.ADMIN_EMAILS = previousAdmins;
+      }
+    });
+
+    it('refuses a token whose recorded address no longer matches the account', async () => {
+      // Defence in depth: even if a path changed the email without clearing
+      // the token, consuming it must check the address it was issued for.
+      const user = await signInWith('acctv-before@example.com');
+      const token = (await issueAccountVerifyToken(user.id))?.token;
+      await getSql()`UPDATE users SET email = 'acctv-after@example.com' WHERE id = ${user.id}`;
+
+      expect(await consumeAccountVerifyToken(token!)).toBeNull();
+      expect((await findUserByEmail('acctv-after@example.com'))?.emailVerified).toBe(false);
+    });
+
+    it('keeps the pending link when a sign-in reports the same address', async () => {
+      const user = await signInWith('acctv-same@example.com');
+      const token = (await issueAccountVerifyToken(user.id))?.token;
+      await signInWith('ACCTV-same@example.com');
+
+      const res = await verifyAccount(app, token!);
+      expect(res.statusCode).toBe(200);
+      expect((await findUserByEmail('acctv-same@example.com'))?.emailVerified).toBe(true);
+    });
+
+    it('lets the account resend straight away after the address changes', async () => {
+      const user = await signInWith('acctv-resend-a@example.com');
+      await issueAccountVerifyToken(user.id);
+      await signInWith('acctv-resend-b@example.com');
+
+      expect((await issueAccountVerifyToken(user.id))?.token).toEqual(expect.any(String));
+    });
+
+    it('returns the address the new token is bound to, read in the same write', async () => {
+      const user = await signInWith('acctv-race-old@example.com');
+      // The email changes after a caller read the user, before it issues.
+      await getSql()`UPDATE users SET email = 'acctv-race-new@example.com' WHERE id = ${user.id}`;
+
+      const issued = await issueAccountVerifyToken(user.id);
+      expect(issued?.email).toBe('acctv-race-new@example.com');
+    });
+
+    it('resend mails the bound address, not one read before the token was issued', async () => {
+      const user = await signInWith('acctv-race-new@example.com');
+      const session = app.jwt.sign({
+        userId: user.id, email: user.email, displayName: null, tokenVersion: user.tokenVersion,
+      });
+      // Make the route's read see the old address, as if an OAuth sign-in
+      // changed the email right after it.
+      const users = await import('../../src/db/queries/users.js');
+      const real = users.findUserById;
+      const stale = vi.spyOn(users, 'findUserById').mockImplementation(async (id) => {
+        const row = await real(id);
+        return row && { ...row, email: 'acctv-race-old@example.com' };
+      });
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      try {
+        const res = await app.inject({
+          method: 'POST', url: '/auth/resend-account-verification', headers: auth(session),
+        });
+        expect(res.statusCode).toBe(200);
+      } finally {
+        stale.mockRestore();
+      }
+      const line = logSpy.mock.calls.map(c => String(c[0])).find(l => l.includes('/verify-account?token='));
+      logSpy.mockRestore();
+      expect(line).toContain('"acctv-race-new@example.com"');
+      expect(line).not.toContain('acctv-race-old@example.com');
     });
   });
 });

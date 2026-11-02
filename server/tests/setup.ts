@@ -21,6 +21,9 @@ process.env['OUTBOUND_ALLOW_PRIVATE_HOSTS'] ??= 'true';
 process.env['MAX_UNPROVEN_ORGS_PER_USER'] ??= '1000';
 process.env['ORG_WRITE_RATE_LIMIT_MAX'] ??= '10000';
 process.env['ORG_RECOVERY_RATE_LIMIT_MAX'] ??= '10000';
+// Suites reuse a few emails for failed logins across runs on one database;
+// the account-wide lockout would trip them. auth-security.test.ts lowers it.
+process.env['AUTH_MAX_ACCOUNT_LOGIN_ATTEMPTS'] ??= '100000';
 process.env['DOMAIN_VERIFY_RATE_LIMIT_MAX'] ??= '10000';
 
 // Every inject() comes from 127.0.0.1, so suites would share one per-IP
