@@ -8,7 +8,7 @@ import {
   type User,
 } from '../db/queries/users.js';
 import {
-  isLoginLocked,
+  loginLock,
   recordLoginFailure,
   clearLoginFailures,
   clearAllLoginFailures,
@@ -33,6 +33,12 @@ import { createPasswordHasher, newPasswordError, newPasswordSchema } from '../li
 import { apiErrorSchema } from '../types/api/common.js';
 
 const INVALID_CREDENTIALS = { error: 'UNAUTHORIZED', detail: 'invalid email or password' } as const;
+/** 429 text per lock. Both depend only on the submitted email, never on
+ *  whether an account exists, so neither enumerates accounts. */
+const LOCK_DETAIL = {
+  network: 'too many failed sign-in attempts from this network; try again later',
+  account: 'too many failed sign-in attempts for this account; try again later or reset your password',
+} as const;
 const INVALID_LOGIN_CODE = {
   error:  'INVALID_CODE',
   detail: 'sign-in link is invalid or expired; please sign in again',
@@ -354,14 +360,13 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
 
       // Soft lockout per (email, client network): an attacker's failures lock
       // only the attacker's network, never the real owner signing in from
-      // elsewhere; a looser account-wide limit caps guesses spread over many
-      // networks (see loginFailures.ts). Both answer with the same 429.
+      // elsewhere. A looser account-wide limit caps guesses spread over many
+      // networks, but only refuses networks that have themselves failed for
+      // this email, so a clean network still gets in (see loginFailures.ts).
       // Checked before the user lookup so known and unknown emails behave alike.
-      if (await isLoginLocked(email, network)) {
-        return reply.code(429).send({
-          error:  'TOO_MANY_ATTEMPTS',
-          detail: 'too many failed sign-in attempts from this network; try again later',
-        });
+      const lock = await loginLock(email, network);
+      if (lock) {
+        return reply.code(429).send({ error: 'TOO_MANY_ATTEMPTS', detail: LOCK_DETAIL[lock] });
       }
 
       // Unknown emails and OAuth-only accounts still pay for one compare, so

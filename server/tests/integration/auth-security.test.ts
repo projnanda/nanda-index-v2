@@ -335,7 +335,10 @@ describe('auth security hardening', () => {
   });
 
   // Per-network limits still allow one guess stream per network; a botnet or
-  // a pool of /64s could spread guesses for one account across many.
+  // a pool of /64s could spread guesses for one account across many. Past the
+  // account-wide limit, every network that has already failed for the email
+  // is refused, but a clean network (the owner's) can still sign in, so the
+  // limit cannot be used to lock the owner out.
   describe('account-wide failure limit (across networks)', () => {
     let acctApp: FastifyInstance;
 
@@ -353,58 +356,111 @@ describe('auth security hardening', () => {
       await acctApp.close();
     });
 
-    const spread = (i: number) => `198.18.0.${i + 1}`;
+    /** A distinct /64 per attacker network. */
+    const spread = (i: number) => `2001:db8:a${i}::1`;
 
-    it('locks an account after the failures from all networks reach the limit', async () => {
-      const email = 'lockout-account@example.com';
-      await resetUser(email);
-
+    async function exhaust(email: string) {
       for (let i = 0; i < 4; i++) {
         expect((await login(acctApp, email, 'wrong-password', spread(i))).statusCode).toBe(401);
       }
+    }
 
-      const locked = await login(acctApp, email, PW, '192.0.2.200');
-      expect(locked.statusCode).toBe(429);
-      // The same body as a per-network lock, so the response reveals nothing new.
+    it('still lets the owner sign in from a clean network once the limit is reached', async () => {
+      const email = 'lockout-account@example.com';
+      await resetUser(email);
+      await exhaust(email);
+
+      expect((await login(acctApp, email, PW, OWNER_IP)).statusCode).toBe(200);
+    });
+
+    it('keeps refusing every network that already failed for the email', async () => {
+      const email = 'lockout-account-attacker@example.com';
+      await resetUser(email);
+      await exhaust(email);
+
+      for (let i = 0; i < 4; i++) {
+        const res = await login(acctApp, email, PW, spread(i));
+        expect(res.statusCode).toBe(429);
+        expect(res.json().error).toBe('TOO_MANY_ATTEMPTS');
+      }
+    });
+
+    it('gives a fresh network one more try, then refuses it too', async () => {
+      const email = 'lockout-account-fresh@example.com';
+      await resetUser(email);
+      await exhaust(email);
+
+      expect((await login(acctApp, email, 'wrong-password', spread(7))).statusCode).toBe(401);
+      expect((await login(acctApp, email, PW, spread(7))).statusCode).toBe(429);
+    });
+
+    it('says which limit applied, with the same code as a per-network lock', async () => {
+      const email = 'lockout-account-text@example.com';
+      await resetUser(email);
+      await exhaust(email);
+      const accountLock = (await login(acctApp, email, 'wrong-password', spread(0))).json();
+
       const other = 'lockout-account-other@example.com';
       await resetUser(other);
       for (let i = 0; i < 3; i++) await login(app, other, 'wrong-password', ATTACKER_IP);
-      expect(locked.json()).toEqual((await login(app, other, PW, ATTACKER_IP)).json());
+      const networkLock = (await login(app, other, PW, ATTACKER_IP)).json();
+
+      expect(accountLock.error).toBe(networkLock.error);
+      expect(networkLock.detail).toMatch(/from this network/);
+      expect(accountLock.detail).not.toMatch(/from this network/);
+      expect(accountLock.detail).toMatch(/this account/);
     });
 
-    it('locks an unknown email the same way, so a 429 does not reveal an account', async () => {
+    it('treats an unknown email the same way, so a 429 does not reveal an account', async () => {
       const email = 'lockout-account-unknown@example.com';
       await resetUser(email);
       await getSql()`DELETE FROM users WHERE email = ${email}`;
+      await exhaust(email);
 
-      for (let i = 0; i < 4; i++) await login(acctApp, email, 'wrong-password', spread(i));
-      expect((await login(acctApp, email, 'wrong-password', '192.0.2.201')).statusCode).toBe(429);
+      expect((await login(acctApp, email, 'wrong-password', spread(0))).statusCode).toBe(429);
+      expect((await login(acctApp, email, 'wrong-password', OWNER_IP)).statusCode).toBe(401);
     });
 
-    it('lets the owner end the lock with a password reset', async () => {
+    it("does not block a signed-in owner's password re-check", async () => {
+      const email = 'lockout-account-settings@example.com';
+      await resetUser(email);
+      const session = (await login(acctApp, email, PW, OWNER_IP)).json().token as string;
+      await exhaust(email);
+
+      // From a network that has failed for this email, but is under its own limit.
+      const res = await acctApp.inject({
+        method: 'POST', url: '/auth/change-password',
+        headers: { authorization: `Bearer ${session}` },
+        payload: { current_password: PW, new_password: 'changed-after-attack' },
+        remoteAddress: spread(0),
+      });
+      expect(res.statusCode).toBe(200);
+    });
+
+    it('lets the owner clear the account-wide streak with a password reset', async () => {
       const email = 'lockout-account-reset@example.com';
       const user = await resetUser(email);
-      for (let i = 0; i < 4; i++) await login(acctApp, email, 'wrong-password', spread(i));
-      expect((await login(acctApp, email, PW, OWNER_IP)).statusCode).toBe(429);
+      await exhaust(email);
+      expect((await login(acctApp, email, PW, spread(0))).statusCode).toBe(429);
 
       const { token } = await createResetToken(user.id, 60);
       await acctApp.inject({
         method: 'POST', url: '/auth/reset-password', payload: { token, password: 'after-account-lock' },
       });
 
-      expect((await login(acctApp, email, 'after-account-lock', OWNER_IP)).statusCode).toBe(200);
+      expect((await login(acctApp, email, 'after-account-lock', spread(0))).statusCode).toBe(200);
     });
 
-    it('does not double the account-wide lock, so an attacker cannot lock the owner out for a day', async () => {
+    it('does not double the account-wide lock', async () => {
       const email = 'lockout-account-flat@example.com';
       await resetUser(email);
-      for (let i = 0; i < 4; i++) await login(acctApp, email, 'wrong-password', spread(i));
+      await exhaust(email);
       await getSql()`UPDATE login_failures SET locked_until = NOW() - INTERVAL '1 second' WHERE email = ${email}`;
       expect((await login(acctApp, email, 'wrong-password', spread(9))).statusCode).toBe(401);
 
       const rows = await getSql()<{ secs: number }[]>`
-        SELECT MAX(EXTRACT(EPOCH FROM (locked_until - NOW())))::float AS secs
-        FROM login_failures WHERE email = ${email}
+        SELECT EXTRACT(EPOCH FROM (locked_until - NOW()))::float AS secs
+        FROM login_failures WHERE email = ${email} AND ip_address = '*'
       `;
       expect(Number(rows[0]?.secs)).toBeGreaterThan(14 * 60);
       expect(Number(rows[0]?.secs)).toBeLessThanOrEqual(15 * 60);

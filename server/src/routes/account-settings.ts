@@ -3,7 +3,7 @@ import { buildConfig } from '../config/index.js';
 import { createPasswordHasher, newPasswordError, newPasswordSchema } from '../lib/password.js';
 import { findUserById, type User } from '../db/queries/users.js';
 import {
-  isLoginLocked,
+  loginLock,
   recordLoginFailure,
   clearLoginFailures,
   lockoutPolicy,
@@ -58,15 +58,18 @@ export async function registerAccountSettingsRoutes(app: FastifyInstance): Promi
     user: User,
     password: string | undefined,
   ): Promise<void> {
+    // The caller already holds a session, so only the per-network limit
+    // applies here; the account-wide one guards sign-in, where it could
+    // otherwise be turned against the owner.
     const network = clientNetworkKey(request.ip);
-    if (await isLoginLocked(user.email, network))
+    if (await loginLock(user.email, network, { accountWide: false }))
       throw new AccountSettingsError(
         429,
         'TOO_MANY_ATTEMPTS',
         'too many password attempts; try again later',
       );
     if (!password || !(await passwords.verify(password, user.passwordHash))) {
-      await recordLoginFailure(user.email, network, lockoutPolicy(config));
+      await recordLoginFailure(user.email, network, lockoutPolicy(config), { accountWide: false });
       throw new AccountSettingsError(403, 'INVALID_PASSWORD', 'the current password is incorrect');
     }
     await clearLoginFailures(user.email, network);

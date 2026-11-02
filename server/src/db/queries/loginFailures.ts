@@ -15,9 +15,12 @@ import type { Config } from '../../config/index.js';
  * ones, so a 429 never confirms that an account exists.
  *
  * A second, account-wide row (network ACCOUNT_WIDE) counts failures from
- * every network together. It caps guesses spread over many networks, but its
- * lock never grows past lockoutMinutes, so an attacker can at most slow the
- * owner down, and a password reset clears it straight away.
+ * every network together. Once it is locked, it refuses only networks that
+ * have themselves failed for the email in the current streak: each attacker
+ * network gets at most one more guess per lock period, while a clean network
+ * (the owner's) can still sign in, so the lock cannot shut the owner out.
+ * It never grows past lockoutMinutes, and a password reset clears it. The
+ * signed-in password re-check in account settings ignores it entirely.
  */
 
 /** login_failures.ip_address of the row counting every network together. */
@@ -64,33 +67,57 @@ export function accountLockoutMinutesFor(failedCount: number, policy: LockoutPol
   return failedCount < policy.maxAccountAttempts ? 0 : policy.lockoutMinutes;
 }
 
-/** True while this email is locked for this network, or for every network. */
-export async function isLoginLocked(email: string, network: string): Promise<boolean> {
+/** Which lock refuses a sign-in attempt, if any. */
+export type LoginLock = 'network' | 'account' | null;
+
+/**
+ * The lock that applies to this email from this network:
+ *   'network' — this network's own streak is locked;
+ *   'account' — the account-wide streak is locked AND this network has itself
+ *               failed for the email in the current streak window;
+ *   null      — neither. A clean network, such as the owner's, is never
+ *               refused by the account-wide lock.
+ * Pass `accountWide: false` to check only the network lock.
+ */
+export async function loginLock(
+  email: string,
+  network: string,
+  { accountWide = true }: { accountWide?: boolean } = {},
+): Promise<LoginLock> {
   const sql = getSql();
-  const rows = await sql<{ locked: boolean | null }[]>`
-    SELECT bool_or(locked_until IS NOT NULL AND locked_until > NOW()) AS locked
+  const [row] = await sql<{ networkLocked: boolean | null; accountLocked: boolean | null; networkFailed: boolean | null }[]>`
+    SELECT
+      bool_or(ip_address = ${network} AND locked_until > NOW()) AS network_locked,
+      bool_or(ip_address = ${ACCOUNT_WIDE} AND locked_until > NOW()) AS account_locked,
+      bool_or(ip_address = ${network}
+              AND last_failed_at > NOW() - make_interval(hours => ${STREAK_RESET_HOURS})) AS network_failed
     FROM login_failures
     WHERE email = ${normalizeEmail(email)} AND ip_address IN (${network}, ${ACCOUNT_WIDE})
   `;
-  return rows[0]?.locked ?? false;
+  if (row?.networkLocked) return 'network';
+  if (accountWide && row?.accountLocked && row.networkFailed) return 'account';
+  return null;
 }
 
 /**
- * Records one failed attempt against the network and the account-wide
- * counters and, past their thresholds, sets their locks. Callers reject while
- * locked, so the counts only grow between locks — each per-network lock that
- * expires and is followed by another failure doubles.
+ * Records one failed attempt against the network counter and (unless
+ * `accountWide: false`) the account-wide counter, and past their thresholds
+ * sets their locks. Callers reject while locked, so the counts only grow
+ * between locks — each per-network lock that expires and is followed by
+ * another failure doubles.
  */
 export async function recordLoginFailure(
   email: string,
   network: string,
   policy: LockoutPolicy,
+  { accountWide = true }: { accountWide?: boolean } = {},
 ): Promise<void> {
   const key = normalizeEmail(email);
   const perNetwork = await countFailure(key, network);
   await lockFor(key, network, lockoutMinutesFor(perNetwork, policy));
-  const accountWide = await countFailure(key, ACCOUNT_WIDE);
-  await lockFor(key, ACCOUNT_WIDE, accountLockoutMinutesFor(accountWide, policy));
+  if (!accountWide) return;
+  const accountTotal = await countFailure(key, ACCOUNT_WIDE);
+  await lockFor(key, ACCOUNT_WIDE, accountLockoutMinutesFor(accountTotal, policy));
 }
 
 /** Adds one failure to a streak (restarting a stale one) and returns its length. */
