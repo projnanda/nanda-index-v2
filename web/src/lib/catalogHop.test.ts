@@ -54,6 +54,14 @@ describe("planRegistryHop", () => {
     ]);
   });
 
+  it("follows a same-origin (root-relative) registry URL without a well-known fallback", () => {
+    // The hosted resolve examples (/api/resolve-examples) link this way.
+    const url = "/api/resolve-examples/catalog/registry";
+    expect(planRegistryHop(resolved("urn:air:nandaindex.org:demo:catalog-agent", "publisher", url)).steps).toEqual([
+      { url: `${url}/agents/catalog-agent`, shape: "entry" },
+    ]);
+  });
+
   it("has nothing to try for an entry without a URL", () => {
     expect(planRegistryHop(resolved("urn:air:a.com:agent:x", "exact", undefined)).steps).toEqual([]);
   });
@@ -108,11 +116,11 @@ describe("resolveRegistryHop", () => {
 describe("resolve example presets", () => {
   it.each(["catalog", "smb", "personal"] as const)("plans a hop 2 URL the %s example route serves", async (kind) => {
     const { exampleResponse } = await import("./resolveExamples");
-    const base = "https://index.example";
-    const index = exampleResponse(kind, ["index"], base) as ResolveResponse;
-    const step = planRegistryHop(index).steps[0]!;
-    const path = step.url.slice(`${base}/api/resolve-examples/${kind}/`.length).split("/");
-    expect(step.url.startsWith(`${base}/api/resolve-examples/${kind}/`)).toBe(true);
-    expect(exampleResponse(kind, path, base)).not.toBeNull();
+    const prefix = `/api/resolve-examples/${kind}/`;
+    const index = exampleResponse(kind, ["index"]) as ResolveResponse;
+    const steps = planRegistryHop(index).steps;
+    expect(steps).toHaveLength(1);
+    expect(steps[0]!.url.startsWith(prefix)).toBe(true);
+    expect(exampleResponse(kind, steps[0]!.url.slice(prefix.length).split("/"))).not.toBeNull();
   });
 });

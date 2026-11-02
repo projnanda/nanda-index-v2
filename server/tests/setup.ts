@@ -21,6 +21,7 @@ process.env['OUTBOUND_ALLOW_PRIVATE_HOSTS'] ??= 'true';
 process.env['MAX_UNPROVEN_ORGS_PER_USER'] ??= '1000';
 process.env['ORG_WRITE_RATE_LIMIT_MAX'] ??= '10000';
 process.env['ORG_RECOVERY_RATE_LIMIT_MAX'] ??= '10000';
+process.env['DOMAIN_VERIFY_RATE_LIMIT_MAX'] ??= '10000';
 
 // Every inject() comes from 127.0.0.1, so suites would share one per-IP
 // budget on the public read routes. Raise it; rate-limit-public.test.ts

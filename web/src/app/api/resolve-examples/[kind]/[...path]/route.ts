@@ -1,13 +1,12 @@
 import { exampleResponse, isExampleKind } from "@/lib/resolveExamples";
 
 type Context = { params: Promise<{ kind: string; path: string[] }> };
-export async function GET(request: Request, context: Context) {
+export async function GET(_request: Request, context: Context) {
   const { kind, path } = await context.params;
-  // Next's local server may normalize request.url to localhost. Preserve the
-  // browser-facing host so example links stay same-origin (including ports).
-  const origin = new URL(request.url);
-  origin.host = request.headers.get("host") ?? origin.host;
-  const body = exampleResponse(kind, path, origin.origin);
+  // Root-relative links: the client resolves them against the origin it is
+  // already on. Building them from the Host header leaked the internal port
+  // behind the proxy (https://nandaindex.org:3000/…) and reflected any Host.
+  const body = exampleResponse(kind, path);
   return body === null ? Response.json({ error: "Example resource not found" }, { status: 404 }) : Response.json(body);
 }
 

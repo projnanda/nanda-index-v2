@@ -465,6 +465,10 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
   const orgWriteRateLimit = {
     rateLimit: { max: claims.writeRateLimitMax, timeWindow: claims.writeRateLimitWindow },
   };
+  // Each verify-domain asks four DNS resolvers about an admin-chosen name.
+  const domainVerifyRateLimit = {
+    rateLimit: { max: claims.domainVerifyRateLimitMax, timeWindow: claims.domainVerifyRateLimitWindow },
+  };
 
   // Create a new organization
   fastify.post<{ Body: CreateOrgBody }>('/api/v1/orgs', {
@@ -625,6 +629,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
   fastify.post<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/domain-challenge', {
     preValidation: [fastify.authenticate],
     preHandler: [fastify.requireVerifiedAccount, requireOrgRole('admin')],
+    config: domainVerifyRateLimit,
     schema: {
       tags: ['orgs'],
       summary: 'Issue a DNS TXT challenge to prove domain ownership',
@@ -672,6 +677,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
   fastify.post<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/verify-domain', {
     preValidation: [fastify.authenticate],
     preHandler: [fastify.requireVerifiedAccount, requireOrgRole('admin')],
+    config: domainVerifyRateLimit,
     schema: {
       tags: ['orgs'],
       summary: 'Verify the DNS TXT challenge and activate the organization',
@@ -720,7 +726,8 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
     let updated: Organization | null;
     try {
-      updated = await markDomainVerified(org.orgId);
+      // Applies only if the org still has the domain and challenge just checked.
+      updated = await markDomainVerified(org.orgId, { domain: org.domain, challenge: org.domainChallenge });
     } catch (err) {
       // Another registrant proved this domain an instant earlier — first proof wins.
       if (isUniqueViolation(err)) {
@@ -729,7 +736,13 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       throw err;
     }
     if (!updated) {
-      return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
+      if (!(await findByOrgId(org.orgId))) {
+        return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
+      }
+      return reply.code(409).send({
+        error: 'DOMAIN_CHANGED',
+        detail: 'the domain or challenge changed while verifying; request a new challenge',
+      });
     }
     fastify.analytics.capture('entry_domain_verified');
 

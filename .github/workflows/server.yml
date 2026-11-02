@@ -1,0 +1,57 @@
+name: Server
+on:
+  pull_request:
+    paths: ['server/**', '.github/workflows/server.yml']
+  push:
+    branches: [main]
+    paths: ['server/**', '.github/workflows/server.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    services:
+      # The integration suites talk to a real Postgres — they assert on
+      # constraints, advisory locks, full-text search and concurrent
+      # transactions, none of which a fake would reproduce.
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: nanda_index
+          POSTGRES_USER: nanda
+          POSTGRES_PASSWORD: nanda-ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U nanda -d nanda_index"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://nanda:nanda-ci@localhost:5432/nanda_index
+      # Dev-only values. config/index.ts refuses to start without real ones
+      # when NODE_ENV is production, which it is not here.
+      JWT_SECRET: ci-jwt-secret
+      COOKIE_SECRET: ci-cookie-secret
+      SMTP_URL: log
+      EMAIL_FROM: noreply@nanda.local
+      FRONTEND_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # Matches server/package.json engines and both Dockerfiles. Pinned
+          # rather than 'lts/*' so a Node release cannot change the result of
+          # a run without a commit saying so.
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      # Before the tests, because the suites run against the schema rather
+      # than creating it, and a PR that adds a migration must have it applied.
+      - run: npm run migrate
+      - run: npm test
+      - run: npm run typecheck

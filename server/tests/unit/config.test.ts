@@ -159,6 +159,17 @@ describe('buildConfig', () => {
     expect(cfg.auth.resetTokenTtlMinutes).toBe(60);
   });
 
+  it('throttles domain verification per IP by default, overridable from env', () => {
+    process.env.DATABASE_URL = 'x';
+    delete process.env.DOMAIN_VERIFY_RATE_LIMIT_MAX;
+    delete process.env.DOMAIN_VERIFY_RATE_LIMIT_WINDOW;
+    expect(buildConfig().claims).toMatchObject({ domainVerifyRateLimitMax: 20, domainVerifyRateLimitWindow: '10 minutes' });
+
+    process.env.DOMAIN_VERIFY_RATE_LIMIT_MAX = '5';
+    process.env.DOMAIN_VERIFY_RATE_LIMIT_WINDOW = '1 hour';
+    expect(buildConfig().claims).toMatchObject({ domainVerifyRateLimitMax: 5, domainVerifyRateLimitWindow: '1 hour' });
+  });
+
   it('caps concurrent password hashes at CPU count minus one (min 1), overridable from env', () => {
     process.env.DATABASE_URL = 'x';
     delete process.env.AUTH_MAX_CONCURRENT_HASHES;
