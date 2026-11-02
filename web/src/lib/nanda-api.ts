@@ -248,6 +248,20 @@ export async function changePassword(currentPassword: string, newPassword: strin
   await request("/auth/change-password", { method: "POST", body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }) });
 }
 
+/**
+ * POST /auth/exchange — swaps the one-time code from an OAuth callback for a
+ * session token. `credentials: "include"` sends the API's HttpOnly login
+ * nonce cookie, which binds the code to the browser that signed in.
+ */
+export async function exchangeLoginCode(code: string): Promise<string> {
+  const data = await request<{ token: string }>("/auth/exchange", {
+    method: "POST",
+    body: JSON.stringify({ code }),
+    credentials: "include",
+  });
+  return data.token;
+}
+
 export async function logoutAll(): Promise<void> {
   await request("/auth/logout-all", { method: "POST" });
 }

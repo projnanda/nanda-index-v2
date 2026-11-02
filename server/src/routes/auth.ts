@@ -21,12 +21,37 @@ import {
   hashResetToken,
 } from '../db/queries/passwordResetTokens.js';
 import { issueAccountVerifyToken } from '../db/queries/accountVerification.js';
+import {
+  createLoginExchangeCode,
+  consumeLoginExchangeCode,
+  LOGIN_EXCHANGE_CODE_TTL_SECONDS,
+} from '../db/queries/loginExchangeCodes.js';
 import { sendPasswordResetEmail, sendAccountVerificationEmail } from '../services/email.js';
-import { buildConfig } from '../config/index.js';
+import { buildConfig, type Config } from '../config/index.js';
 import { createPasswordHasher, newPasswordError, newPasswordSchema } from '../lib/password.js';
 import { apiErrorSchema } from '../types/api/common.js';
 
 const INVALID_CREDENTIALS = { error: 'UNAUTHORIZED', detail: 'invalid email or password' } as const;
+const INVALID_LOGIN_CODE = {
+  error:  'INVALID_CODE',
+  detail: 'sign-in link is invalid or expired; please sign in again',
+} as const;
+
+/** HttpOnly cookie binding an OAuth sign-in code to the browser that finished the flow. */
+const LOGIN_NONCE_COOKIE = 'nanda_login_nonce';
+const LOGIN_EXCHANGE_PATH = '/auth/exchange';
+
+function loginNonceCookieOptions(config: Config) {
+  return {
+    path:     LOGIN_EXCHANGE_PATH,
+    httpOnly: true,
+    // Lax: sent on the web app's same-site fetch (nandaindex.org →
+    // api.nandaindex.org), never on a cross-site POST.
+    sameSite: 'lax',
+    secure:   config.nodeEnv === 'production',
+    maxAge:   LOGIN_EXCHANGE_CODE_TTL_SECONDS,
+  } as const;
+}
 
 /** Signs a session JWT carrying the user's current token_version (see plugins/jwt.ts). */
 function signSession(reply: FastifyReply, user: User, expiresIn: string): Promise<string> {
@@ -71,7 +96,12 @@ interface GitHubEmail {
  *   1. Exchange code for access token via @fastify/oauth2
  *   2. Fetch user profile from provider API
  *   3. Upsert user in DB
- *   4. Sign JWT and redirect to frontend /auth/callback?token=<jwt>
+ *   4. Redirect to frontend /auth/callback?code=<one-time code>, with the
+ *      code's nonce in an HttpOnly cookie; the web app POSTs the code to
+ *      /auth/exchange (sending the cookie) and gets the JWT in the body.
+ *      No JWT is ever put in a URL, and a code only works in the browser
+ *      that finished the OAuth flow, so a link carrying an attacker's code
+ *      cannot sign a victim in to the attacker's account.
  *
  * Decorator names: fastify.oauth2Google, fastify.oauth2Github
  * (matches the `oauth2X` template literal type from @fastify/oauth2)
@@ -98,6 +128,13 @@ export function googleEmailVerified(profile: { verified_email?: unknown }): bool
 export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void> {
   const config = buildConfig();
   const passwords = createPasswordHasher(config.auth.maxConcurrentHashes);
+
+  /** Sends the browser to the web app with a one-time code (see above). */
+  async function finishOAuthSignIn(reply: FastifyReply, user: User): Promise<FastifyReply> {
+    const { code, nonce } = await createLoginExchangeCode(user);
+    reply.setCookie(LOGIN_NONCE_COOKIE, nonce, loginNonceCookieOptions(config));
+    return reply.redirect(`${config.frontendUrl}/auth/callback?code=${code}`);
+  }
 
   // Per-route throttle for auth mutations (login/register/forgot/reset).
   // The rate-limit plugin runs in opt-in mode (global: false), so only routes
@@ -165,14 +202,50 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
       });
       if (wasJustCreated(user)) fastify.analytics.capture('user_signed_up', { method: 'google' });
 
-      const token = await signSession(reply, user, config.jwt.expiresIn);
-
-      return reply.redirect(`${config.frontendUrl}/auth/callback?token=${token}`);
+      return await finishOAuthSignIn(reply, user);
     } catch (err) {
       fastify.log.error(err, 'Google OAuth callback error');
       return reply.redirect(`${config.frontendUrl}/login?error=${oauthErrorCode(err)}`);
     }
   });
+
+  // Swap the one-time code from an OAuth callback for a session JWT. Needs
+  // the nonce cookie set by that callback, so only the browser that finished
+  // the OAuth flow can use the code.
+  fastify.post<{ Body: { code: string } }>(
+    LOGIN_EXCHANGE_PATH,
+    {
+      config: authRateLimit,
+      schema: {
+        tags: ['auth'],
+        summary: 'Exchange an OAuth sign-in code for a session token',
+        body: {
+          type: 'object',
+          required: ['code'],
+          additionalProperties: false,
+          properties: {
+            code: { type: 'string', minLength: 1, maxLength: 128 },
+          },
+        },
+        response: {
+          200: jwtResponseSchema,
+          400: apiErrorSchema,
+          429: apiErrorSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const nonce = request.cookies[LOGIN_NONCE_COOKIE];
+      const user = nonce ? await consumeLoginExchangeCode(request.body.code, nonce) : null;
+      // A failed attempt leaves the cookie alone: a planted link must not be
+      // able to cancel the sign-in this browser has in flight.
+      if (!user) return reply.code(400).send(INVALID_LOGIN_CODE);
+
+      reply.clearCookie(LOGIN_NONCE_COOKIE, loginNonceCookieOptions(config));
+      const token = await signSession(reply, user, config.jwt.expiresIn);
+      return reply.code(200).send({ token });
+    },
+  );
 
   // Email/password registration
   fastify.post<{ Body: { email: string; password: string; display_name?: string } }>(
@@ -433,9 +506,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
       });
       if (wasJustCreated(user)) fastify.analytics.capture('user_signed_up', { method: 'github' });
 
-      const token = await signSession(reply, user, config.jwt.expiresIn);
-
-      return reply.redirect(`${config.frontendUrl}/auth/callback?token=${token}`);
+      return await finishOAuthSignIn(reply, user);
     } catch (err) {
       fastify.log.error(err, 'GitHub OAuth callback error');
       return reply.redirect(`${config.frontendUrl}/login?error=${oauthErrorCode(err)}`);
