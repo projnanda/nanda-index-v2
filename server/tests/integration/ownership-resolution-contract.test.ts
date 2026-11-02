@@ -32,6 +32,17 @@ describe('ownership changes across public resolution paths', () => {
     }
   }
 
+  /** Re-proves the domain the way verify-domain does: against an outstanding challenge. */
+  async function reprove() {
+    const challenge = 'trust-contract-challenge';
+    await getSql()`
+      UPDATE organizations SET domain_challenge = ${challenge},
+        domain_challenge_expires_at = NOW() + INTERVAL '1 hour'
+      WHERE org_id = ${orgId}
+    `;
+    return markDomainVerified(orgId, { domain, challenge });
+  }
+
   beforeAll(async () => {
     server = (await buildServer({ logger: false })).fastify;
     await server.ready();
@@ -64,7 +75,7 @@ describe('ownership changes across public resolution paths', () => {
     await expectVisibility(200);
     await getSql()`UPDATE organizations SET domain_verified = false WHERE org_id = ${orgId}`;
     await expectVisibility(404);
-    await markDomainVerified(orgId);
+    await reprove();
     await expectVisibility(200);
   });
 
@@ -76,7 +87,7 @@ describe('ownership changes across public resolution paths', () => {
       await sql`UPDATE organizations SET moderation = 'takedown', domain_verified = false WHERE org_id = ${orgId}`;
     }
     await expectVisibility(404);
-    const verified = await markDomainVerified(orgId);
+    const verified = await reprove();
     expect(verified?.domainVerified).toBe(true);
     if (restriction === 'suspended') expect(verified?.status).toBe('suspended');
     else expect(verified?.moderation).toBe('takedown');
@@ -86,7 +97,7 @@ describe('ownership changes across public resolution paths', () => {
   it('keeps a hidden but proven entry resolvable after reproof', async () => {
     await getSql()`UPDATE organizations SET moderation = 'hidden', domain_verified = false WHERE org_id = ${orgId}`;
     await expectVisibility(404);
-    await markDomainVerified(orgId);
+    await reprove();
     await expectVisibility(200);
   });
 
