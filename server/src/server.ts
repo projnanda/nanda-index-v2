@@ -2,6 +2,7 @@ import { fileURLToPath } from 'url';
 import Fastify, { type FastifyServerOptions } from 'fastify';
 import { buildConfig } from './config/index.js';
 import { serializeRequest } from './lib/logRedaction.js';
+import { trustPrivateProxyHops } from './lib/trustProxy.js';
 import { registerErrorHandler } from './plugins/errorHandler.js';
 import { registerHelmet } from './plugins/helmet.js';
 import { registerCors } from './plugins/cors.js';
@@ -78,9 +79,10 @@ export async function buildServer(options: BuildServerOptions = {}) {
     bodyLimit: MAX_BODY_BYTES,
     // Behind Caddy, request.ip must be the visitor's address, not the proxy's —
     // otherwise every per-IP rate limit is one bucket shared by all users.
-    // Only the configured number of hops is trusted, so a client reaching the
-    // API directly cannot pick its own address via X-Forwarded-For.
-    ...(config.trustProxyHops > 0 ? { trustProxy: config.trustProxyHops } : {}),
+    // Only the configured number of hops, each on a private network, is
+    // trusted, so a client reaching the API directly cannot pick its own
+    // address via X-Forwarded-For.
+    ...(config.trustProxyHops > 0 ? { trustProxy: trustPrivateProxyHops(config.trustProxyHops) } : {}),
     logger: buildLoggerOptions(config.nodeEnv, options.logger),
   });
 

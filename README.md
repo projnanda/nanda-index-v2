@@ -48,7 +48,7 @@ Four registration types:
 
 ## Stack
 
-- **API:** Fastify 5, TypeScript, Node.js 20
+- **API:** Fastify 5, TypeScript, Node.js 22
 - **Database:** PostgreSQL 16, postgres.js v3
 - **Frontend:** Next.js 16, TailwindCSS v4
 - **Auth:** Email/password + Google OAuth + GitHub OAuth, JWT
