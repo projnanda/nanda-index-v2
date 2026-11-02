@@ -526,19 +526,30 @@ export async function issueDomainChallenge(
   return rows[0] ?? findByOrgId(orgId);
 }
 
+/** The domain and challenge a DNS TXT check actually proved. */
+export interface CheckedDomainProof {
+  readonly domain: string;
+  readonly challenge: string;
+}
+
 /**
  * Marks an org's domain as verified after a successful DNS TXT check, clears
  * the challenge, and activates the org if it was still pending. A suspended
  * org is NOT auto-reactivated — only 'pending' transitions to 'active'.
- * Returns null if org_id not found.
+ *
+ * The DNS lookup runs outside any transaction, so the row may have changed
+ * since it was read: the proof only applies while the org still has the
+ * domain and the unexpired challenge that were checked. Otherwise a PUT that
+ * swaps the domain mid-lookup would get the new, unproven domain verified.
+ * Returns null if org_id not found or the domain or challenge changed.
  */
-export async function markDomainVerified(orgId: string): Promise<Organization | null> {
+export async function markDomainVerified(
+  orgId: string,
+  checked: CheckedDomainProof,
+): Promise<Organization | null> {
   const sql = getSql();
   return sql.begin(async (tx) => {
-    const [target] = await tx<{ domain: string | null }[]>`
-      SELECT domain FROM organizations WHERE org_id = ${orgId}
-    `;
-    if (target?.domain) await lockClaim(tx, `domain:${target.domain.toLowerCase()}`);
+    await lockClaim(tx, `domain:${checked.domain.toLowerCase()}`);
     const rows = await tx<Organization[]>`
       UPDATE organizations SET
         ever_proven                 = TRUE,
@@ -549,15 +560,18 @@ export async function markDomainVerified(orgId: string): Promise<Organization | 
         status                      = CASE WHEN status = 'pending' THEN 'active' ELSE status END,
         updated_at                  = NOW()
       WHERE org_id = ${orgId}
+        AND lower(domain) = lower(${checked.domain})
+        AND domain_challenge = ${checked.challenge}
+        AND domain_challenge_expires_at > NOW()
       RETURNING *
     `;
     const org = rows[0] ?? null;
-    // First proof wins: every unproven claim on this domain is removed, so
-    // registering a domain you do not control cannot block its owner.
-    if (org?.domain) {
+    // First proof wins: every unproven claim on the proven domain is removed,
+    // so registering a domain you do not control cannot block its owner.
+    if (org) {
       await tx`
         DELETE FROM organizations
-        WHERE lower(domain) = lower(${org.domain}) AND org_id <> ${org.orgId}
+        WHERE lower(domain) = lower(${checked.domain}) AND org_id <> ${org.orgId}
           AND NOT domain_verified
       `;
     }

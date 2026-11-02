@@ -71,8 +71,8 @@ it("reports malformed source data and offers a retry instead of leaving the trac
 it.each(["catalog", "smb", "personal"] as const)("runs the controlled %s preset through the card without using the public index", async (kind) => {
   const { exampleResponse, resolveExamples } = await import("@/lib/resolveExamples");
   const preset = resolveExamples.find((example) => example.kind === kind)!;
-  vi.mocked(fetchFactsUrl).mockImplementation(async (url) => exampleResponse(kind, [url.endsWith("/index") ? "index" : "card"], "https://index.example"));
-  vi.mocked(fetchRegistryHop).mockResolvedValue(entryHop(exampleResponse(kind, kind === "catalog" ? ["registry", "agents", "demo"] : ["card"], "https://index.example")));
+  vi.mocked(fetchFactsUrl).mockImplementation(async (url) => exampleResponse(kind, [url.endsWith("/index") ? "index" : "card"]));
+  vi.mocked(fetchRegistryHop).mockResolvedValue(entryHop(exampleResponse(kind, kind === "catalog" ? ["registry", "agents", "demo"] : ["card"])));
   render(<ResolvePage />);
   fireEvent.click(screen.getByRole("button", { name: preset.label }));
   expect(await screen.findByRole("button", { name: "Send" })).toBeTruthy();

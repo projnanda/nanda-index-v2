@@ -24,6 +24,11 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      # After the build, so the route types Next generates into .next are
+      # checked as well. tsconfig includes them but tolerates their absence,
+      # so this passes either way on a clean checkout — running it here just
+      # covers more.
+      - run: npm run typecheck
       - name: Verify every preset over HTTP
         run: |
           npm start -- --port 3000 > /tmp/resolve-examples.log 2>&1 &

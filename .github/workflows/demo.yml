@@ -1,0 +1,36 @@
+name: Demo
+on:
+  pull_request:
+    paths: ['demo/**', '.github/workflows/demo.yml']
+  push:
+    branches: [main]
+    paths: ['demo/**', '.github/workflows/demo.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: demo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          # demo/pyproject.toml requires >=3.11; pinned so a runner image
+          # bump cannot change the result of a run on its own.
+          python-version: '3.12'
+      - run: pip install -e .
+      # The gate's own tools. They are deliberately not project dependencies —
+      # the agent does not need a linter to run — so they are named here.
+      - run: pip install ruff pytest pytest-cov playwright
+      # tests/test_ui.py drives the real page. Without chromium those tests
+      # skip themselves and the gate still passes, which would mean nobody
+      # ever rendered the page; install the browser so they actually run.
+      - run: python -m playwright install --with-deps chromium
+      # Lint, format, the offline suite with its global and per-module
+      # coverage floors, then the browser suite. tools/ci.py is the gate the
+      # demo is developed against, so CI runs that rather than a copy of it
+      # that can drift.
+      - run: PYTHONPATH=src python tools/ci.py
