@@ -1,0 +1,14 @@
+# The Dockerfile copies the whole context, and Next's standalone output bundles
+# any loaded .env / .env.production into the image, so keep them (and host
+# node_modules / .next, which would overwrite the clean npm ci) out.
+.env*
+node_modules
+.next
+dist
+coverage
+**/*.test.ts
+**/*.test.tsx
+.git
+.claude
+*.log
+.DS_Store
