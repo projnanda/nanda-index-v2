@@ -22,8 +22,11 @@ export async function registerOrgRecoveryRoute(fastify: FastifyInstance): Promis
   });
   fastify.post<{ Params: { org_id: string }; Body: { token?: string } | undefined }>(
     '/api/v1/orgs/:org_id/claim', {
-      preValidation: async (request) => { request.body ??= {}; },
-      preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, async (request, reply) => {
+      preValidation: [
+        fastify.authenticate,
+        async (request) => { request.body ??= {}; },
+      ],
+      preHandler: [fastify.requireVerifiedAccount, async (request, reply) => {
         const limit = await accountLimit(request);
         if (!limit.isAllowed && limit.isExceeded) {
           return reply.header('Retry-After', limit.ttlInSeconds).code(429)
