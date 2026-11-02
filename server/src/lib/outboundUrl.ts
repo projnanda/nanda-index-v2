@@ -1,6 +1,6 @@
 import { BlockList, isIP, type LookupFunction } from 'node:net';
 import type { LookupAddress, LookupOptions } from 'node:dns';
-import { lookup as dnsLookup } from 'node:dns/promises';
+import { Resolver } from 'node:dns/promises';
 import { Agent, fetch as undiciFetch } from 'undici';
 
 /**
@@ -95,8 +95,35 @@ function isBlockedAddress(address: string): boolean {
   return BLOCKED.check(address, 'ipv6') || IPV4_MAPPED.check(address, 'ipv6');
 }
 
-const defaultLookup: HostLookup = async (hostname) =>
-  (await dnsLookup(hostname, { all: true, verbatim: true })).map((entry) => entry.address);
+/** The slice of dns.promises.Resolver a HostLookup needs (injectable for tests). */
+export interface AddressResolver {
+  resolve4(hostname: string): Promise<string[]>;
+  resolve6(hostname: string): Promise<string[]>;
+}
+
+/** Answers with every A and AAAA address; rejects only when neither family resolves. */
+export function resolverLookup(resolver: AddressResolver): HostLookup {
+  return async (hostname) => {
+    const [v4, v6] = await Promise.allSettled([resolver.resolve4(hostname), resolver.resolve6(hostname)]);
+    if (v4.status === 'rejected' && v6.status === 'rejected') throw v4.reason;
+    return [v4, v6].flatMap((answer) => (answer.status === 'fulfilled' ? answer.value : []));
+  };
+}
+
+/** Per-query timeout and attempts for the guard's DNS queries. */
+const GUARD_DNS_TIMEOUT_MS = 2000;
+const GUARD_DNS_TRIES = 2;
+
+/**
+ * Resolves with c-ares (dns.promises.Resolver), not dns.lookup. dns.lookup is
+ * getaddrinfo on libuv's threadpool (4 threads by default, at most half of
+ * them for DNS): a few registrant hosts whose DNS never answers would block
+ * every lookup in the process, database connections and OAuth included.
+ * c-ares queries run on the event loop and give up after a bounded time.
+ * /etc/hosts is not consulted, which outbound registry fetches do not need.
+ */
+const defaultLookup: HostLookup = (hostname) =>
+  resolverLookup(new Resolver({ timeout: GUARD_DNS_TIMEOUT_MS, tries: GUARD_DNS_TRIES }))(hostname);
 
 /**
  * Validates `rawUrl` as above and returns the public addresses its host

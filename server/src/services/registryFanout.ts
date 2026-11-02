@@ -94,6 +94,23 @@ export function searchCatalogEntries(entries: RemoteCatalogEntry[], query: strin
 }
 
 /**
+ * Settles like `promise`, or rejects as soon as `signal` aborts. The guard's
+ * DNS lookup cannot be cancelled, so this is how the per-org timeout also
+ * covers it: a registrant whose DNS never answers costs at most the budget.
+ */
+function untilAborted<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason);
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (value) => { signal.removeEventListener('abort', onAbort); resolve(value); },
+      (err: unknown) => { signal.removeEventListener('abort', onAbort); reject(err); },
+    );
+  });
+}
+
+/**
  * GETs one catalog-shaped response ({ entries: [...] }) and keeps only
  * well-formed entries anchored to this org's own domain. Never throws:
  * network errors, non-2xx responses and malformed JSON resolve to `null`.
@@ -108,7 +125,7 @@ async function fetchCatalogEntries(
     // registry_url is registrant-controlled: refuse internal hosts, connect
     // only to the addresses the guard checked (no DNS rebinding), and refuse
     // redirects so a public host can't bounce us to an internal one.
-    const guardedFetch = await urlGuard(url);
+    const guardedFetch = await untilAborted(urlGuard(url), signal);
     const res = await guardedFetch(url, { signal, redirect: 'error' });
     if (!res.ok) return null;
 
@@ -130,7 +147,8 @@ async function fetchCatalogEntries(
  * searched locally; or a registry API base, asked via /agents/search, falling
  * back to the origin's /.well-known/ai-catalog.json when the publisher serves
  * no search API. `null` only when no shape answers, so one flaky registry
- * can't fail the whole fan-out. One timeout covers every attempt.
+ * can't fail the whole fan-out. One timeout covers every attempt, DNS
+ * lookups included.
  */
 async function fetchAgentSearch(
   org: RankedOrganization,
