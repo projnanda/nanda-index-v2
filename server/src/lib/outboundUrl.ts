@@ -17,11 +17,50 @@ import { Agent, fetch as undiciFetch } from 'undici';
  * (see pinnedFetch); the hostname is never resolved a second time.
  */
 
+/**
+ * Why a URL was refused. Callers that treat the reasons differently — a
+ * registration accepts a host that merely does not resolve, but never one
+ * that resolves privately — should branch on this rather than on the
+ * message text, which carries the caller's raw URL.
+ */
+export type OutboundUrlErrorKind = 'invalid-url' | 'bad-protocol' | 'unresolvable' | 'non-public';
+
 export class OutboundUrlError extends Error {
-  constructor(message: string) {
+  readonly kind: OutboundUrlErrorKind;
+
+  constructor(message: string, kind: OutboundUrlErrorKind = 'non-public') {
     super(message);
     this.name = 'OutboundUrlError';
+    this.kind = kind;
   }
+}
+
+/**
+ * Wraps a lookup so it cannot outlast `timeoutMs`, reporting a timeout as
+ * `unresolvable` — the same outcome as a name that genuinely does not resolve.
+ *
+ * Unbounded resolution is not just slow. `dns.lookup` occupies a libuv
+ * threadpool thread for the whole wait (four by default), so a few requests
+ * against a slow name server will also stall password hashing and anything
+ * else on that pool.
+ */
+export function withLookupTimeout(lookup: HostLookup, timeoutMs: number): HostLookup {
+  return async (hostname) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        lookup(hostname),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(
+            () => reject(new OutboundUrlError(`host ${hostname} did not resolve within ${timeoutMs}ms`, 'unresolvable')),
+            timeoutMs,
+          );
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  };
 }
 
 /** Resolves a hostname to all of its IP addresses. Injectable for tests. */
@@ -69,7 +108,7 @@ for (const [network, prefix] of [
   BLOCKED.addSubnet(network, prefix, 'ipv4');
 }
 for (const [network, prefix] of [
-  ['::', 128],           // unspecified
+  ['::', 96],            // unspecified, and IPv4-compatible IPv6 (::a9fe:a9fe)
   ['::1', 128],          // loopback
   ['64:ff9b::', 96],
   ['64:ff9b:1::', 48],
@@ -95,22 +134,23 @@ function isBlockedAddress(address: string): boolean {
   return BLOCKED.check(address, 'ipv6') || IPV4_MAPPED.check(address, 'ipv6');
 }
 
-const defaultLookup: HostLookup = async (hostname) =>
+/** The process resolver, exported so a caller can wrap it (e.g. with a timeout). */
+export const defaultHostLookup: HostLookup = async (hostname) =>
   (await dnsLookup(hostname, { all: true, verbatim: true })).map((entry) => entry.address);
 
 /**
  * Validates `rawUrl` as above and returns the public addresses its host
  * resolved to — the only addresses a connection to it may then use.
  */
-export async function resolvePublicHttpUrl(rawUrl: string, lookup: HostLookup = defaultLookup): Promise<string[]> {
+export async function resolvePublicHttpUrl(rawUrl: string, lookup: HostLookup = defaultHostLookup): Promise<string[]> {
   let url: URL;
   try {
     url = new URL(rawUrl);
   } catch {
-    throw new OutboundUrlError(`refusing to fetch "${rawUrl}": not a valid URL`);
+    throw new OutboundUrlError(`refusing to fetch "${rawUrl}": not a valid URL`, 'invalid-url');
   }
   if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-    throw new OutboundUrlError(`refusing to fetch "${rawUrl}": protocol ${url.protocol} is not allowed`);
+    throw new OutboundUrlError(`refusing to fetch "${rawUrl}": protocol ${url.protocol} is not allowed`, 'bad-protocol');
   }
 
   const host = url.hostname.replace(/^\[|\]$/g, '');
@@ -121,17 +161,17 @@ export async function resolvePublicHttpUrl(rawUrl: string, lookup: HostLookup = 
     try {
       addresses = await lookup(host);
     } catch {
-      throw new OutboundUrlError(`refusing to fetch "${rawUrl}": host ${host} does not resolve`);
+      throw new OutboundUrlError(`refusing to fetch "${rawUrl}": host ${host} does not resolve`, 'unresolvable');
     }
   }
 
   if (addresses.length === 0 || addresses.some(isBlockedAddress)) {
-    throw new OutboundUrlError(`refusing to fetch "${rawUrl}": host ${host} resolves to a non-public address`);
+    throw new OutboundUrlError(`refusing to fetch "${rawUrl}": host ${host} resolves to a non-public address`, 'non-public');
   }
   return addresses;
 }
 
-export async function assertPublicHttpUrl(rawUrl: string, lookup: HostLookup = defaultLookup): Promise<void> {
+export async function assertPublicHttpUrl(rawUrl: string, lookup: HostLookup = defaultHostLookup): Promise<void> {
   await resolvePublicHttpUrl(rawUrl, lookup);
 }
 
@@ -190,4 +230,4 @@ export function publicUrlGuardWith(lookup: HostLookup): UrlGuard {
  *  Uses the global fetch, read at call time, so tests can stub it. */
 export const allowAnyUrl: UrlGuard = async () => (url, init) => globalThis.fetch(url, init);
 
-export const publicUrlGuard: UrlGuard = publicUrlGuardWith(defaultLookup);
+export const publicUrlGuard: UrlGuard = publicUrlGuardWith(defaultHostLookup);

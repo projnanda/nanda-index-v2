@@ -1,6 +1,7 @@
 import { validateRegistrationCard } from '../services/cardValidation.js';
-import { allowAnyUrl, publicUrlGuard, assertPublicHttpUrl, OutboundUrlError } from '../lib/outboundUrl.js';
+import { allowAnyUrl, publicUrlGuard, assertPublicHttpUrl, OutboundUrlError, defaultHostLookup, withLookupTimeout } from '../lib/outboundUrl.js';
 import { randomBytes } from 'node:crypto';
+import { isIP } from 'node:net';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { findByOrgId, findProvenByDomain, findProvenByIdentifier, countUnprovenOrgsForUser, updateOrganization, suspendOrganization, reactivateOrganization, deleteOrganization, issueDomainChallenge, markDomainVerified, renewVerifyToken, toIndexRecord, type Organization } from '../db/queries/organizations.js';
 import { checkMembership } from '../db/queries/orgMemberships.js';
@@ -258,7 +259,14 @@ function registryUrlError(registryUrl: string): string | null {
  * OUTBOUND_ALLOW_PRIVATE_HOSTS turns the check off, the same way it already
  * allows plaintext and lets fan-out reach a registry on localhost.
  */
-const INTERNAL_ONLY_SUFFIXES = ['.localhost', '.local', '.internal', '.home.arpa'];
+const INTERNAL_ONLY_SUFFIXES = [
+  '.localhost', '.local', '.internal', '.home.arpa',
+  // RFC 6762 Appendix G: names people actually use for private networks.
+  '.lan', '.corp', '.home', '.intranet',
+];
+
+/** How long a registration will wait on DNS before giving up on the lookup. */
+const REGISTRY_URL_DNS_TIMEOUT_MS = 3000;
 
 /**
  * Names reserved for use inside a single network. Address classification
@@ -270,9 +278,28 @@ const INTERNAL_ONLY_SUFFIXES = ['.localhost', '.local', '.internal', '.home.arpa
  * refused by name rather than by address.
  */
 function isInternalOnlyHost(hostname: string): boolean {
-  const host = hostname.toLowerCase().replace(/\.$/, '');
-  return host === 'localhost' || INTERNAL_ONLY_SUFFIXES.some((suffix) => host.endsWith(suffix));
+  const host = hostname.toLowerCase().replace(/\.+$/, '');
+  if (host === 'localhost') return true;
+  if (INTERNAL_ONLY_SUFFIXES.some((suffix) => host.endsWith(suffix))) return true;
+  // A name with no dot can only be resolved by a search domain, which means
+  // it names something inside one network. On GCE `metadata` reaches
+  // 169.254.169.254 that way, and on EC2 `instance-data` reaches it through
+  // ec2.internal — the same case as metadata.google.internal, spelled shorter.
+  // IP literals have no dots in IPv6 form, so they are excluded here and
+  // judged by address below.
+  return !host.includes('.') && isIP(host) === 0;
 }
+
+/**
+ * The address check needs DNS, and a slow resolver must not hold a
+ * registration open. `validateRegistrationCard` already races its own lookup
+ * against a timer for the same reason.
+ *
+ * A timeout is reported as "does not resolve", which is already the accepted
+ * outcome here: an entry whose host cannot be resolved right now is still
+ * published, and re-verification is what catches it later.
+ */
+const registryUrlLookup = withLookupTimeout(defaultHostLookup, REGISTRY_URL_DNS_TIMEOUT_MS);
 
 async function registryUrlReachabilityError(registryUrl: string): Promise<string | null> {
   if (buildConfig().outbound.allowPrivateHosts) return null;
@@ -285,11 +312,11 @@ async function registryUrlReachabilityError(registryUrl: string): Promise<string
     // Shape is already checked by registryUrlError; fall through to the guard.
   }
   try {
-    await assertPublicHttpUrl(registryUrl);
+    await assertPublicHttpUrl(registryUrl, registryUrlLookup);
     return null;
   } catch (err) {
     if (!(err instanceof OutboundUrlError)) throw err;
-    if (/does not resolve/.test(err.message)) return null;
+    if (err.kind === 'unresolvable') return null;
     return 'registry_url must be a public internet address — private, loopback, link-local and cloud metadata addresses are refused';
   }
 }

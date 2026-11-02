@@ -78,6 +78,29 @@ describe('registry_url must be a public address', () => {
     expect(res.json().detail).toContain('public internet address');
   });
 
+  it.each([
+    { label: 'a bare single-label name', value: 'https://metadata/computeMetadata/v1/' },
+    { label: 'the EC2 short name', value: 'https://instance-data/latest/' },
+    { label: 'a .lan name', value: 'https://router.lan/catalog.json' },
+    { label: 'a .corp name', value: 'https://intranet.corp/catalog.json' },
+    { label: 'a .home name', value: 'https://hub.home/catalog.json' },
+    { label: 'a .intranet name', value: 'https://wiki.intranet/catalog.json' },
+    { label: 'trailing dots on localhost', value: 'https://localhost../catalog.json' },
+  ])('refuses $label', async ({ value }) => {
+    // A name with no dot resolves only through a search domain, so it names
+    // something inside one network: `metadata` reaches 169.254.169.254 on GCE
+    // and `instance-data` reaches it on EC2.
+    const res = await create(value);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().detail).toContain('public internet address');
+  });
+
+  it('still accepts an IPv6 literal that is publicly routable', async () => {
+    // IPv6 literals have no dots; they must be judged by address, not by shape.
+    expect((await create('https://[2606:4700:4700::1111]/catalog.json')).statusCode).toBe(201);
+  });
+
   it('accepts a hostname that does not resolve yet', async () => {
     // Registering before DNS exists is ordinary: a new domain, a staged
     // launch, a propagation window. Refusing it would also make every
