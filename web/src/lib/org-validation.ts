@@ -4,17 +4,25 @@ export type OrgFormField = "org_id" | "display_name" | "domain" | "registry_url"
 export type OrgFormValues = Partial<Record<OrgFormField, string>>;
 export type OrgFieldErrors = Partial<Record<OrgFormField, string>>;
 export const URL_ERROR = "Enter a valid URL starting with http:// or https://.";
+/** registry_url is https-only on the server, so the form says so before the round trip. */
+export const REGISTRY_URL_ERROR = "Enter a valid URL starting with https://.";
 const FIELD_LABELS: Record<OrgFormField, string> = {
   org_id: "Org ID", display_name: "Display name", domain: "Domain", registry_url: "Catalog or agent card URL",
   description: "Description", tags: "Tags", version: "Version label", runtime_url: "Runtime URL", ttl_seconds: "Cache TTL",
 };
 const ORG_ID_RE = /^[a-z0-9][a-z0-9-]*[a-z0-9]$/;
 const DOMAIN_RE = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
-function validHttpUrl(value: string): boolean {
+function validHttpUrl(value: string, httpsOnly = false): boolean {
   // Match the server's explicit authority requirement before URL repairs input.
   if (!/^https?:\/\/[^/\\\s]/i.test(value) || /[\\\s\u0000-\u001f\u007f]/.test(value)) return false;
-  try { const url = new URL(value); return ["http:", "https:"].includes(url.protocol) && !!url.hostname; }
-  catch { return false; }
+  const allowed = httpsOnly ? ["https:"] : ["http:", "https:"];
+  try {
+    const url = new URL(value);
+    // `https://good.com@evil.invalid/` reads as the wrong host at a glance, and
+    // a published directory entry has no business carrying credentials.
+    if (url.username || url.password) return false;
+    return allowed.includes(url.protocol) && !!url.hostname;
+  } catch { return false; }
 }
 
 /** Validate only supplied fields, so create steps and edit use the same rules. */
@@ -28,7 +36,7 @@ export function validateOrgFields(values: OrgFormValues, options: { allowEmptyRe
   }
   if (values.display_name !== undefined && !values.display_name.trim()) errors.display_name = "Required.";
   if (values.domain !== undefined && !DOMAIN_RE.test(values.domain.trim())) errors.domain = "Enter a valid domain (e.g., moonbakery.com).";
-  if (values.registry_url !== undefined && !(options.allowEmptyRegistryUrl && !values.registry_url.trim()) && !validHttpUrl(values.registry_url.trim())) errors.registry_url = URL_ERROR;
+  if (values.registry_url !== undefined && !(options.allowEmptyRegistryUrl && !values.registry_url.trim()) && !validHttpUrl(values.registry_url.trim(), true)) errors.registry_url = REGISTRY_URL_ERROR;
   if (values.runtime_url?.trim() && !validHttpUrl(values.runtime_url.trim())) errors.runtime_url = URL_ERROR;
   for (const [field, max] of [["display_name", 255], ["domain", 255], ["registry_url", 512], ["description", 1000], ["version", 64]] as const) {
     if ((values[field]?.length ?? 0) > max) errors[field] = `Max ${max} characters.`;
@@ -65,7 +73,7 @@ export function orgFormError(error: unknown): { fields: OrgFieldErrors; message:
     let message = detail;
     const tagLimit = /^(?:body\/)?tags\/\d+ must NOT have more than (\d+) characters$/.exec(detail);
     if (error.status === 400 && (field === "registry_url" || field === "runtime_url") && /https?:\/\/|HTTP\(S\)/i.test(detail)) {
-      message = URL_ERROR;
+      message = field === "registry_url" ? REGISTRY_URL_ERROR : URL_ERROR;
     } else if (field === "tags" && tagLimit) {
       message = `Tags: each tag must be at most ${tagLimit[1]} characters.`;
     } else if (legacyPath && formField(legacyPath[1]) === field) {

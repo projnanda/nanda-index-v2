@@ -8,11 +8,14 @@ export const resolveExamples = [
 export type ExampleKind = (typeof resolveExamples)[number]["kind"];
 export const isExampleKind = (value: unknown): value is ExampleKind => resolveExamples.some((example) => example.kind === value);
 
-/** Repository-controlled HTTP fixtures, explicitly separate from the public index. */
-export function exampleResponse(kind: string, path: string[], origin: string): unknown | null {
+/**
+ * Repository-controlled HTTP fixtures, explicitly separate from the public index.
+ * Their links are root-relative, so they stay on whichever origin served them.
+ */
+export function exampleResponse(kind: string, path: string[]): unknown | null {
   const preset = resolveExamples.find((example) => example.kind === kind);
   if (!preset) return null;
-  const base = `${origin}/api/resolve-examples/${kind}`;
+  const base = `/api/resolve-examples/${kind}`;
   const catalog = kind === "catalog";
   const card = {
     name: `${preset.label} demonstration`, description: "Controlled demonstration hosted by this site. No external agent is invoked.",

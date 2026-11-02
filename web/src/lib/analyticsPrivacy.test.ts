@@ -14,11 +14,23 @@ function event(overrides: Partial<CaptureResult> = {}): CaptureResult {
 }
 
 describe("isPrivatePath", () => {
-  it.each(["/reset-password", "/auth/callback", "/verify-email", "/verify-account"])("%s is private", (path) => {
+  it.each([
+    "/reset-password",
+    "/auth/callback",
+    "/verify-email",
+    "/verify-account",
+    "/login",
+    "/register",
+    "/forgot-password",
+    "/dashboard",
+    "/dashboard/",
+    "/dashboard/orgs/123",
+    "/dashboard/settings",
+  ])("%s is private", (path) => {
     expect(isPrivatePath(path)).toBe(true);
   });
 
-  it.each(["/", "/explore", "/dashboard", "/privacy", "/authors"])("%s is public", (path) => {
+  it.each(["/", "/explore", "/privacy", "/authors", "/login-help", "/dashboards", "/registries"])("%s is public", (path) => {
     expect(isPrivatePath(path)).toBe(false);
   });
 });
@@ -78,7 +90,7 @@ describe("scrubEvent", () => {
           $elements: [{ tag_name: "a", attr__href: "/reset-password?token=t" }],
         },
       }),
-      "/dashboard",
+      "/explore",
     );
 
     expect(scrubbed?.properties.$elements_chain).toBe('a:attr__href="/verify-email"href="/verify-email"nth-child="1";div');
@@ -88,7 +100,7 @@ describe("scrubEvent", () => {
   it("redacts email addresses anywhere in the event", () => {
     const scrubbed = scrubEvent(
       event({ event: "$autocapture", properties: { $el_text: "Signed in as Ada@Example.org" } }),
-      "/dashboard",
+      "/explore",
     );
 
     expect(scrubbed?.properties.$el_text).toBe("Signed in as [email]");

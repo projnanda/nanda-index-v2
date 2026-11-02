@@ -23,16 +23,22 @@ function gtag(...args: unknown[]): void {
   if (fn) fn(...args);
 }
 
+function setGaDisabled(gaId: string, disabled: boolean): void {
+  (window as unknown as Record<string, boolean>)[`ga-disable-${gaId}`] = disabled;
+}
+
 export function Analytics({ gaId }: { gaId: string }) {
   const pathname = usePathname() ?? "/";
   const isPrivate = isPrivatePath(pathname);
   const consent = useAnalyticsConsent();
 
-  // Declining after accepting: GA's own opt-out flag stops it at once,
-  // without waiting for a reload to unload the script.
-  useEffect(() => onAnalyticsConsentChange((value) => {
-    (window as unknown as Record<string, boolean>)[`ga-disable-${gaId}`] = value !== "granted";
-  }), [gaId]);
+  // GA's own opt-out flag stops a loaded gtag at once, without waiting for a
+  // reload to unload the script: when the visitor declines after accepting,
+  // and while a client-side navigation has them on a private page.
+  useEffect(() => {
+    setGaDisabled(gaId, isPrivate || consent !== "granted");
+    return onAnalyticsConsentChange((value) => setGaDisabled(gaId, isPrivate || value !== "granted"));
+  }, [gaId, isPrivate, consent]);
 
   const enabled = consent === "granted" && !isPrivate;
 

@@ -91,6 +91,9 @@ export interface ClaimsConfig {
   /** Max org create/update requests per window per client IP. */
   readonly writeRateLimitMax: number;
   readonly writeRateLimitWindow: string;
+  /** Max domain-challenge / verify-domain requests per window per client IP (each route counted apart). */
+  readonly domainVerifyRateLimitMax: number;
+  readonly domainVerifyRateLimitWindow: string;
   /** How many unproven (unverified) orgs one account may hold at once. */
   readonly maxUnprovenPerUser: number;
   /** How long an unproven org keeps its org_id slug before others may take it. */
@@ -126,6 +129,16 @@ export interface OutboundConfig {
    *  Local development only (e.g. a nanda-registry on localhost) — leaving it
    *  on in production re-opens SSRF into the internal network. */
   readonly allowPrivateHosts: boolean;
+}
+
+export interface ExtensionsConfig {
+  /**
+   * 'open' (default) accepts any reverse-DNS namespace in `extensions`.
+   * 'anchored' accepts only `org.projectnanda` and the reverse-DNS form of
+   * the domain the entry proved. See README — turning it on is a policy
+   * change, and one entry on the live index does not satisfy it today.
+   */
+  readonly namespacePolicy: 'open' | 'anchored';
 }
 
 export interface LlmEnrichmentConfig {
@@ -173,6 +186,7 @@ export interface Config {
   readonly apiBaseUrl: string;
   readonly federation: FederationConfig;
   readonly outbound: OutboundConfig;
+  readonly extensions: ExtensionsConfig;
   readonly llmEnrichment: LlmEnrichmentConfig;
   readonly analytics: AnalyticsConfig;
 }
@@ -186,6 +200,30 @@ export interface Config {
 const DEV_JWT_SECRET = 'dev-secret-change-in-production';
 const DEV_COOKIE_SECRET = 'dev-cookie-secret-change-in-production';
 const MIN_JWT_SECRET_LENGTH = 32;
+
+/**
+ * Anything that is not exactly `anchored` means `open`. That is deliberate —
+ * the policy fails open rather than locking registrants out of a misread env
+ * var — but it used to be silent, so `Anchored` or a trailing space turned off
+ * a policy the operator believed was on. Unrecognised values now say so.
+ */
+let namespacePolicyWarned = false;
+
+function readNamespacePolicy(): 'anchored' | 'open' {
+  const raw = optionalEnv('EXTENSION_NAMESPACE_POLICY', 'open');
+  if (raw === 'anchored') return 'anchored';
+  // buildConfig() runs per request on several routes, so without this the
+  // warning repeats for the life of the process — re-review on #133 counted
+  // 283 copies after about 150 requests.
+  if (raw !== 'open' && !namespacePolicyWarned) {
+    namespacePolicyWarned = true;
+    console.warn(
+      `WARNING: EXTENSION_NAMESPACE_POLICY="${raw}" is not recognised — using "open". ` +
+      'The only value that enables namespace anchoring is exactly "anchored".',
+    );
+  }
+  return 'open';
+}
 
 export function buildConfig(): Config {
   const rawSigningKey = process.env['SIGNING_PRIVATE_KEY'];
@@ -264,6 +302,11 @@ export function buildConfig(): Config {
         'ORG_WRITE_RATE_LIMIT_MAX', optionalEnv('ORG_WRITE_RATE_LIMIT_MAX', '30'),
       ),
       writeRateLimitWindow: optionalEnv('ORG_WRITE_RATE_LIMIT_WINDOW', '1 hour'),
+      // domain-challenge and verify-domain: each verify asks four resolvers.
+      domainVerifyRateLimitMax: parsePositiveInt(
+        'DOMAIN_VERIFY_RATE_LIMIT_MAX', optionalEnv('DOMAIN_VERIFY_RATE_LIMIT_MAX', '20'),
+      ),
+      domainVerifyRateLimitWindow: optionalEnv('DOMAIN_VERIFY_RATE_LIMIT_WINDOW', '10 minutes'),
       maxUnprovenPerUser: parsePositiveInt(
         'MAX_UNPROVEN_ORGS_PER_USER', optionalEnv('MAX_UNPROVEN_ORGS_PER_USER', '5'),
       ),
@@ -300,6 +343,9 @@ export function buildConfig(): Config {
     },
     outbound: {
       allowPrivateHosts: optionalEnv('OUTBOUND_ALLOW_PRIVATE_HOSTS', 'false') === 'true',
+    },
+    extensions: {
+      namespacePolicy: readNamespacePolicy(),
     },
     llmEnrichment: {
       apiKey: process.env['OPENAI_API_KEY'] || undefined,
