@@ -186,12 +186,15 @@ export interface Config {
 const DEV_JWT_SECRET = 'dev-secret-change-in-production';
 const DEV_COOKIE_SECRET = 'dev-cookie-secret-change-in-production';
 const MIN_JWT_SECRET_LENGTH = 32;
+/** SMTP_URL value that prints emails (live reset/verification links) to stdout. */
+const EMAIL_LOG_MODE = 'log';
 
 export function buildConfig(): Config {
   const rawSigningKey = process.env['SIGNING_PRIVATE_KEY'];
   const nodeEnv = optionalEnv('NODE_ENV', 'development');
   const jwtSecret = optionalEnv('JWT_SECRET', DEV_JWT_SECRET);
   const cookieSecret = optionalEnv('COOKIE_SECRET', DEV_COOKIE_SECRET);
+  const smtpUrl = optionalEnv('SMTP_URL', EMAIL_LOG_MODE);
 
   // Refuse to start in production with a weak or default JWT secret
   if (nodeEnv === 'production') {
@@ -205,6 +208,12 @@ export function buildConfig(): Config {
     }
     if (cookieSecret === DEV_COOKIE_SECRET) {
       console.error('FATAL: COOKIE_SECRET must be set in production — do not use the default dev secret');
+      process.exit(1);
+    }
+    // Log mode writes live password-reset and verification tokens to stdout,
+    // i.e. into docker logs. Only an explicit opt-in may run production that way.
+    if (smtpUrl === EMAIL_LOG_MODE && process.env['ALLOW_EMAIL_LOG_IN_PRODUCTION'] !== 'true') {
+      console.error('FATAL: SMTP_URL (Resend API key) must be set in production — "log" would print reset and verification tokens to the logs. Set ALLOW_EMAIL_LOG_IN_PRODUCTION=true to override.');
       process.exit(1);
     }
   }
@@ -231,7 +240,7 @@ export function buildConfig(): Config {
       expiresIn: optionalEnv('JWT_EXPIRES_IN', '1d'),
     },
     email: {
-      smtpUrl:     optionalEnv('SMTP_URL', 'log'),
+      smtpUrl:     smtpUrl,
       fromAddress: optionalEnv('EMAIL_FROM', 'noreply@nanda.local'),
     },
     cookie: {
