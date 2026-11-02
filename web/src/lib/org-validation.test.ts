@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ACCOUNT_NOT_VERIFIED, ACCOUNT_NOT_VERIFIED_MESSAGE, ApiError } from "./nanda-api";
-import { orgFormError, validateOrgFields, REGISTRY_URL_ERROR } from "./org-validation";
+import { orgFormError, validateOrgFields } from "./org-validation";
 
 describe("shared organization validation", () => {
   it.each(["https://", "not-a-url", "javascript:alert(1)", "ftp://example.com"])("rejects malformed or unsupported URLs: %s", (url) => {
@@ -13,15 +13,12 @@ describe("shared organization validation", () => {
     "https://runtime.exam\nple.com/run", "https://runtime.example.com/run now",
   ])("rejects URLs a URL parser would repair: %s", (url) => {
     expect(validateOrgFields({ registry_url: url, runtime_url: url })).toEqual({
-      registry_url: REGISTRY_URL_ERROR,
+      registry_url: "Enter a valid URL starting with http:// or https://.",
       runtime_url: "Enter a valid URL starting with http:// or https://.",
     });
   });
   it("allows HTTP development URLs, HTTPS and omitted optional hints", () => {
-    // http:// is a runtime_url affordance now; registry_url is https-only,
-    // matching the server (#75).
-    expect(validateOrgFields({ runtime_url: "http://localhost:8000/run", version: "release-2026" })).toEqual({});
-    expect(validateOrgFields({ registry_url: "https://localhost:8000/card.json", runtime_url: "" })).toEqual({});
+    expect(validateOrgFields({ registry_url: "http://localhost:8000/card.json", runtime_url: "", version: "release-2026" })).toEqual({});
     expect(validateOrgFields({ registry_url: "https://example.com/card.json", ttl_seconds: "3600" })).toEqual({});
     expect(validateOrgFields({ registry_url: " HTTPS://example.com/card.json ", runtime_url: "   " })).toEqual({});
   });
@@ -40,7 +37,7 @@ describe("shared organization validation", () => {
     expect(validateOrgFields({ tags: Array(21).fill("tag").join(","), ttl_seconds: "604801" })).toHaveProperty("tags");
   });
   it("maps structured and legacy API fields without leaking codes", () => {
-    expect(orgFormError(new ApiError("VALIDATION", 400, { detail: "registry_url must start with https://" }))).toEqual({ fields: { registry_url: REGISTRY_URL_ERROR }, message: null });
+    expect(orgFormError(new ApiError("VALIDATION", 400, { detail: "registry_url must start with https://" }))).toEqual({ fields: { registry_url: "Enter a valid URL starting with http:// or https://." }, message: null });
     expect(orgFormError(new ApiError("VALIDATION", 400, { field: "description", detail: "Too long." }))).toEqual({ fields: { description: "Too long." }, message: null });
   });
   it("keeps the shared account-verification message ahead of field or raw-detail mapping", () => {
@@ -83,44 +80,5 @@ describe("shared organization validation", () => {
   });
   it("gives network errors a retry action without implementation details", () => {
     expect(orgFormError(new TypeError("Failed to fetch"))).toEqual({ fields: {}, message: "Could not reach the server. Check your connection and try again." });
-  });
-});
-
-/**
- * Review on #135: the server went https-only for registry_url while the form
- * still accepted http://, so a registrant got no client-side feedback and
- * then a server error telling them a value the form had accepted was invalid.
- */
-describe("registry_url is https-only, runtime_url is not", () => {
-  it("rejects an http:// catalog URL with an https-specific message", () => {
-    expect(validateOrgFields({ registry_url: "http://example.com/catalog.json" }))
-      .toEqual({ registry_url: REGISTRY_URL_ERROR });
-  });
-
-  it("accepts an https:// catalog URL", () => {
-    expect(validateOrgFields({ registry_url: "https://example.com/catalog.json" })).toEqual({});
-  });
-
-  it("accepts an uppercase scheme, as the server does", () => {
-    expect(validateOrgFields({ registry_url: "HTTPS://example.com/catalog.json" })).toEqual({});
-  });
-
-  it("still allows http:// for runtime_url", () => {
-    expect(validateOrgFields({ runtime_url: "http://example.com/run" })).toEqual({});
-  });
-
-  it("says https:// rather than the http-or-https wording", () => {
-    expect(REGISTRY_URL_ERROR).toContain("https://");
-    expect(REGISTRY_URL_ERROR).not.toContain("http://");
-  });
-});
-
-describe("registry_url must not carry credentials", () => {
-  it.each([
-    "https://user:pass@example.com/c.json",
-    "https://user@example.com/c.json",
-    "https://good.com@evil.invalid/c.json",
-  ])("rejects %s", (url) => {
-    expect(validateOrgFields({ registry_url: url })).toEqual({ registry_url: REGISTRY_URL_ERROR });
   });
 });

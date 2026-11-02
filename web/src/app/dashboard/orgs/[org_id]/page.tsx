@@ -71,15 +71,8 @@ export default function OrgDetailPage() {
   const isAgentCard = resolutionRole === "smb-agent-card" || resolutionRole === "personal-agent-card";
   const [runtime, setRuntime] = useState(() => readRuntimeSettings({}));
   const [fieldErrors, setFieldErrors] = useState<OrgFieldErrors>({});
-  // Only validate the catalog URL when it has actually been edited. An entry
-  // registered before the https-only rule has a stored http:// URL, and
-  // checking it on every save left its owner unable to change their
-  // description — the form refused before any request went out, for a value
-  // they had not touched. The server already skips the check when unchanged.
-  const registryUrlChanged = registryUrl.trim() !== (org?.registry_url ?? "");
   const validation = validateOrgFields({ display_name: displayName, ...(org?.domain ? { domain } : {}),
-    ...(registryUrlChanged ? { registry_url: registryUrl } : {}),
-    description, tags, version, ...(isAgentCard ? { runtime_url: runtime["runtime.url"] } : {}), ttl_seconds: ttlSeconds },
+    registry_url: registryUrl, description, tags, version, ...(isAgentCard ? { runtime_url: runtime["runtime.url"] } : {}), ttl_seconds: ttlSeconds },
     { allowEmptyRegistryUrl: !org?.registry_url });
   function showFieldErrors(errors: OrgFieldErrors) {
     pendingAdvancedFocus.current = errors.ttl_seconds ? "ttl_seconds" : isAgentCard && errors.runtime_url ? "runtime_url" : null;
@@ -162,8 +155,7 @@ export default function OrgDetailPage() {
       const newDomain = domain.trim();
       const updated = await updateOrg(orgId, {
         display_name: displayName.trim(),
-        // Unchanged values are left out entirely rather than echoed back.
-        ...(registryUrlChanged && registryUrl.trim() ? { registry_url: registryUrl.trim() } : {}),
+        ...(registryUrl.trim() ? { registry_url: registryUrl.trim() } : {}),
         ...(org?.domain && newDomain && newDomain !== org.domain ? { domain: newDomain } : {}),
         description: description || undefined,
         tags: tagList.length ? tagList : [],
