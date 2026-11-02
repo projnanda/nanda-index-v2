@@ -6,7 +6,9 @@ import {
   isLoginLocked,
   recordLoginFailure,
   clearLoginFailures,
+  lockoutPolicy,
 } from '../db/queries/loginFailures.js';
+import { clientNetworkKey } from '../lib/clientNetwork.js';
 import {
   AccountSettingsError,
   changeAccountPassword,
@@ -54,20 +56,18 @@ export async function registerAccountSettingsRoutes(app: FastifyInstance): Promi
     user: User,
     password: string | undefined,
   ): Promise<void> {
-    if (await isLoginLocked(user.email, request.ip))
+    const network = clientNetworkKey(request.ip);
+    if (await isLoginLocked(user.email, network))
       throw new AccountSettingsError(
         429,
         'TOO_MANY_ATTEMPTS',
         'too many password attempts; try again later',
       );
     if (!password || !(await passwords.verify(password, user.passwordHash))) {
-      await recordLoginFailure(user.email, request.ip, {
-        maxAttempts: config.auth.maxLoginAttempts,
-        lockoutMinutes: config.auth.lockoutMinutes,
-      });
+      await recordLoginFailure(user.email, network, lockoutPolicy(config));
       throw new AccountSettingsError(403, 'INVALID_PASSWORD', 'the current password is incorrect');
     }
-    await clearLoginFailures(user.email, request.ip);
+    await clearLoginFailures(user.email, network);
   }
   function failure(error: unknown, reply: FastifyReply) {
     if (!(error instanceof AccountSettingsError)) throw error;

@@ -11,7 +11,9 @@ import {
   recordLoginFailure,
   clearLoginFailures,
   clearAllLoginFailures,
+  lockoutPolicy,
 } from '../db/queries/loginFailures.js';
+import { clientNetworkKey } from '../lib/clientNetwork.js';
 import {
   createResetToken,
   findValidResetToken,
@@ -259,12 +261,14 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
     },
     async (request, reply) => {
       const { email, password } = request.body;
-      const ip = request.ip;
+      const network = clientNetworkKey(request.ip);
 
-      // Soft lockout per (email, client IP): an attacker's failures lock only
-      // the attacker's IP, never the real owner signing in from elsewhere.
+      // Soft lockout per (email, client network): an attacker's failures lock
+      // only the attacker's network, never the real owner signing in from
+      // elsewhere; a looser account-wide limit caps guesses spread over many
+      // networks (see loginFailures.ts). Both answer with the same 429.
       // Checked before the user lookup so known and unknown emails behave alike.
-      if (await isLoginLocked(email, ip)) {
+      if (await isLoginLocked(email, network)) {
         return reply.code(429).send({
           error:  'TOO_MANY_ATTEMPTS',
           detail: 'too many failed sign-in attempts from this network; try again later',
@@ -276,15 +280,12 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
       const user = await findUserByEmail(email);
       const valid = await passwords.verify(password, user?.passwordHash);
       if (!user || !valid) {
-        await recordLoginFailure(email, ip, {
-          maxAttempts:    config.auth.maxLoginAttempts,
-          lockoutMinutes: config.auth.lockoutMinutes,
-        });
+        await recordLoginFailure(email, network, lockoutPolicy(config));
         return reply.code(401).send(INVALID_CREDENTIALS);
       }
 
-      // Successful login clears this IP's accumulated failures / lock.
-      await clearLoginFailures(email, ip);
+      // Successful login clears this network's accumulated failures / lock.
+      await clearLoginFailures(email, network);
 
       const token = await signSession(reply, user, config.jwt.expiresIn);
       return reply.code(200).send({ token });
@@ -376,7 +377,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
       if (!user) {
         return reply.code(400).send({ error: 'INVALID_TOKEN', detail: 'reset token is invalid or expired' });
       }
-      // Clear lockouts from every IP so the user can sign in immediately.
+      // Clear lockouts from every network so the user can sign in immediately.
       await clearAllLoginFailures(user.email);
 
       return reply.code(200).send({ ok: true });

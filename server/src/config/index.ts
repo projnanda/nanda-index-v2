@@ -75,6 +75,9 @@ export interface AuthConfig {
   readonly maxLoginAttempts: number;
   /** How long an account stays locked after hitting the threshold. */
   readonly lockoutMinutes: number;
+  /** Failed logins for one email, from every network together, before each
+   *  further attempt waits out a lock of lockoutMinutes. */
+  readonly maxAccountLoginAttempts: number;
   /** Lifetime of a password-reset token. */
   readonly resetTokenTtlMinutes: number;
   /**
@@ -247,6 +250,9 @@ export function buildConfig(): Config {
       ),
       lockoutMinutes: parsePositiveInt(
         'AUTH_LOCKOUT_MINUTES', optionalEnv('AUTH_LOCKOUT_MINUTES', '15'),
+      ),
+      maxAccountLoginAttempts: parsePositiveInt(
+        'AUTH_MAX_ACCOUNT_LOGIN_ATTEMPTS', optionalEnv('AUTH_MAX_ACCOUNT_LOGIN_ATTEMPTS', '50'),
       ),
       resetTokenTtlMinutes: parsePositiveInt(
         'AUTH_RESET_TOKEN_TTL_MINUTES', optionalEnv('AUTH_RESET_TOKEN_TTL_MINUTES', '60'),
