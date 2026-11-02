@@ -115,3 +115,42 @@ it.each(["nested-ai-catalog", "dns-svcb-pointer", undefined])("allows unrelated 
   expect(saved).not.toHaveProperty("extensions");
   expect(screen.queryByLabelText(/^Runtime URL/)).toBeNull();
 });
+
+const legacyOrg = { ...org, registry_url: "http://legacy.example.com/catalog.json" };
+
+it("lets the owner of a pre-https entry edit other fields", async () => {
+  // The server skips the https rule when registry_url is unchanged. The form
+  // used to apply it on every save, so these owners could not edit anything
+  // and no request ever left the page.
+  let body: Record<string, unknown> | null = null;
+  vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+    if (init?.method) { body = JSON.parse(String(init.body)); return new Response(JSON.stringify(legacyOrg)); }
+    return new Response(JSON.stringify(legacyOrg));
+  });
+  render(<OrgDetailPage />);
+  await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
+  fireEvent.change(screen.getByLabelText(/^Description/), { target: { value: "Edited description" } });
+  await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+  // The save went out at all — previously the form refused and sent nothing.
+  expect(body).not.toBeNull();
+  expect(body).toMatchObject({ description: "Edited description" });
+  // The unchanged legacy URL is left out of the request rather than echoed.
+  expect(body).not.toHaveProperty("registry_url");
+});
+
+it("still refuses a change from a pre-https entry to another http URL", async () => {
+  let writes = 0;
+  vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+    if (init?.method) writes++;
+    return new Response(JSON.stringify(legacyOrg));
+  });
+  render(<OrgDetailPage />);
+  await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
+  const url = screen.getByLabelText(/^Catalog \/ Agent Card URL/);
+  fireEvent.change(url, { target: { value: "http://other.example.com/catalog.json" } });
+  await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+  expect(writes).toBe(0);
+  expect(url.getAttribute("aria-invalid")).toBe("true");
+});
