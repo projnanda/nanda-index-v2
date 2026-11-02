@@ -75,6 +75,8 @@ function posthogRewrites() {
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  // No X-Powered-By: Next.js header; it only tells scanners what to try.
+  poweredByHeader: false,
   // PostHog's endpoints end in a slash (/e/, /flags/); Next's default
   // redirect to the slash-less URL would break them behind the rewrite.
   skipTrailingSlashRedirect: !!process.env.NEXT_PUBLIC_POSTHOG_KEY,

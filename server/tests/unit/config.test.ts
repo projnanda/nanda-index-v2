@@ -100,7 +100,7 @@ describe('buildConfig', () => {
     process.env.NODE_ENV = 'production';
     // JWT_SECRET and COOKIE_SECRET must be set in production (auth hardening)
     process.env.JWT_SECRET = 'a-secret-that-is-long-enough-for-production-use';
-    process.env.COOKIE_SECRET = 'a-production-cookie-secret';
+    process.env.COOKIE_SECRET = 'a-production-cookie-secret-of-32-plus-chars';
     process.env.SIGNING_KEY_ID = 'custom';
     process.env.DB_MAX_CONNECTIONS = '20';
 
@@ -112,6 +112,25 @@ describe('buildConfig', () => {
 
     delete process.env.JWT_SECRET;
     delete process.env.COOKIE_SECRET;
+  });
+
+  it('exits in production when COOKIE_SECRET is shorter than 32 characters', () => {
+    process.env.DATABASE_URL = 'x';
+    process.env.NODE_ENV = 'production';
+    process.env.JWT_SECRET = 'a-secret-that-is-long-enough-for-production-use';
+    process.env.COOKIE_SECRET = 'x'.repeat(31);
+    const exitSpy = mockExit();
+
+    expect(() => buildConfig()).toThrow('__mock_exit__');
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('accepts a short COOKIE_SECRET outside production', () => {
+    process.env.DATABASE_URL = 'x';
+    process.env.NODE_ENV = 'development';
+    process.env.COOKIE_SECRET = 'short';
+
+    expect(buildConfig().cookie.secret).toBe('short');
   });
 
   it('exits when DATABASE_URL is missing', () => {

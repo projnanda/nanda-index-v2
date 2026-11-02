@@ -189,6 +189,7 @@ export interface Config {
 const DEV_JWT_SECRET = 'dev-secret-change-in-production';
 const DEV_COOKIE_SECRET = 'dev-cookie-secret-change-in-production';
 const MIN_JWT_SECRET_LENGTH = 32;
+const MIN_COOKIE_SECRET_LENGTH = 32;
 
 export function buildConfig(): Config {
   const rawSigningKey = process.env['SIGNING_PRIVATE_KEY'];
@@ -208,6 +209,10 @@ export function buildConfig(): Config {
     }
     if (cookieSecret === DEV_COOKIE_SECRET) {
       console.error('FATAL: COOKIE_SECRET must be set in production — do not use the default dev secret');
+      process.exit(1);
+    }
+    if (cookieSecret.length < MIN_COOKIE_SECRET_LENGTH) {
+      console.error(`FATAL: COOKIE_SECRET must be at least ${MIN_COOKIE_SECRET_LENGTH} characters in production`);
       process.exit(1);
     }
   }

@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import fjwt from '@fastify/jwt';
 import { buildConfig } from '../config/index.js';
 import { findUserById } from '../db/queries/users.js';
+import { isSessionRevoked } from '../db/queries/revokedSessions.js';
 
 export interface JwtPayload {
   userId: string;
@@ -10,6 +11,13 @@ export interface JwtPayload {
   /** users.token_version at issue time. Tokens minted before this claim
    *  existed carry none and are treated as version 0. */
   tokenVersion?: number;
+  /** Random id of the sign-in session, kept when a token is re-issued for it
+   *  (profile update). Signing out revokes it (POST /auth/logout). Tokens
+   *  minted before this claim existed carry none. */
+  jti?: string;
+  /** Standard claims, set on every signed token. */
+  iat?: number;
+  exp?: number;
 }
 
 declare module '@fastify/jwt' {
@@ -50,9 +58,10 @@ export async function registerJwtPlugin(fastify: FastifyInstance): Promise<void>
     // A signature check alone cannot revoke a JWT. Comparing against the
     // user's current token_version lets a password reset end every older
     // session, and a deleted account's tokens stop working immediately.
-    const { userId, tokenVersion } = request.user as JwtPayload;
+    // A signed-out session's id is refused as well.
+    const { userId, tokenVersion, jti } = request.user as JwtPayload;
     const user = await findUserById(userId);
-    if (!user || user.tokenVersion !== (tokenVersion ?? 0)) {
+    if (!user || user.tokenVersion !== (tokenVersion ?? 0) || (jti && await isSessionRevoked(jti))) {
       reply.code(401).send({ error: 'UNAUTHORIZED', detail: 'session expired; please sign in again' });
     }
   });

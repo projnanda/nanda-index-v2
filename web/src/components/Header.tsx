@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { navigation } from "@/lib/site-data";
 import { getAuthToken, parseJwtPayload, clearAuthToken, isTokenExpired, subscribeAuthChanges } from "@/lib/auth";
+import { logout } from "@/lib/nanda-api";
 
 export function Header() {
   const detailsRef = useRef<HTMLDetailsElement>(null);
@@ -19,7 +20,14 @@ export function Header() {
     if (detailsRef.current) detailsRef.current.open = false;
   }
 
-  function signOut() {
+  async function signOut() {
+    // Revoke the session on the server, so a copied token stops working too.
+    // Sign out locally whatever the answer: the user asked to leave.
+    try {
+      await logout();
+    } catch {
+      // Already expired or revoked, or the API is unreachable.
+    }
     clearAuthToken();
     router.push("/");
   }
@@ -75,7 +83,7 @@ export function Header() {
                   <span className="truncate max-w-[12rem]">{displayName}</span>
                 </Link>
                 <button
-                  onClick={signOut}
+                  onClick={() => void signOut()}
                   className="text-xs text-ink-weak hover:text-ink transition-colors"
                 >
                   Sign out
@@ -109,7 +117,7 @@ export function Header() {
               ))}
               {displayName ? (
                 <button
-                  onClick={() => { closeMobileMenu(); signOut(); }}
+                  onClick={() => { closeMobileMenu(); void signOut(); }}
                   className="block w-full rounded-control px-3 py-2 text-left text-sm text-ink-weak hover:bg-surface-strong"
                 >
                   Sign out ({displayName})

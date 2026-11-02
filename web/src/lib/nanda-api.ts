@@ -262,6 +262,11 @@ export async function exchangeLoginCode(code: string): Promise<string> {
   return data.token;
 }
 
+/** POST /auth/logout — revokes this session on the server. */
+export async function logout(): Promise<void> {
+  await request("/auth/logout", { method: "POST" });
+}
+
 export async function logoutAll(): Promise<void> {
   await request("/auth/logout-all", { method: "POST" });
 }

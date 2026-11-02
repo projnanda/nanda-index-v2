@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import {
   upsertUser,
@@ -53,10 +54,25 @@ function loginNonceCookieOptions(config: Config) {
   } as const;
 }
 
-/** Signs a session JWT carrying the user's current token_version (see plugins/jwt.ts). */
-function signSession(reply: FastifyReply, user: User, expiresIn: string): Promise<string> {
+/**
+ * Signs a session JWT carrying the user's current token_version and a session
+ * id (see plugins/jwt.ts). A token re-issued for an existing session passes
+ * that session's id, so signing out revokes both.
+ */
+export function signSession(
+  reply: FastifyReply,
+  user: User,
+  expiresIn: string,
+  sessionId: string = randomUUID(),
+): Promise<string> {
   return reply.jwtSign(
-    { userId: user.id, email: user.email, displayName: user.displayName, tokenVersion: user.tokenVersion },
+    {
+      userId: user.id,
+      email: user.email,
+      displayName: user.displayName,
+      tokenVersion: user.tokenVersion,
+      jti: sessionId,
+    },
     { expiresIn },
   );
 }
