@@ -145,6 +145,8 @@ dd{margin:0;font-family:var(--mono);font-size:12.5px;word-break:break-all}
 .caprow a{font-family:var(--mono);font-size:11.5px;color:var(--muted);word-break:break-all;
           text-decoration:none;display:inline-block;margin:4px 0 0}
 .caprow a:hover{color:var(--ink);text-decoration:underline}
+.caprow .addr{font-family:var(--mono);font-size:11.5px;color:var(--muted);word-break:break-all;
+              display:inline-block;margin:4px 0 0}
 .captags{display:flex;gap:6px;flex-wrap:wrap;margin:7px 0 0}
 .captags em{font:400 11px/1 var(--mono);font-style:normal;padding:4px 8px;
             border:1px solid var(--rule-soft);color:var(--faint)}
@@ -176,6 +178,7 @@ dd{margin:0;font-family:var(--mono);font-size:12.5px;word-break:break-all}
 .ref a{grid-column:2;font-family:var(--mono);font-size:11.5px;color:var(--muted);
        word-break:break-all;text-decoration:none}
 .ref a:hover{color:var(--ink);text-decoration:underline}
+.ref .addr{grid-column:2;font-family:var(--mono);font-size:11.5px;color:var(--muted);word-break:break-all}
 .ref .nt{grid-column:2;font-size:13px;color:var(--faint);margin:2px 0 0}
 .ref .fx{grid-column:2;font-family:var(--mono);font-size:11px;color:var(--faint);margin:3px 0 0}
 @media(max-width:560px){.ref{grid-template-columns:auto 1fr}.ref .st{grid-column:2;grid-row:auto}}
@@ -436,7 +439,7 @@ async function loadReferences(force) {
           <span class="dot ${esc(r.status)}" aria-hidden="true"></span>
           <span class="nm">${esc(r.name)}</span>
           <span class="st">${esc(r.status)}</span>
-          <a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.url)}</a>
+          ${link(r.url)}
           ${r.note ? `<p class="nt">${esc(r.note)}</p>` : ''}
           <p class="fx">${esc(r.detail)}${r.extra ? ' \u00B7 ' + esc(Object.entries(r.extra).map(([k,v]) => `${k} ${v}`).join(' \u00B7 ')) : ''}</p>
         </li>`).join('')}</ul></div>`).join('');
@@ -510,7 +513,7 @@ async function searchCapability(term) {
         <div class="caprow">
           <div class="nm">${esc(m.display_name)}</div>
           <div class="id">${esc(m.identifier)}</div>
-          <a href="${esc(m.facts_url || m.url)}" target="_blank" rel="noopener">${esc(m.facts_url || m.url)}</a>
+          ${link(m.facts_url || m.url)}
           <div class="captags">${claims.map(t =>
             `<em class="${String(t).toLowerCase() === wanted ? 'hit' : ''}">${esc(t)}</em>`).join('')}</div>
           <p class="src">${m.source === 'org'
@@ -566,6 +569,24 @@ for (const b of document.querySelectorAll('.chips button')) {
 function esc(t) {
   return String(t).replace(/[&<>"']/g, c =>
     ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+/* Addresses come from other organisations' documents, and this page runs on
+   the index's own origin. esc() keeps them from breaking out of the attribute
+   but not from being a javascript: URL, so only http(s) becomes a link; any
+   other address is shown as text. */
+function safeHref(u) {
+  try {
+    const url = new URL(String(u));
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : '';
+  } catch (_) {
+    return '';
+  }
+}
+function link(u) {
+  const href = safeHref(u);
+  return href
+    ? `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(u)}</a>`
+    : `<span class="addr">${esc(u || '')}</span>`;
 }
 function setStatus(t) { $('status-plain').textContent = t; $('status-tech').textContent = t; }
 

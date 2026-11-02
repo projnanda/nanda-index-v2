@@ -235,10 +235,11 @@ to exist first:
 curl -s https://nandaindex.org/demo/healthz          # → "did": "did:key:z6Mk…"
 
 # 2. Mint the host's grant for that DID, onto the volume the agent reads.
-#    HOST_SEED is the host's key material: keep it private and keep it, or no
-#    replacement or revocation can ever be minted for this host identity.
-docker compose -f docker-compose.prod.yml --env-file .env.prod exec \
-  -e AGENT_DID='did:key:z6Mk…' -e HOST_SEED='…' demo python tools/mint_grant.py
+#    host.seed is the host's key material (make one with --generate-seed): keep
+#    it private, offline and kept, or no replacement or revocation can ever be
+#    minted for this host identity. It goes in on stdin, never in a command.
+docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T \
+  -e AGENT_DID='did:key:z6Mk…' demo python tools/mint_grant.py --seed-file - < host.seed
 
 # 3. Restart so it loads the grant; it registers itself with the second index
 #    on start and renews every hour after that.
@@ -246,7 +247,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod restart demo
 curl -s https://nandaindex.org/demo/ui/authority     # names the same DID
 ```
 
-The grant expires after 90 days — repeat step 2 with the same `HOST_SEED`.
+The grant expires after 90 days — repeat step 2 with the same `host.seed`.
 Visitors see the last run replayed in the step-by-step player on load; each
 visitor may start `DEMO_RUN_LIMIT_PER_HOUR` live runs, because a live run sends
 real messages to two companies' agents and holds a real table.

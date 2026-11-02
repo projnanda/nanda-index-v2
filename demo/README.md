@@ -98,10 +98,15 @@ curl -s localhost:8080/healthz    # → {"did": "did:key:z6Mk…", "urn": "urn:a
 
 # 2. an operator mints a grant for THAT did, into this copy's own directory
 export CONCIERGE_AUTHORITY=~/.concierge-authority
-AGENT_DID='did:key:z6Mk…' HOST_SEED='your host key material' python3 tools/mint_grant.py
+python3 tools/mint_grant.py --generate-seed > host.seed     # once; keep it private
+AGENT_DID='did:key:z6Mk…' python3 tools/mint_grant.py --seed-file host.seed
 ```
 
-`HOST_SEED` is the host's key material and belongs to whoever is delegating.
+`host.seed` is the host's key material and belongs to whoever is delegating. It
+is read from a file (`--seed-file`, `-` for stdin) or a prompt (`--prompt`), never
+from the command line. The host's public key is published in the grant, so the
+material must be at least 32 random bytes as hex; anything weaker is refused
+(`--allow-weak` exists only to renew under a host key minted before that check).
 Omit it and the tool generates one and discards it: the grant is still valid and
 unforgeable, but nobody can ever mint a replacement or a revocation for that host
 identity, and the tool says so.

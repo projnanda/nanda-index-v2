@@ -82,14 +82,39 @@ def index_v3_url() -> str:
     return index_url()
 
 
+#: Live runs all visitors together may start per hour, unless configured. Each
+#: run messages two companies' agents and holds a table under the host's grant;
+#: a per-visitor limit alone lets enough visitors spend that without end.
+DEFAULT_RUN_LIMIT_GLOBAL_PER_HOUR = 20
+
+#: Capability searches one visitor may start per minute, unless configured. Each
+#: uncached search is about 3 + 2N requests to other organisations' servers.
+DEFAULT_CAPABILITY_LIMIT_PER_MINUTE = 20
+
+
+def _limit(name: str, default: int) -> int:
+    """A non-negative count from the environment; 0 means no limit."""
+    raw = os.environ.get(name, "").strip()
+    try:
+        return max(int(raw), 0) if raw else default
+    except ValueError:
+        return default
+
+
 def run_limit_per_hour() -> int:
     """Live runs one visitor may start per hour. Unset or 0 means no limit, which
     suits a workstation; a public deployment sets it (see docker-compose)."""
-    raw = os.environ.get("RUN_LIMIT_PER_HOUR", "").strip()
-    try:
-        return max(int(raw), 0) if raw else 0
-    except ValueError:
-        return 0
+    return _limit("RUN_LIMIT_PER_HOUR", 0)
+
+
+def run_limit_global_per_hour() -> int:
+    """Live runs all visitors together may start per hour. 0 switches it off."""
+    return _limit("RUN_LIMIT_GLOBAL_PER_HOUR", DEFAULT_RUN_LIMIT_GLOBAL_PER_HOUR)
+
+
+def capability_limit_per_minute() -> int:
+    """Uncached capability searches one visitor may start per minute. 0 switches it off."""
+    return _limit("CAPABILITY_LIMIT_PER_MINUTE", DEFAULT_CAPABILITY_LIMIT_PER_MINUTE)
 
 
 def behind_proxy() -> bool:

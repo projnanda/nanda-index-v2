@@ -37,6 +37,10 @@ nandaindex.org {
 	# /demo/.well-known/agent-card.json and it answers A2A on POST /demo/, so the
 	# prefix is stripped and everything under it goes to the demo service.
 	# GET /demo and GET /demo/ land on the page; POST /demo/ stays A2A.
+	# This prefix shares the web app's origin (and its localStorage session),
+	# and Next's headers never reach it. The demo sends its own CSP, nosniff,
+	# Referrer-Policy and X-Frame-Options (demo/src/concierge/security.py), so
+	# its tests can check them; the complete fix is a host of its own.
 	redir /demo /demo/ui/ 302
 	@demo_page {
 		path /demo/
