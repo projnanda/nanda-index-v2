@@ -319,8 +319,8 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
       // dashboard can show the "verify your email" prompt. Org writes stay
       // blocked (requireVerifiedAccount) until the link is used.
       try {
-        const verifyToken = await issueAccountVerifyToken(user.id);
-        if (verifyToken) await sendAccountVerificationEmail(user.email, verifyToken);
+        const issued = await issueAccountVerifyToken(user.id);
+        if (issued) await sendAccountVerificationEmail(issued.email, issued.token);
       } catch (err) {
         // Sign-up still succeeds; the user can resend from the dashboard.
         fastify.log.error(err, 'failed to send account verification email');

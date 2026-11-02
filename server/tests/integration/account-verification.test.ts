@@ -266,7 +266,7 @@ describe('account email verification', () => {
       process.env.ADMIN_EMAILS = ADMIN;
       try {
         const user = await signInWith('acctv-attacker@example.com');
-        const token = await issueAccountVerifyToken(user.id);
+        const token = (await issueAccountVerifyToken(user.id))?.token;
         expect(token).toEqual(expect.any(String));
 
         // Same GitHub identity, now reporting an unverified admin address.
@@ -289,7 +289,7 @@ describe('account email verification', () => {
       // Defence in depth: even if a path changed the email without clearing
       // the token, consuming it must check the address it was issued for.
       const user = await signInWith('acctv-before@example.com');
-      const token = await issueAccountVerifyToken(user.id);
+      const token = (await issueAccountVerifyToken(user.id))?.token;
       await getSql()`UPDATE users SET email = 'acctv-after@example.com' WHERE id = ${user.id}`;
 
       expect(await consumeAccountVerifyToken(token!)).toBeNull();
@@ -298,7 +298,7 @@ describe('account email verification', () => {
 
     it('keeps the pending link when a sign-in reports the same address', async () => {
       const user = await signInWith('acctv-same@example.com');
-      const token = await issueAccountVerifyToken(user.id);
+      const token = (await issueAccountVerifyToken(user.id))?.token;
       await signInWith('ACCTV-same@example.com');
 
       const res = await verifyAccount(app, token!);
@@ -311,7 +311,44 @@ describe('account email verification', () => {
       await issueAccountVerifyToken(user.id);
       await signInWith('acctv-resend-b@example.com');
 
-      expect(await issueAccountVerifyToken(user.id)).toEqual(expect.any(String));
+      expect((await issueAccountVerifyToken(user.id))?.token).toEqual(expect.any(String));
+    });
+
+    it('returns the address the new token is bound to, read in the same write', async () => {
+      const user = await signInWith('acctv-race-old@example.com');
+      // The email changes after a caller read the user, before it issues.
+      await getSql()`UPDATE users SET email = 'acctv-race-new@example.com' WHERE id = ${user.id}`;
+
+      const issued = await issueAccountVerifyToken(user.id);
+      expect(issued?.email).toBe('acctv-race-new@example.com');
+    });
+
+    it('resend mails the bound address, not one read before the token was issued', async () => {
+      const user = await signInWith('acctv-race-new@example.com');
+      const session = app.jwt.sign({
+        userId: user.id, email: user.email, displayName: null, tokenVersion: user.tokenVersion,
+      });
+      // Make the route's read see the old address, as if an OAuth sign-in
+      // changed the email right after it.
+      const users = await import('../../src/db/queries/users.js');
+      const real = users.findUserById;
+      const stale = vi.spyOn(users, 'findUserById').mockImplementation(async (id) => {
+        const row = await real(id);
+        return row && { ...row, email: 'acctv-race-old@example.com' };
+      });
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      try {
+        const res = await app.inject({
+          method: 'POST', url: '/auth/resend-account-verification', headers: auth(session),
+        });
+        expect(res.statusCode).toBe(200);
+      } finally {
+        stale.mockRestore();
+      }
+      const line = logSpy.mock.calls.map(c => String(c[0])).find(l => l.includes('/verify-account?token='));
+      logSpy.mockRestore();
+      expect(line).toContain('"acctv-race-new@example.com"');
+      expect(line).not.toContain('acctv-race-old@example.com');
     });
   });
 });
