@@ -42,7 +42,12 @@ services:
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
       OAUTH_CALLBACK_BASE_URL: ${OAUTH_CALLBACK_BASE_URL}
-      SMTP_URL: ${SMTP_URL:-log}
+      # Resend API key. Required: the server refuses to start in production
+      # with SMTP_URL unset or "log", which would print password-reset and
+      # verification tokens to docker logs. ALLOW_EMAIL_LOG_IN_PRODUCTION=true
+      # overrides that (never on the live site).
+      SMTP_URL: ${SMTP_URL:-}
+      ALLOW_EMAIL_LOG_IN_PRODUCTION: ${ALLOW_EMAIL_LOG_IN_PRODUCTION:-}
       EMAIL_FROM: ${EMAIL_FROM:-noreply@nandaindex.org}
       FRONTEND_URL: ${FRONTEND_URL}
       DB_MAX_CONNECTIONS: ${DB_MAX_CONNECTIONS:-10}
@@ -73,6 +78,14 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # GET /health pings the database. start_period covers the migrations that
+    # entrypoint.sh runs before the server listens.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3001/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
     restart: unless-stopped
 
   web:
@@ -87,7 +100,14 @@ services:
     environment:
       PORT: 3000
     depends_on:
-      - server
+      server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     restart: unless-stopped
 
   # The concierge demo, served at https://nandaindex.org/demo (see Caddyfile).
@@ -126,9 +146,12 @@ services:
       - caddy_config:/config
       - ./static:/srv/static:ro
     depends_on:
-      - server
-      - web
-      - demo
+      server:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+      demo:
+        condition: service_started
     restart: unless-stopped
 
 volumes:

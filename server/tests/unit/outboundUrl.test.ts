@@ -8,6 +8,7 @@ import {
   pinnedLookup,
   publicUrlGuardWith,
   resolvePublicHttpUrl,
+  withLookupTimeout,
   type HostLookup,
 } from '../../src/lib/outboundUrl.js';
 
@@ -132,5 +133,37 @@ describe('pinned outbound fetch (DNS-rebinding defence)', () => {
     const guarded = await publicUrlGuardWith(lookup)('https://ok.example.com/agents');
     expect(typeof guarded).toBe('function');
     expect(lookup).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('withLookupTimeout', () => {
+  const never: HostLookup = () => new Promise(() => {});
+  const slow: HostLookup = (h) => new Promise((resolve) => setTimeout(() => resolve(['93.184.216.34']), 200));
+
+  it('reports a resolver that never answers as unresolvable', async () => {
+    // Registration must not sit open for as long as a hostile or broken name
+    // server chooses, and dns.lookup holds a libuv thread while it waits.
+    const bounded = withLookupTimeout(never, 20);
+
+    await expect(bounded('slow.example.com')).rejects.toMatchObject({
+      name: 'OutboundUrlError', kind: 'unresolvable',
+    });
+  });
+
+  it('returns the answer when the resolver beats the deadline', async () => {
+    await expect(withLookupTimeout(slow, 2000)('ok.example.com')).resolves.toEqual(['93.184.216.34']);
+  });
+
+  it('refuses a slow resolver rather than waiting for it', async () => {
+    const started = Date.now();
+    await expect(withLookupTimeout(slow, 20)('ok.example.com')).rejects.toThrow();
+
+    expect(Date.now() - started).toBeLessThan(150);
+  });
+
+  it('surfaces a real resolver failure unchanged', async () => {
+    const boom: HostLookup = () => Promise.reject(new Error('ENOTFOUND'));
+
+    await expect(withLookupTimeout(boom, 1000)('x.example.com')).rejects.toThrow('ENOTFOUND');
   });
 });

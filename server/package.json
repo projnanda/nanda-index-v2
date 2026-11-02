@@ -6,7 +6,7 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=20.0.0 <21.0.0"
+    "node": ">=22.0.0 <23.0.0"
   },
   "scripts": {
     "dev": "tsx watch --env-file=.env src/server.ts",
@@ -23,14 +23,13 @@
     "@fastify/cookie": "^11.0.2",
     "@fastify/cors": "^11.2.0",
     "@fastify/helmet": "^13.0.2",
-    "@fastify/jwt": "^10.1.0",
+    "@fastify/jwt": "^10.2.6",
     "@fastify/oauth2": "^8.2.0",
     "@fastify/rate-limit": "^11.0.0",
     "@fastify/swagger": "^9.7.0",
     "@fastify/swagger-ui": "^5.2.6",
     "bcrypt": "^6.0.0",
-    "fastify": "^5.1.0",
-    "nodemailer": "^8.0.10",
+    "fastify": "^5.12.7",
     "openai": "^6.48.0",
     "postgres": "^3.4.4",
     "posthog-node": "^5.57.2",
@@ -40,7 +39,6 @@
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
     "@types/node": "^20.14.0",
-    "@types/nodemailer": "^8.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"

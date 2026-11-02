@@ -1,6 +1,7 @@
 import { validateRegistrationCard } from '../services/cardValidation.js';
-import { allowAnyUrl, publicUrlGuard } from '../lib/outboundUrl.js';
+import { allowAnyUrl, publicUrlGuard, assertPublicHttpUrl, OutboundUrlError, defaultHostLookup, withLookupTimeout } from '../lib/outboundUrl.js';
 import { randomBytes } from 'node:crypto';
+import { isIP } from 'node:net';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { findByOrgId, findProvenByDomain, findProvenByIdentifier, countUnprovenOrgsForUser, updateOrganization, suspendOrganization, reactivateOrganization, deleteOrganization, issueDomainChallenge, markDomainVerified, renewVerifyToken, toIndexRecord, type Organization } from '../db/queries/organizations.js';
 import { checkMembership } from '../db/queries/orgMemberships.js';
@@ -234,6 +235,92 @@ function registryUrlError(registryUrl: string): string | null {
   return 'registry_url must be an absolute https:// URL';
 }
 
+/**
+ * Refuses a registry_url the index must not send anyone to.
+ *
+ * The outbound guard in lib/outboundUrl.ts already knows which addresses are
+ * private, loopback, link-local or otherwise reserved, and it protects this
+ * server when it fetches a registrant's card. Nothing was asking it at the
+ * point the index decides what to *publish*, so an entry could carry
+ * `https://127.0.0.1:5433/x.json` or `https://metadata.google.internal/...`
+ * and `/api/v1/index` would hand that to every consumer as the address to
+ * use. A directory that tells other people's software to fetch their own
+ * loopback is a defect even though this server never fetches it.
+ *
+ * The host is resolved here, so this costs a DNS lookup on create and on a
+ * changed registry_url. A host that does not resolve is still accepted:
+ * registering before DNS exists is ordinary — a new domain, a staged launch,
+ * a propagation window — and refusing it would also fail every registration
+ * whenever DNS is slow. The risk this guard exists for needs the host to
+ * really resolve to a private address, so that is the only case refused. A
+ * host that resolves publicly today and privately tomorrow is the same
+ * problem one step later, and belongs to periodic re-verification.
+ *
+ * OUTBOUND_ALLOW_PRIVATE_HOSTS turns the check off, the same way it already
+ * allows plaintext and lets fan-out reach a registry on localhost.
+ */
+const INTERNAL_ONLY_SUFFIXES = [
+  '.localhost', '.local', '.internal', '.home.arpa',
+  // RFC 6762 Appendix G: names people actually use for private networks.
+  '.lan', '.corp', '.home', '.intranet',
+];
+
+/** How long a registration will wait on DNS before giving up on the lookup. */
+const REGISTRY_URL_DNS_TIMEOUT_MS = 3000;
+
+/**
+ * Names reserved for use inside a single network. Address classification
+ * cannot catch these, because resolution depends on who is asking:
+ * `metadata.google.internal` does not resolve from a machine outside GCP, so
+ * the lookup below lets it pass, and it resolves to 169.254.169.254 for every
+ * consumer that does run there. A name that only means something inside a
+ * network has no meaning in a directory published to everyone, so it is
+ * refused by name rather than by address.
+ */
+function isInternalOnlyHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/\.+$/, '');
+  if (host === 'localhost') return true;
+  if (INTERNAL_ONLY_SUFFIXES.some((suffix) => host.endsWith(suffix))) return true;
+  // A name with no dot can only be resolved by a search domain, which means
+  // it names something inside one network. On GCE `metadata` reaches
+  // 169.254.169.254 that way, and on EC2 `instance-data` reaches it through
+  // ec2.internal — the same case as metadata.google.internal, spelled shorter.
+  // IP literals have no dots in IPv6 form, so they are excluded here and
+  // judged by address below.
+  return !host.includes('.') && isIP(host) === 0;
+}
+
+/**
+ * The address check needs DNS, and a slow resolver must not hold a
+ * registration open. `validateRegistrationCard` already races its own lookup
+ * against a timer for the same reason.
+ *
+ * A timeout is reported as "does not resolve", which is already the accepted
+ * outcome here: an entry whose host cannot be resolved right now is still
+ * published, and re-verification is what catches it later.
+ */
+const registryUrlLookup = withLookupTimeout(defaultHostLookup, REGISTRY_URL_DNS_TIMEOUT_MS);
+
+async function registryUrlReachabilityError(registryUrl: string): Promise<string | null> {
+  if (buildConfig().outbound.allowPrivateHosts) return null;
+  try {
+    const host = new URL(registryUrl).hostname.replace(/^\[|\]$/g, '');
+    if (isInternalOnlyHost(host)) {
+      return 'registry_url must be a public internet address — private, loopback, link-local and cloud metadata addresses are refused';
+    }
+  } catch {
+    // Shape is already checked by registryUrlError; fall through to the guard.
+  }
+  try {
+    await assertPublicHttpUrl(registryUrl, registryUrlLookup);
+    return null;
+  } catch (err) {
+    if (!(err instanceof OutboundUrlError)) throw err;
+    if (err.kind === 'unresolvable') return null;
+    return 'registry_url must be a public internet address — private, loopback, link-local and cloud metadata addresses are refused';
+  }
+}
+
 /** Checks the create body's hosting-path invariants; returns the first problem or null. */
 function validateCreateBody(body: CreateOrgBody, path: HostingPath): ApiError | null {
   if (path === 'personal' && body.domain) {
@@ -432,6 +519,9 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
     if (isReservedOrgId(body.org_id) && !(await isOperator(user.userId))) {
       return reply.code(400).send({ error: 'RESERVED_ORG_ID', detail: `org_id "${body.org_id}" is reserved — choose another` });
     }
+
+    const unreachable = await registryUrlReachabilityError(body.registry_url);
+    if (unreachable) return reply.code(400).send({ error: 'VALIDATION', detail: unreachable });
 
     const profile = buildProfileOrError(body, path);
     if ('status' in profile) return reply.code(profile.status).send(profile.body);
@@ -704,6 +794,10 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       const registryError = registryUrlError(body.registry_url);
       if (registryError) {
         return reply.code(400).send({ error: 'VALIDATION', detail: registryError });
+      }
+      const changedUnreachable = await registryUrlReachabilityError(body.registry_url);
+      if (changedUnreachable) {
+        return reply.code(400).send({ error: 'VALIDATION', detail: changedUnreachable });
       }
     }
 

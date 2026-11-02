@@ -1,6 +1,8 @@
-# Environment
-.env
-.env.local
+# Environment — every env file holds secrets (.env.prod has all of production's).
+# Only the committed *.example templates are tracked.
+.env*
+!.env.example
+!.env.prod.example
 
 # Dependencies
 server/node_modules/
