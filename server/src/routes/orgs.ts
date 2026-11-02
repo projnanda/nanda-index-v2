@@ -215,6 +215,12 @@ function registryUrlError(registryUrl: string): string | null {
     try {
       const parsed = new URL(registryUrl);
       if (parsed.hostname) {
+        // A directory entry carries no credentials, and `https://good.com@evil.invalid/`
+        // reads as the host before the @ to anyone skimming the published record.
+        // cardValidation already refuses these; the write path now matches.
+        if (parsed.username || parsed.password) {
+          return 'registry_url must not contain a username or password';
+        }
         // `new URL` lowercases the protocol, so `HTTPS://…` is accepted here
         // and by the web form's /i regex alike.
         if (parsed.protocol === 'https:') return null;

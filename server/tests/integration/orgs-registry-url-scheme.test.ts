@@ -237,3 +237,53 @@ describe('registry_url shapes the prefix test used to let through', () => {
     expect((await create('HTTPS://registry-url-shape.example.com/catalog.json')).statusCode).toBe(201);
   });
 });
+
+describe('registry_url must not carry credentials', () => {
+  let fastify: FastifyInstance;
+  let token: string;
+  const orgId = 'registry-url-userinfo-test';
+
+  const create = (registryUrl: string) => fastify.inject({
+    method: 'POST', url: '/api/v1/orgs',
+    headers: { authorization: `Bearer ${token}` },
+    payload: {
+      org_id: orgId, display_name: 'Userinfo', domain: 'registry-url-userinfo.example.com',
+      contact_email: 'userinfo@example.com', registry_url: registryUrl,
+    },
+  });
+
+  beforeAll(async () => {
+    ({ fastify } = await buildServer({ logger: false }));
+    await fastify.ready();
+    const user = await upsertUser({
+      email: 'userinfo@example.com', displayName: null, avatarUrl: null,
+      provider: 'google', providerId: 'userinfo-provider', emailVerified: true,
+    });
+    token = fastify.jwt.sign({ userId: user.id, email: user.email, displayName: null });
+  });
+
+  beforeEach(async () => {
+    await getSql()`DELETE FROM organizations WHERE org_id = ${orgId}`;
+  });
+
+  afterAll(async () => {
+    await fastify.close();
+    await closeSql();
+  });
+
+  it.each([
+    { label: 'a username and password', value: 'https://user:pass@example.com/catalog.json' },
+    { label: 'a username only', value: 'https://user@example.com/catalog.json' },
+    // The one that matters: reads as good.com to anyone skimming the record.
+    { label: 'a lookalike host before the @', value: 'https://good.com@evil.invalid/catalog.json' },
+  ])('refuses $label', async ({ value }) => {
+    const res = await create(value);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().detail).toContain('username or password');
+  });
+
+  it('still accepts an ordinary URL', async () => {
+    expect((await create('https://registry-url-userinfo.example.com/catalog.json')).statusCode).toBe(201);
+  });
+});
