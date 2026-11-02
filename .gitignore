@@ -29,3 +29,6 @@ web/coverage/
 !/static/.gitkeep
 
 docs/
+
+# Cloudflare Origin Certificate and private key: on the droplet only.
+/certs/

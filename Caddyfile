@@ -26,6 +26,10 @@
 }
 
 nandaindex.org {
+	# Cloudflare Origin Certificate (15-year, trusted only by Cloudflare's edge).
+	# Lives on the droplet in ./certs, never in git. Replaces Let's Encrypt,
+	# whose renewals fail once the droplet only accepts Cloudflare traffic.
+	tls /etc/caddy/certs/origin.pem /etc/caddy/certs/origin.key
 	import hsts
 
 	handle /paper.pdf {
@@ -57,6 +61,8 @@ nandaindex.org {
 }
 
 api.nandaindex.org {
+	# Same Origin Certificate as above (it covers *.nandaindex.org).
+	tls /etc/caddy/certs/origin.pem /etc/caddy/certs/origin.key
 	import hsts
 	reverse_proxy server:3001 {
 		import to_app

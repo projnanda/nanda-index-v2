@@ -145,6 +145,7 @@ services:
       - caddy_data:/data
       - caddy_config:/config
       - ./static:/srv/static:ro
+      - ./certs:/etc/caddy/certs:ro
     depends_on:
       server:
         condition: service_healthy
