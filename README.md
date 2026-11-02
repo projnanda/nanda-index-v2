@@ -142,6 +142,10 @@ NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
 
 DB_MAX_CONNECTIONS=10
 
+# Extension namespaces — "open" (default) or "anchored". See "Extension
+# metadata" below; turning this on is a policy change, not a hardening step.
+EXTENSION_NAMESPACE_POLICY=open
+
 # Concierge demo at https://nandaindex.org/demo — all optional, defaults shown
 DEMO_BASE_URL=https://nandaindex.org/demo
 DEMO_RUN_LIMIT_PER_HOUR=3          # live runs per visitor per hour; 0 = unlimited
@@ -165,6 +169,55 @@ masked even though `token` would be too.
 
 Logged URLs are truncated at 512 characters, which is far more than any real
 request and keeps a long query string from bloating the log.
+
+### Extension metadata
+
+`extensions` is where a registrant puts metadata the index itself does not
+model, keyed by reverse-DNS namespace as the AI Catalog format describes. It is
+published verbatim on every public read surface — `/api/v1/index/:org_id`,
+`/api/v1/index`, `/api/v1/search`, `/api/v1/resolve` and `/api/ard/agents` —
+so what goes in reaches every consumer that reads this index.
+
+Two rules apply to what you can put there, beyond the 16 KB and 6-level caps
+in `server/src/lib/jsonLimits.ts`.
+
+**Active-content URLs are rejected, always.** A value that begins
+`javascript:`, `vbscript:`, or `data:` followed by an HTML, SVG or XML media
+type is refused on create and on update, at any depth, including inside
+arrays. Control characters are stripped before the check, because browsers
+strip them too. The list is deliberately short: `data: 2026-01-01` and
+`about: the refunds agent` are ordinary metadata, and `data:image/png` is
+harmless, so none of them is affected. Markup is not filtered — `description`
+and `tags` have always been free text, and escaping belongs to whoever renders
+it.
+
+The `javascript:` and `vbscript:` tests have two tiers, because the scheme
+names are also ordinary English. Under a URL-shaped key — `url`, `uri`,
+`href`, `link`, `src`, or anything ending in one, singular or plural — any
+form is refused: a value there is going to be rendered as a link. Strictness
+is inherited, so everything nested under such a key stays strict, including
+`links: [{ "target": … }]`.
+
+Under any other key one narrow exemption applies, for prose that merely opens
+with a scheme name. After the colon there must be whitespace, and then nothing
+that can call, assign, terminate, quote, subscript or percent-encode. A skills
+list entry of `JavaScript: React`, or `JavaScript: Node.js, Deno & Bun`, is
+left alone; `javascript: alert(1)`, `javascript: %61lert%281%29` and
+`javascript: onerror=alert;throw 1` are all refused. Object keys get the same
+treatment as values.
+
+**Namespaces are open by default.** `EXTENSION_NAMESPACE_POLICY=anchored`
+restricts a registrant to `org.projectnanda` plus the reverse-DNS form of the
+domain they proved (`acme.com` → `com.acme`); an entry with no domain gets
+`org.projectnanda` only. This mirrors how identifiers already work — control
+of a domain is what entitles you to speak for it.
+
+It ships **off**, because it is a policy decision rather than a fix. Of the
+105 entries on the live index, 103 use only `org.projectnanda`, one uses the
+reverse-DNS of its own domain (which `anchored` accepts), and one publishes
+under a namespace belonging to neither — so switching this on would reject
+that registrant's next update. Decide what should happen to entries like it
+before turning it on.
 
 ### Concierge demo (`/demo`)
 

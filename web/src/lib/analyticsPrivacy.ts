@@ -7,10 +7,22 @@ import type { CaptureResult, CapturedNetworkRequest } from "posthog-js";
  * every URL that does leave the browser loses its query string and fragment.
  */
 
-const PRIVATE_PATH_PREFIXES = ["/reset-password", "/auth/", "/verify-email", "/verify-account", "/dashboard/settings"];
+// Sign-in and account pages are never measured either (see /privacy): the
+// dashboard shows contact emails and domain-verification challenges.
+const PRIVATE_PATHS = [
+  "/reset-password",
+  "/auth",
+  "/verify-email",
+  "/verify-account",
+  "/login",
+  "/register",
+  "/forgot-password",
+  "/dashboard",
+];
 
+/** True for a private page or anything below it (`/dashboard/orgs/1`, not `/dashboards`). */
 export function isPrivatePath(pathname: string): boolean {
-  return PRIVATE_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+  return PRIVATE_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
 }
 
 export function stripQueryAndHash(url: string): string {

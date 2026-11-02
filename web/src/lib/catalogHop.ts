@@ -70,10 +70,12 @@ export function planRegistryHop(resolved: ResolveResponse): HopPlan {
   if (isCatalogDocumentUrl(url)) return { kind, steps: [{ url, shape: "document" }] };
 
   const base = url.replace(/\/+$/, "");
-  const fallback: HopStep = { url: wellKnownCatalogUrl(url), shape: "document" };
+  // A root-relative URL (this site's hosted examples) has no publisher origin
+  // whose well-known catalog could be tried instead.
+  const fallback: HopStep[] = url.startsWith("/") ? [] : [{ url: wellKnownCatalogUrl(url), shape: "document" }];
   return kind === "catalog"
-    ? { kind, steps: [{ url: `${base}/agents`, shape: "document" }, fallback] }
-    : { kind, steps: [{ url: `${base}/agents/${encodeURIComponent(resolved.identifier)}`, shape: "entry" }, fallback] };
+    ? { kind, steps: [{ url: `${base}/agents`, shape: "document" }, ...fallback] }
+    : { kind, steps: [{ url: `${base}/agents/${encodeURIComponent(resolved.identifier)}`, shape: "entry" }, ...fallback] };
 }
 
 function isCatalogDocument(body: unknown): body is CatalogDocument {

@@ -198,6 +198,42 @@ function withoutBlankDomain(body: UpdateOrgBody): UpdateOrgBody {
   return rest;
 }
 
+/**
+ * Enforces the https:// the validation message has always promised. http:// is
+ * allowed only alongside OUTBOUND_ALLOW_PRIVATE_HOSTS — the same development
+ * escape hatch that lets fan-out reach a registry on localhost. A card fetched
+ * over plaintext can be rewritten in transit, and its contents now feed the
+ * stored cardValidation result.
+ */
+function registryUrlError(registryUrl: string): string | null {
+  // Mirrors validateRuntimeUrl in lib/entryProfile.ts: URL parsing on its own
+  // repairs a missing authority slash, backslashes and control characters, so
+  // `https:///evil` and `https://exa mple.com/x` have to be refused before
+  // parsing rather than after. Review on #135 found the prefix test accepting
+  // all of them.
+  if (/^https?:\/\/[^/\\\s]/i.test(registryUrl) && !/[\\\s\u0000-\u001f\u007f]/.test(registryUrl)) {
+    try {
+      const parsed = new URL(registryUrl);
+      if (parsed.hostname) {
+        // A directory entry carries no credentials, and `https://good.com@evil.invalid/`
+        // reads as the host before the @ to anyone skimming the published record.
+        // cardValidation already refuses these; the write path now matches.
+        if (parsed.username || parsed.password) {
+          return 'registry_url must not contain a username or password';
+        }
+        // `new URL` lowercases the protocol, so `HTTPS://…` is accepted here
+        // and by the web form's /i regex alike.
+        if (parsed.protocol === 'https:') return null;
+        if (parsed.protocol === 'http:' && buildConfig().outbound.allowPrivateHosts) return null;
+        return 'registry_url must start with https://';
+      }
+    } catch {
+      // Report a malformed URL through the same validation error.
+    }
+  }
+  return 'registry_url must be an absolute https:// URL';
+}
+
 /** Checks the create body's hosting-path invariants; returns the first problem or null. */
 function validateCreateBody(body: CreateOrgBody, path: HostingPath): ApiError | null {
   if (path === 'personal' && body.domain) {
@@ -209,8 +245,9 @@ function validateCreateBody(body: CreateOrgBody, path: HostingPath): ApiError | 
   if (body.domain && !isFqdn(body.domain)) {
     return validationError('domain must be a valid hostname (e.g. acme.com)');
   }
-  if (!/^https?:\/\//.test(body.registry_url)) {
-    return validationError('registry_url must start with https://');
+  const registryError = registryUrlError(body.registry_url);
+  if (registryError) {
+    return validationError(registryError);
   }
   return null;
 }
@@ -341,10 +378,15 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
   const orgWriteRateLimit = {
     rateLimit: { max: claims.writeRateLimitMax, timeWindow: claims.writeRateLimitWindow },
   };
+  // Each verify-domain asks four DNS resolvers about an admin-chosen name.
+  const domainVerifyRateLimit = {
+    rateLimit: { max: claims.domainVerifyRateLimitMax, timeWindow: claims.domainVerifyRateLimitWindow },
+  };
 
   // Create a new organization
   fastify.post<{ Body: CreateOrgBody }>('/api/v1/orgs', {
-    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, rejectOversizedJson],
+    preValidation: [fastify.authenticate],
+    preHandler: [fastify.requireVerifiedAccount, rejectOversizedJson],
     config: orgWriteRateLimit,
     schema: {
       tags: ['orgs'],
@@ -468,7 +510,8 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Get own org (must be member)
   fastify.get<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id', {
-    preHandler: [fastify.authenticate, requireOrgRole('member')],
+    preValidation: [fastify.authenticate],
+    preHandler: [requireOrgRole('member')],
     schema: {
       tags: ['orgs'],
       summary: 'Get your organization',
@@ -494,7 +537,9 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Issue a DNS TXT challenge for the org's domain, or return the unexpired one
   fastify.post<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/domain-challenge', {
-    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, requireOrgRole('admin')],
+    preValidation: [fastify.authenticate],
+    preHandler: [fastify.requireVerifiedAccount, requireOrgRole('admin')],
+    config: domainVerifyRateLimit,
     schema: {
       tags: ['orgs'],
       summary: 'Issue a DNS TXT challenge to prove domain ownership',
@@ -540,7 +585,9 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Check the DNS TXT record and, on success, mark the domain verified + activate
   fastify.post<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/verify-domain', {
-    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, requireOrgRole('admin')],
+    preValidation: [fastify.authenticate],
+    preHandler: [fastify.requireVerifiedAccount, requireOrgRole('admin')],
+    config: domainVerifyRateLimit,
     schema: {
       tags: ['orgs'],
       summary: 'Verify the DNS TXT challenge and activate the organization',
@@ -589,7 +636,8 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
     let updated: Organization | null;
     try {
-      updated = await markDomainVerified(org.orgId);
+      // Applies only if the org still has the domain and challenge just checked.
+      updated = await markDomainVerified(org.orgId, { domain: org.domain, challenge: org.domainChallenge });
     } catch (err) {
       // Another registrant proved this domain an instant earlier — first proof wins.
       if (isUniqueViolation(err)) {
@@ -598,7 +646,13 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       throw err;
     }
     if (!updated) {
-      return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
+      if (!(await findByOrgId(org.orgId))) {
+        return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
+      }
+      return reply.code(409).send({
+        error: 'DOMAIN_CHANGED',
+        detail: 'the domain or challenge changed while verifying; request a new challenge',
+      });
     }
     fastify.analytics.capture('entry_domain_verified');
 
@@ -607,7 +661,8 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Update own org's index record
   fastify.put<{ Params: { org_id: string }; Body: UpdateOrgBody }>('/api/v1/orgs/:org_id', {
-    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, requireOrgRole('admin'), rejectUnknownUpdateFields, rejectOversizedJson],
+    preValidation: [fastify.authenticate],
+    preHandler: [fastify.requireVerifiedAccount, requireOrgRole('admin'), rejectUnknownUpdateFields, rejectOversizedJson],
     config: orgWriteRateLimit,
     schema: {
       tags: ['orgs'],
@@ -641,8 +696,15 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
         return reply.code(400).send({ error: 'VALIDATION', detail: 'domain must be a valid hostname (e.g. acme.com)' });
       }
     }
-    if (body.registry_url != null && !/^https?:\/\//.test(body.registry_url)) {
-      return reply.code(400).send({ error: 'VALIDATION', detail: 'registry_url must start with https://' });
+    // Only on change. An entry registered before this rule has a stored
+    // http:// URL, and the dashboard resends registry_url on every save — so
+    // checking unconditionally locked those owners out of editing anything,
+    // with an error naming a value they had not touched (review on #135).
+    if (body.registry_url != null && body.registry_url !== current.registryUrl) {
+      const registryError = registryUrlError(body.registry_url);
+      if (registryError) {
+        return reply.code(400).send({ error: 'VALIDATION', detail: registryError });
+      }
     }
 
     let next: EntryProfile;
@@ -714,7 +776,8 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Resend the contact-email verification link (the previous one stops working).
   fastify.post<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/resend-verification', {
-    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, requireOrgRole('admin')],
+    preValidation: [fastify.authenticate],
+    preHandler: [fastify.requireVerifiedAccount, requireOrgRole('admin')],
     config: {
       rateLimit: { max: buildConfig().auth.rateLimitMax, timeWindow: buildConfig().auth.rateLimitWindow },
     },
@@ -758,7 +821,8 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Suspend org
   fastify.delete<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/suspend', {
-    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, requireOrgRole('admin'), rejectIfTakenDown],
+    preValidation: [fastify.authenticate],
+    preHandler: [fastify.requireVerifiedAccount, requireOrgRole('admin'), rejectIfTakenDown],
     schema: {
       tags: ['orgs'],
       summary: 'Suspend your organization',
@@ -784,7 +848,8 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Reactivate a suspended org
   fastify.post<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/reactivate', {
-    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, requireOrgRole('admin'), rejectIfTakenDown],
+    preValidation: [fastify.authenticate],
+    preHandler: [fastify.requireVerifiedAccount, requireOrgRole('admin'), rejectIfTakenDown],
     schema: {
       tags: ['orgs'],
       summary: 'Reactivate a suspended organization',
@@ -819,7 +884,8 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Hard-delete org
   fastify.delete<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id', {
-    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, requireOrgRole('admin')],
+    preValidation: [fastify.authenticate],
+    preHandler: [fastify.requireVerifiedAccount, requireOrgRole('admin')],
     schema: {
       tags: ['orgs'],
       summary: 'Permanently delete your organization',

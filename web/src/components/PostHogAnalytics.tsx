@@ -22,7 +22,9 @@ const OPTIONS: Partial<PostHogConfig> = {
   defaults: "2026-08-30",
   person_profiles: "never",
   capture_pageview: "history_change",
-  before_send: (event) => scrubEvent(event, window.location.pathname),
+  // While on a private page, drop everything, including replay batches that
+  // only flush after the visitor has navigated away again.
+  before_send: (event) => (onPrivatePage ? null : scrubEvent(event, window.location.pathname)),
   session_recording: {
     maskAllInputs: true,
     maskTextSelector: "*",
@@ -34,6 +36,8 @@ const OPTIONS: Partial<PostHogConfig> = {
 };
 
 let loading: Promise<PostHog> | null = null;
+// Set while a client-side navigation has a loaded PostHog on a private page.
+let onPrivatePage = false;
 
 function loadPostHog(): Promise<PostHog> {
   loading ??= import("posthog-js").then((module) => module.default);
@@ -55,13 +59,25 @@ export function PostHogAnalytics({ apiKey, uiHost }: { apiKey: string; uiHost: s
       loading?.then((posthog) => {
         if (!stale && posthog.__loaded) posthog.opt_out_capturing();
       });
-    } else if (!isPrivate) {
+    } else if (isPrivate) {
+      // Navigated here from a public page: posthog-js stays in memory, so
+      // pause capture and replay until the visitor leaves.
+      loading?.then((posthog) => {
+        if (stale || !posthog.__loaded || onPrivatePage) return;
+        onPrivatePage = true;
+        posthog.stopSessionRecording();
+      });
+    } else {
       loadPostHog()
         .then((posthog) => {
           if (stale) return;
           if (!posthog.__loaded) posthog.init(apiKey, { ...OPTIONS, ui_host: uiHost });
           // A previous decline in this browser persisted PostHog's own opt-out.
           if (posthog.has_opted_out_capturing()) posthog.opt_in_capturing({ captureEventName: false });
+          if (onPrivatePage) {
+            onPrivatePage = false;
+            posthog.startSessionRecording();
+          }
         })
         .catch(() => {
           loading = null; // blocked or offline: try again on the next navigation

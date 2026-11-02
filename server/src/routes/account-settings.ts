@@ -44,7 +44,7 @@ export async function registerAccountSettingsRoutes(app: FastifyInstance): Promi
     config: {
       rateLimit: { max: config.auth.rateLimitMax, timeWindow: config.auth.rateLimitWindow },
     },
-    preHandler: [app.authenticate],
+    preValidation: [app.authenticate],
   };
   const version = (request: FastifyRequest) => request.user.tokenVersion ?? 0;
   async function account(request: FastifyRequest): Promise<User> {

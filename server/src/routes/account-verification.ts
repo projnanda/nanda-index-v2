@@ -68,7 +68,7 @@ export async function registerAccountVerificationRoutes(fastify: FastifyInstance
 
   fastify.post('/auth/resend-account-verification', {
     config: authRateLimit,
-    preHandler: [fastify.authenticate],
+    preValidation: [fastify.authenticate],
     schema: {
       tags: ['auth'],
       summary: 'Send a new account verification email',

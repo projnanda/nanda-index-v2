@@ -1,5 +1,5 @@
 import type { NextConfig } from "next";
-import { DEFAULT_POSTHOG_HOST, posthogHosts } from "./src/lib/posthogHosts";
+import { configuredPostHogHost, posthogHosts } from "./src/lib/posthogHosts";
 
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -65,7 +65,7 @@ const securityHeaders = [
 // when a key is configured, so the site isn't a PostHog proxy otherwise.
 function posthogRewrites() {
   if (!process.env.NEXT_PUBLIC_POSTHOG_KEY) return [];
-  const { api, assets } = posthogHosts(process.env.NEXT_PUBLIC_POSTHOG_HOST ?? DEFAULT_POSTHOG_HOST);
+  const { api, assets } = posthogHosts(configuredPostHogHost(process.env.NEXT_PUBLIC_POSTHOG_HOST));
   return [
     { source: "/ingest/static/:path*", destination: `${assets}/static/:path*` },
     { source: "/ingest/array/:path*", destination: `${assets}/array/:path*` },
@@ -75,7 +75,7 @@ function posthogRewrites() {
 
 const nextConfig: NextConfig = {
   output: 'standalone',
-  // No X-Powered-By: Next.js header; it only tells scanners what to try.
+  // Don't advertise the framework (X-Powered-By: Next.js).
   poweredByHeader: false,
   // PostHog's endpoints end in a slash (/e/, /flags/); Next's default
   // redirect to the slash-less URL would break them behind the rewrite.
