@@ -37,17 +37,19 @@ async function addMember(orgId: string, userId: string, role: 'admin' | 'member'
   await sql`INSERT INTO org_memberships (user_id, org_id, role) VALUES (${userId}, ${orgId}, ${role})`;
 }
 
-async function requestChallenge(fastify: FastifyInstance, token: string, orgId: string) {
+async function requestChallenge(fastify: FastifyInstance, token: string, orgId: string, remoteAddress?: string) {
   return fastify.inject({
     method: 'POST', url: `/api/v1/orgs/${orgId}/domain-challenge`,
     headers: { authorization: `Bearer ${token}` },
+    remoteAddress,
   });
 }
 
-async function verifyDomain(fastify: FastifyInstance, token: string, orgId: string) {
+async function verifyDomain(fastify: FastifyInstance, token: string, orgId: string, remoteAddress?: string) {
   return fastify.inject({
     method: 'POST', url: `/api/v1/orgs/${orgId}/verify-domain`,
     headers: { authorization: `Bearer ${token}` },
+    remoteAddress,
   });
 }
 
@@ -340,6 +342,24 @@ describe('Domain ownership verification — DNS TXT challenge', () => {
     const left = await getSql()<{ orgId: string }[]>`
       SELECT org_id FROM organizations WHERE org_id IN ('dv-bystander', 'dv-other') ORDER BY org_id`;
     expect(left.map((r) => r.orgId)).toEqual(['dv-other']);
+  });
+
+  // ── Rate limits ──────────────────────────────────────────────────────────────
+
+  it('rate-limits domain-challenge and verify-domain per client IP', async () => {
+    vi.stubEnv('DOMAIN_VERIFY_RATE_LIMIT_MAX', '2');
+    const limited = (await buildServer({ logger: false })).fastify;
+    await limited.ready();
+    try {
+      await createOrg(limited, adminToken, 'dv-limited');
+      resolveTxtMock.mockResolvedValue([]);
+      for (const send of [requestChallenge, verifyDomain]) {
+        expect((await send(limited, adminToken, 'dv-limited', '192.0.2.10')).statusCode).not.toBe(429);
+        expect((await send(limited, adminToken, 'dv-limited', '192.0.2.10')).statusCode).not.toBe(429);
+        expect((await send(limited, adminToken, 'dv-limited', '192.0.2.10')).statusCode).toBe(429);
+        expect((await send(limited, adminToken, 'dv-limited', '192.0.2.11')).statusCode).not.toBe(429);
+      }
+    } finally { await limited.close(); vi.unstubAllEnvs(); }
   });
 
   // ── Changing the domain invalidates a prior verification ─────────────────────

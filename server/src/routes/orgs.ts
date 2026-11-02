@@ -341,6 +341,10 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
   const orgWriteRateLimit = {
     rateLimit: { max: claims.writeRateLimitMax, timeWindow: claims.writeRateLimitWindow },
   };
+  // Each verify-domain asks four DNS resolvers about an admin-chosen name.
+  const domainVerifyRateLimit = {
+    rateLimit: { max: claims.domainVerifyRateLimitMax, timeWindow: claims.domainVerifyRateLimitWindow },
+  };
 
   // Create a new organization
   fastify.post<{ Body: CreateOrgBody }>('/api/v1/orgs', {
@@ -495,6 +499,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
   // Issue a DNS TXT challenge for the org's domain, or return the unexpired one
   fastify.post<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/domain-challenge', {
     preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, requireOrgRole('admin')],
+    config: domainVerifyRateLimit,
     schema: {
       tags: ['orgs'],
       summary: 'Issue a DNS TXT challenge to prove domain ownership',
@@ -541,6 +546,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
   // Check the DNS TXT record and, on success, mark the domain verified + activate
   fastify.post<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/verify-domain', {
     preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, requireOrgRole('admin')],
+    config: domainVerifyRateLimit,
     schema: {
       tags: ['orgs'],
       summary: 'Verify the DNS TXT challenge and activate the organization',
