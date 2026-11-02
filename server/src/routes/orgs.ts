@@ -198,6 +198,42 @@ function withoutBlankDomain(body: UpdateOrgBody): UpdateOrgBody {
   return rest;
 }
 
+/**
+ * Enforces the https:// the validation message has always promised. http:// is
+ * allowed only alongside OUTBOUND_ALLOW_PRIVATE_HOSTS — the same development
+ * escape hatch that lets fan-out reach a registry on localhost. A card fetched
+ * over plaintext can be rewritten in transit, and its contents now feed the
+ * stored cardValidation result.
+ */
+function registryUrlError(registryUrl: string): string | null {
+  // Mirrors validateRuntimeUrl in lib/entryProfile.ts: URL parsing on its own
+  // repairs a missing authority slash, backslashes and control characters, so
+  // `https:///evil` and `https://exa mple.com/x` have to be refused before
+  // parsing rather than after. Review on #135 found the prefix test accepting
+  // all of them.
+  if (/^https?:\/\/[^/\\\s]/i.test(registryUrl) && !/[\\\s\u0000-\u001f\u007f]/.test(registryUrl)) {
+    try {
+      const parsed = new URL(registryUrl);
+      if (parsed.hostname) {
+        // A directory entry carries no credentials, and `https://good.com@evil.invalid/`
+        // reads as the host before the @ to anyone skimming the published record.
+        // cardValidation already refuses these; the write path now matches.
+        if (parsed.username || parsed.password) {
+          return 'registry_url must not contain a username or password';
+        }
+        // `new URL` lowercases the protocol, so `HTTPS://…` is accepted here
+        // and by the web form's /i regex alike.
+        if (parsed.protocol === 'https:') return null;
+        if (parsed.protocol === 'http:' && buildConfig().outbound.allowPrivateHosts) return null;
+        return 'registry_url must start with https://';
+      }
+    } catch {
+      // Report a malformed URL through the same validation error.
+    }
+  }
+  return 'registry_url must be an absolute https:// URL';
+}
+
 /** Checks the create body's hosting-path invariants; returns the first problem or null. */
 function validateCreateBody(body: CreateOrgBody, path: HostingPath): ApiError | null {
   if (path === 'personal' && body.domain) {
@@ -209,8 +245,9 @@ function validateCreateBody(body: CreateOrgBody, path: HostingPath): ApiError | 
   if (body.domain && !isFqdn(body.domain)) {
     return validationError('domain must be a valid hostname (e.g. acme.com)');
   }
-  if (!/^https?:\/\//.test(body.registry_url)) {
-    return validationError('registry_url must start with https://');
+  const registryError = registryUrlError(body.registry_url);
+  if (registryError) {
+    return validationError(registryError);
   }
   return null;
 }
@@ -659,8 +696,15 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
         return reply.code(400).send({ error: 'VALIDATION', detail: 'domain must be a valid hostname (e.g. acme.com)' });
       }
     }
-    if (body.registry_url != null && !/^https?:\/\//.test(body.registry_url)) {
-      return reply.code(400).send({ error: 'VALIDATION', detail: 'registry_url must start with https://' });
+    // Only on change. An entry registered before this rule has a stored
+    // http:// URL, and the dashboard resends registry_url on every save — so
+    // checking unconditionally locked those owners out of editing anything,
+    // with an error naming a value they had not touched (review on #135).
+    if (body.registry_url != null && body.registry_url !== current.registryUrl) {
+      const registryError = registryUrlError(body.registry_url);
+      if (registryError) {
+        return reply.code(400).send({ error: 'VALIDATION', detail: registryError });
+      }
     }
 
     let next: EntryProfile;
