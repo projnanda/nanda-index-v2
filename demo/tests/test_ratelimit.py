@@ -91,3 +91,96 @@ def test_peeking_says_whether_a_run_would_be_allowed_without_counting_one():
     limiter.try_acquire("a")
     assert not limiter.would_allow("a")
     assert RunLimiter(max_runs=0, window_seconds=60).would_allow("a")
+
+
+# ── which visitor ───────────────────────────────────────────────────────────
+
+
+def test_every_address_in_one_ipv6_64_is_one_visitor():
+    """An IPv6 subscriber is handed a whole /64. Counted per address, one
+    visitor had 2^64 allowances."""
+    a = client_key("2001:db8:1:2::1", None, behind_proxy=False)
+    b = client_key("2001:db8:1:2:ffff:ffff:ffff:ffff", None, behind_proxy=False)
+    assert a == b
+
+
+def test_a_different_ipv6_64_is_a_different_visitor():
+    assert client_key("2001:db8:1:2::1", None, behind_proxy=False) != client_key(
+        "2001:db8:1:3::1", None, behind_proxy=False
+    )
+
+
+def test_the_64_applies_to_the_forwarded_address_too():
+    a = client_key("10.0.0.1", "2001:db8:1:2::1", behind_proxy=True)
+    b = client_key("10.0.0.1", "2001:db8:1:2::abcd", behind_proxy=True)
+    assert a == b
+
+
+def test_ipv4_is_counted_per_address():
+    assert client_key("198.51.100.1", None, behind_proxy=False) == "198.51.100.1"
+    assert client_key("198.51.100.1", None, behind_proxy=False) != client_key(
+        "198.51.100.2", None, behind_proxy=False
+    )
+
+
+def test_an_ipv4_mapped_ipv6_address_is_the_ipv4_visitor():
+    assert client_key("::ffff:198.51.100.1", None, behind_proxy=False) == "198.51.100.1"
+
+
+def test_a_peer_that_is_not_an_address_is_kept_as_is():
+    """The test client's peer is ``testclient``: not an address, still a key."""
+    assert client_key("testclient", None, behind_proxy=False) == "testclient"
+
+
+def test_fifty_addresses_from_one_64_get_one_allowance():
+    """The audit's measurement, inverted: 50 of 50 runs used to be allowed."""
+    limiter = RunLimiter(max_runs=3, window_seconds=3600, clock=_Clock())
+    allowed = sum(
+        limiter.try_acquire(client_key(f"2001:db8:1:2::{n:x}", None, behind_proxy=False))[0] for n in range(50)
+    )
+    assert allowed == 3
+
+
+# ── memory ──────────────────────────────────────────────────────────────────
+
+
+def test_asking_whether_a_run_would_be_allowed_tracks_nobody():
+    limiter = RunLimiter(max_runs=1, window_seconds=60, clock=_Clock())
+    for n in range(100):
+        limiter.would_allow(f"visitor-{n}")
+    assert limiter.tracked == 0
+
+
+def test_visitors_whose_runs_have_aged_out_are_forgotten():
+    """Every new address used to add an entry that was never removed."""
+    clock = _Clock()
+    limiter = RunLimiter(max_runs=1, window_seconds=60, clock=clock)
+    for n in range(100):
+        limiter.try_acquire(f"visitor-{n}")
+    assert limiter.tracked == 100
+
+    clock.now += 61
+    limiter.try_acquire("someone-new")
+    assert limiter.tracked == 1
+
+
+def test_forgetting_a_visitor_does_not_reset_one_still_in_the_window():
+    clock = _Clock()
+    limiter = RunLimiter(max_runs=1, window_seconds=60, clock=clock)
+    limiter.try_acquire("old")
+    clock.now += 30
+    limiter.try_acquire("recent")
+    clock.now += 31
+    limiter.try_acquire("trigger")
+    assert not limiter.try_acquire("recent")[0], "a visitor still inside the window was forgotten"
+
+
+def test_wait_says_how_long_without_counting():
+    clock = _Clock()
+    limiter = RunLimiter(max_runs=1, window_seconds=60, clock=clock)
+    assert limiter.wait("a") == 0.0
+    limiter.try_acquire("a")
+    clock.now += 10
+    assert limiter.wait("a") == 50
+    assert limiter.wait("a") == 50, "asking counted a run"
+    assert RunLimiter(max_runs=0, window_seconds=60).wait("a") == 0.0

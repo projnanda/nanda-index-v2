@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 
 import pytest
 from starlette.testclient import TestClient
@@ -147,7 +148,7 @@ def test_a_failing_run_is_reported_in_the_envelope_not_as_a_500(client, monkeypa
     monkeypatch.setattr(server_mod, "arrange", boom)
     response = _rpc(c, {"skill": "concierge.arrange_meal"})
     assert response.status_code == 200
-    assert "the estate is down" in response.json()["error"]["message"]
+    assert response.json()["error"]["message"] == server_mod.RUN_FAILED_MESSAGE
 
 
 def test_healthz_reports_identity_without_needing_a_run(client):
@@ -333,7 +334,7 @@ def test_a_run_that_fails_midway_reports_it_on_the_stream(client, monkeypatch):
     monkeypatch.setattr(server_mod, "arrange", boom)
     events = _events(c.get("/ui/stream").text)
     assert events[-1][0] == "error"
-    assert "the restaurant is down" in events[-1][1]["message"]
+    assert events[-1][1]["message"] == server_mod.RUN_FAILED_MESSAGE
 
 
 def test_the_stream_refuses_to_start_a_second_concurrent_run(client, monkeypatch):
@@ -651,4 +652,298 @@ def test_forwarded_for_is_ignored_unless_a_proxy_is_declared(client, monkeypatch
 def test_the_page_is_told_the_limit_it_will_meet(client, monkeypatch):
     c, me = client
     monkeypatch.setenv("RUN_LIMIT_PER_HOUR", "3")
-    assert TestClient(build_app(me)).get("/ui/config").json()["run_limit"] == {"per_hour": 3}
+    assert TestClient(build_app(me)).get("/ui/config").json()["run_limit"]["per_hour"] == 3
+
+
+# ── security headers ────────────────────────────────────────────────────────
+#
+# The demo is served at nandaindex.org/demo, the origin whose localStorage holds
+# the web app's session. Caddy routes /demo before Next, so Next's headers never
+# reached it; the demo sends its own.
+
+
+def _directives(csp: str) -> dict[str, list[str]]:
+    out: dict[str, list[str]] = {}
+    for part in csp.split(";"):
+        words = part.split()
+        if words:
+            out[words[0]] = words[1:]
+    return out
+
+
+@pytest.mark.parametrize("path", ["/ui", "/ui/", "/ui/config", "/healthz", "/.well-known/agent-card.json"])
+def test_every_response_carries_the_security_headers(client, path):
+    c, _ = client
+    headers = c.get(path).headers
+    assert headers["x-content-type-options"] == "nosniff"
+    assert headers["referrer-policy"] == "no-referrer"
+    assert headers["x-frame-options"] == "DENY"
+    csp = _directives(headers["content-security-policy"])
+    assert csp["default-src"] == ["'self'"]
+    assert csp["frame-ancestors"] == ["'none'"]
+    assert csp["base-uri"] == ["'none'"]
+    assert csp["form-action"] == ["'self'"]
+
+
+def test_the_a2a_endpoint_and_the_stream_carry_them_too(client, monkeypatch):
+    c, me = client
+    _stub_run(monkeypatch, me)
+    assert _rpc(c, {"skill": "concierge.last_run"}).headers["x-frame-options"] == "DENY"
+    assert c.get("/ui/stream").headers["x-content-type-options"] == "nosniff"
+
+
+def test_the_page_script_and_style_are_allowed_by_hash_not_by_unsafe_inline(client):
+    """A hash admits exactly the page's own inline script. ``unsafe-inline``
+    would admit an injected one as well, which is the case the CSP is for."""
+    import base64
+    import hashlib
+    import re
+
+    c, _ = client
+    response = c.get("/ui")
+    csp = _directives(response.headers["content-security-policy"])
+    assert "'unsafe-inline'" not in csp["script-src"]
+    assert "'unsafe-inline'" not in csp.get("style-src", [])
+    assert "'unsafe-eval'" not in csp["script-src"]
+
+    def digest(block: str) -> str:
+        return "'sha256-" + base64.b64encode(hashlib.sha256(block.encode()).digest()).decode() + "'"
+
+    scripts = re.findall(r"<script>(.*?)</script>", response.text, re.S)
+    styles = re.findall(r"<style>(.*?)</style>", response.text, re.S)
+    assert scripts and styles
+    for block in scripts:
+        assert digest(block) in csp["script-src"]
+    for block in styles:
+        assert digest(block) in csp["style-src"]
+
+
+# ── the global run budget ───────────────────────────────────────────────────
+
+
+def test_the_demo_has_a_global_run_budget_by_default(monkeypatch):
+    monkeypatch.delenv("RUN_LIMIT_GLOBAL_PER_HOUR", raising=False)
+    assert server_mod.config.run_limit_global_per_hour() > 0
+
+
+def test_the_global_budget_can_be_configured_or_switched_off(monkeypatch):
+    monkeypatch.setenv("RUN_LIMIT_GLOBAL_PER_HOUR", "7")
+    assert server_mod.config.run_limit_global_per_hour() == 7
+    monkeypatch.setenv("RUN_LIMIT_GLOBAL_PER_HOUR", "0")
+    assert server_mod.config.run_limit_global_per_hour() == 0
+
+
+def test_the_global_budget_refuses_a_fresh_visitor_once_it_is_spent(client, monkeypatch):
+    """Per-visitor limits alone let enough visitors (or one with enough
+    addresses) spend the host's authority without end."""
+    c, me = client
+    monkeypatch.setenv("RUN_LIMIT_PER_HOUR", "5")
+    monkeypatch.setenv("RUN_LIMIT_GLOBAL_PER_HOUR", "1")
+    monkeypatch.setenv("CONCIERGE_BEHIND_PROXY", "1")
+    _stub_run(monkeypatch, me)
+    limited = TestClient(build_app(me))
+
+    assert _events(limited.get("/ui/stream", headers={"X-Forwarded-For": "198.51.100.1"}).text)[-1][0] == "done"
+    refused = _events(limited.get("/ui/stream", headers={"X-Forwarded-For": "198.51.100.2"}).text)
+    assert [k for k, _ in refused] == ["error"]
+    assert refused[0][1]["limited"] is True
+    assert "all visitors" in refused[0][1]["message"]
+
+    body = _rpc(limited, {"skill": "concierge.arrange_meal"}).json()
+    assert "all visitors" in body["error"]["message"]
+
+
+def test_a_visitor_refused_by_the_global_budget_is_not_charged(client, monkeypatch):
+    c, me = client
+    monkeypatch.setenv("RUN_LIMIT_PER_HOUR", "1")
+    monkeypatch.setenv("RUN_LIMIT_GLOBAL_PER_HOUR", "1")
+    monkeypatch.setenv("CONCIERGE_BEHIND_PROXY", "1")
+    _stub_run(monkeypatch, me)
+    app = build_app(me)
+    limited = TestClient(app)
+
+    limited.get("/ui/stream", headers={"X-Forwarded-For": "198.51.100.1"})
+    limited.get("/ui/stream", headers={"X-Forwarded-For": "198.51.100.2"})  # global refusal
+    message = _events(limited.get("/ui/stream", headers={"X-Forwarded-For": "198.51.100.2"}).text)[0][1][
+        "message"
+    ]
+    assert "all visitors" in message, "the global refusal was counted against the visitor"
+
+
+def test_the_page_is_told_the_global_budget(client, monkeypatch):
+    c, me = client
+    monkeypatch.setenv("RUN_LIMIT_GLOBAL_PER_HOUR", "9")
+    assert TestClient(build_app(me)).get("/ui/config").json()["run_limit"]["global_per_hour"] == 9
+
+
+# ── one run cannot hold the lock for ever ───────────────────────────────────
+
+
+def test_a_stream_stops_waiting_for_a_run_that_overruns(client, monkeypatch):
+    """A visitor's stream gives up after the deadline; the lock is held only
+    while the run itself is actually going, and released when it ends — never
+    while it is still running, which would let two runs race for one slot."""
+    c, me = client
+    monkeypatch.setattr(server_mod, "RUN_STREAM_TIMEOUT_SECONDS", 0.2)
+    started, release = threading.Event(), threading.Event()
+    finished = threading.Event()
+
+    def slow(*_a, **_k):
+        started.set()
+        release.wait(timeout=5)
+        finished.set()
+        return _FakePlan([])
+
+    monkeypatch.setattr(server_mod, "arrange", slow)
+    events = _events(c.get("/ui/stream").text)
+    assert events[-1][0] == "error"
+    assert "taking longer" in events[-1][1]["message"]
+
+    assert started.is_set()
+    busy = _events(c.get("/ui/stream").text)
+    assert "already in progress" in busy[0][1]["message"], "the lock was released while the run still ran"
+
+    release.set()
+    assert finished.wait(timeout=5)
+    monkeypatch.setattr(server_mod, "arrange", lambda *a, **k: _FakePlan([]))
+    # The worker releases the lock a moment after arrange() returns.
+    for _ in range(50):
+        last = _events(c.get("/ui/stream").text)
+        if last[-1][0] == "done":
+            break
+        time.sleep(0.05)
+    assert last[-1][0] == "done", "the lock was never released"
+
+
+# ── internal errors stay internal ───────────────────────────────────────────
+
+
+def test_a_failed_a2a_run_does_not_echo_the_exception(client, monkeypatch, caplog):
+    c, _ = client
+
+    def boom(*_a, **_k):
+        raise RuntimeError("connect to internal-host.railway.internal:5432 refused")
+
+    monkeypatch.setattr(server_mod, "arrange", boom)
+    with caplog.at_level("ERROR"):
+        message = _rpc(c, {"skill": "concierge.arrange_meal"}).json()["error"]["message"]
+    assert "internal-host" not in message
+    assert "RuntimeError" not in message
+    assert "internal-host" in caplog.text, "the detail must still reach the log"
+
+
+def test_a_failed_stream_run_does_not_echo_the_exception(client, monkeypatch, caplog):
+    c, _ = client
+
+    def boom(*_a, **_k):
+        raise RuntimeError("connect to internal-host.railway.internal:5432 refused")
+
+    monkeypatch.setattr(server_mod, "arrange", boom)
+    with caplog.at_level("ERROR"):
+        events = _events(c.get("/ui/stream").text)
+    assert events[-1][0] == "error"
+    assert "internal-host" not in events[-1][1]["message"]
+    assert "internal-host" in caplog.text
+
+
+# ── the capability search ───────────────────────────────────────────────────
+
+
+class _Found:
+    def __init__(self, term):
+        self.term = term
+
+    def to_dict(self):
+        return {"capability": self.term, "matches": []}
+
+
+def _counting_search(monkeypatch):
+    calls: list[str] = []
+
+    def search(term, **_):
+        calls.append(term)
+        return _Found(term)
+
+    monkeypatch.setattr(server_mod.capabilities, "search", search)
+    return calls
+
+
+def test_a_repeated_capability_search_is_served_from_the_cache(client, monkeypatch):
+    """Each search is about 3 + 2N requests to other organisations' servers."""
+    c, _ = client
+    calls = _counting_search(monkeypatch)
+    for term in ("leadership", "leadership", " Leadership ", "LEADERSHIP"):
+        assert c.get("/ui/capability", params={"q": term}).status_code == 200
+    assert calls == ["leadership"]
+
+
+def test_the_capability_cache_expires(client, monkeypatch):
+    c, _ = client
+    calls = _counting_search(monkeypatch)
+    clock = {"now": 1000.0}
+    monkeypatch.setattr(server_mod, "_clock", lambda: clock["now"])
+    c.get("/ui/capability", params={"q": "leadership"})
+    clock["now"] += server_mod.CAPABILITY_CACHE_SECONDS + 1
+    c.get("/ui/capability", params={"q": "leadership"})
+    assert calls == ["leadership", "leadership"]
+
+
+def test_capability_searches_are_rate_limited_per_visitor(client, monkeypatch):
+    c, me = client
+    monkeypatch.setenv("CAPABILITY_LIMIT_PER_MINUTE", "2")
+    monkeypatch.setenv("CONCIERGE_BEHIND_PROXY", "1")
+    calls = _counting_search(monkeypatch)
+    limited = TestClient(build_app(me))
+    one = {"X-Forwarded-For": "198.51.100.1"}
+
+    assert limited.get("/ui/capability", params={"q": "a"}, headers=one).status_code == 200
+    assert limited.get("/ui/capability", params={"q": "b"}, headers=one).status_code == 200
+    refused = limited.get("/ui/capability", params={"q": "c"}, headers=one)
+    assert refused.status_code == 429
+    assert "retry-after" in refused.headers
+    assert calls == ["a", "b"]
+    # A cached answer costs nobody anything, so it is still served.
+    assert limited.get("/ui/capability", params={"q": "a"}, headers=one).status_code == 200
+    # And another visitor has their own allowance.
+    other = {"X-Forwarded-For": "198.51.100.2"}
+    assert limited.get("/ui/capability", params={"q": "c"}, headers=other).status_code == 200
+
+
+def test_the_capability_limit_has_a_default(monkeypatch):
+    monkeypatch.delenv("CAPABILITY_LIMIT_PER_MINUTE", raising=False)
+    assert server_mod.config.capability_limit_per_minute() > 0
+
+
+def test_an_overlong_capability_is_refused_before_anything_is_fetched(client, monkeypatch):
+    c, _ = client
+    calls = _counting_search(monkeypatch)
+    response = c.get("/ui/capability", params={"q": "x" * (server_mod.CAPABILITY_MAX_LENGTH + 1)})
+    assert response.status_code == 400
+    assert calls == []
+
+
+def test_concurrent_capability_searches_are_bounded(client, monkeypatch):
+    """Each search holds a worker thread for up to ~16s against a slow
+    organisation; unbounded, 40 of them stop the whole demo answering."""
+    c, me = client
+    monkeypatch.setattr(server_mod, "CAPABILITY_MAX_CONCURRENT", 1)
+    started, release = threading.Event(), threading.Event()
+
+    def slow(term, **_):
+        started.set()
+        release.wait(timeout=5)
+        return _Found(term)
+
+    monkeypatch.setattr(server_mod.capabilities, "search", slow)
+    bounded = TestClient(build_app(me))
+    first = threading.Thread(target=lambda: bounded.get("/ui/capability", params={"q": "a"}))
+    first.start()
+    try:
+        assert started.wait(timeout=5)
+        busy = bounded.get("/ui/capability", params={"q": "b"})
+        assert busy.status_code == 503
+        assert "retry-after" in busy.headers
+    finally:
+        release.set()
+        first.join(timeout=5)
+    assert bounded.get("/ui/capability", params={"q": "b"}).status_code == 200

@@ -15,6 +15,7 @@ from typing import Any
 
 from starlette.applications import Starlette
 from starlette.concurrency import run_in_threadpool
+from starlette.middleware import Middleware
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, StreamingResponse
 from starlette.routing import Route
@@ -27,13 +28,44 @@ from .narration import PHASES, caption_for, phase_for
 from .ratelimit import RunLimiter, client_key
 from .receipts import chain_link
 from .references import probe_all
+from .security import SecurityHeaders, content_security_policy
 
 __all__ = ["build_app"]
 
 log = logging.getLogger(__name__)
 
-#: The window the per-visitor run limit counts over.
+#: The window the per-visitor and global run limits count over.
 RUN_LIMIT_WINDOW_SECONDS = 3600.0
+
+#: The one key the global run budget is counted under.
+EVERYONE = "*"
+
+#: How long a visitor's stream waits for a run before giving up on it. The run
+#: itself carries on to the end and holds the lock until then (every request it
+#: makes has its own timeout); this bounds what one visitor's connection holds.
+RUN_STREAM_TIMEOUT_SECONDS = 300.0
+
+#: Said instead of the exception, which can name internal hosts and libraries.
+#: The detail goes to the log.
+RUN_FAILED_MESSAGE = "The run failed before it finished. The cause has been logged for the operator."
+
+#: A capability search is about 3 + 2N requests to other organisations'
+#: servers, so an answer is reused for a minute rather than re-fetched.
+CAPABILITY_CACHE_SECONDS = 60.0
+CAPABILITY_CACHE_MAX_ENTRIES = 256
+CAPABILITY_LIMIT_WINDOW_SECONDS = 60.0
+#: Searches running at once. Each holds a worker thread for up to ~16s against
+#: a slow organisation, and the pool is shared with the run's event stream.
+CAPABILITY_MAX_CONCURRENT = 4
+#: Longer than any capability name the estate publishes; anything longer is not
+#: a search, and is refused before anything is fetched.
+CAPABILITY_MAX_LENGTH = 64
+#: What a busy server suggests to a caller as a wait, in seconds.
+BUSY_RETRY_SECONDS = 5
+
+#: The capability cache's clock. Monotonic, and a name of its own so a test can
+#: move it without moving every other clock in the process.
+_clock = time.monotonic
 
 #: JSON-RPC codes, reused from the estate's vocabulary rather than invented, so a
 #: client that already talks to the venue reads these without a second table.
@@ -80,6 +112,10 @@ def build_app(identity: Identity | None = None) -> Starlette:
     last_path = lastrun.default_path()
     state: dict[str, Any] = {"last": lastrun.load(last_path), "refs": None, "vocab": None}
     limiter = RunLimiter(config.run_limit_per_hour(), RUN_LIMIT_WINDOW_SECONDS)
+    everyone = RunLimiter(config.run_limit_global_per_hour(), RUN_LIMIT_WINDOW_SECONDS)
+    searches = RunLimiter(config.capability_limit_per_minute(), CAPABILITY_LIMIT_WINDOW_SECONDS)
+    search_slots = threading.BoundedSemaphore(CAPABILITY_MAX_CONCURRENT)
+    found: dict[str, tuple[float, dict[str, Any]]] = {}
     proxied = config.behind_proxy()
     #: Created here, not in the lifespan, so ``started_at`` is the process's
     #: own clock and /healthz can answer before the first tick is due.
@@ -107,6 +143,46 @@ def build_app(identity: Identity | None = None) -> Starlette:
             "real messages to two companies' agents and holds a real table, so they are rationed. "
             f"Try again in {minutes} minute{'s' if minutes != 1 else ''} — or watch the last run."
         )
+
+    def _global_message(wait: float) -> str:
+        n = everyone.max_runs
+        minutes = max(1, math.ceil(wait / 60))
+        return (
+            f"The demo has used its {n} live run{'s' if n != 1 else ''} for this hour, across all visitors. "
+            f"Try again in {minutes} minute{'s' if minutes != 1 else ''} — or watch the last run."
+        )
+
+    def _refusal(visitor: str) -> str | None:
+        """Why ``visitor`` may not start a run now, or None. Counts nothing."""
+        wait = limiter.wait(visitor)
+        if wait:
+            return _limit_message(wait)
+        wait = everyone.wait(EVERYONE)
+        return _global_message(wait) if wait else None
+
+    def _admit(visitor: str) -> tuple[str, str]:
+        """Take the run lock and count the run, or say why not.
+
+        Returns ``("ok", "")`` with the lock held, ``("limited", why)`` or
+        ``("busy", "")``. Over-limit visitors are turned away before the lock, so
+        retrying cannot make a run look "in progress" to anyone else; a run is
+        counted only once it can actually start, so a visitor who found another
+        run in progress has not used anything.
+        """
+        refusal = _refusal(visitor)
+        if refusal:
+            return "limited", refusal
+        if not lock.acquire(blocking=False):
+            return "busy", ""
+        # Checked again under the lock: only one admission happens at a time, so
+        # what is checked here is what is counted.
+        refusal = _refusal(visitor)
+        if refusal:
+            lock.release()
+            return "limited", refusal
+        limiter.try_acquire(visitor)
+        everyone.try_acquire(EVERYONE)
+        return "ok", ""
 
     async def agent_card(_: Request) -> JSONResponse:
         return JSONResponse(card, media_type=AGENT_CARD_MEDIA_TYPE)
@@ -173,19 +249,16 @@ def build_app(identity: Identity | None = None) -> Starlette:
             result = state["last"] or {"summary": None, "entries": [], "note": "no run yet"}
             result = {"skill": skill, "kind": "receipt-chain", **result}
         elif skill == "concierge.arrange_meal":
-            visitor = _visitor(request)
-            if not limiter.would_allow(visitor):
-                return _error(rpc_id, INTERNAL_ERROR, _limit_message(limiter.try_acquire(visitor)[1]))
-            if not lock.acquire(blocking=False):
+            admitted, why = _admit(_visitor(request))
+            if admitted == "limited":
+                return _error(rpc_id, INTERNAL_ERROR, why)
+            if admitted == "busy":
                 return _error(rpc_id, INTERNAL_ERROR, "a run is already in progress; try concierge.last_run")
-            allowed, wait = limiter.try_acquire(visitor)
-            if not allowed:
-                lock.release()
-                return _error(rpc_id, INTERNAL_ERROR, _limit_message(wait))
             try:
                 result = {"skill": skill, "kind": "receipt-chain", **_arrange()}
-            except Exception as exc:  # noqa: BLE001 - reported in the envelope, never as a 500
-                return _error(rpc_id, INTERNAL_ERROR, f"{type(exc).__name__}: {exc}"[:400])
+            except Exception:  # noqa: BLE001 - reported in the envelope, never as a 500
+                log.exception("concierge.arrange_meal failed")
+                return _error(rpc_id, INTERNAL_ERROR, RUN_FAILED_MESSAGE)
             finally:
                 lock.release()
         else:
@@ -274,21 +347,12 @@ def build_app(identity: Identity | None = None) -> Starlette:
         visitor = _visitor(request)
 
         def generate():
-            # Over-limit visitors are turned away before the lock, so retrying
-            # cannot make a run look "in progress" to anyone else.
-            if not limiter.would_allow(visitor):
-                wait = limiter.try_acquire(visitor)[1]
-                yield _sse("error", {"message": _limit_message(wait), "limited": True})
+            admitted, why = _admit(visitor)
+            if admitted == "limited":
+                yield _sse("error", {"message": why, "limited": True})
                 return
-            if not lock.acquire(blocking=False):
+            if admitted == "busy":
                 yield _sse("error", {"message": "A run is already in progress. Open the replay instead."})
-                return
-            # Counted only once the run can actually start: a visitor who found
-            # another run in progress has not used anything.
-            allowed, wait = limiter.try_acquire(visitor)
-            if not allowed:
-                lock.release()
-                yield _sse("error", {"message": _limit_message(wait), "limited": True})
                 return
 
             events: queue.Queue = queue.Queue()
@@ -312,30 +376,46 @@ def build_app(identity: Identity | None = None) -> Starlette:
                     }
                     _remember(payload)
                     outcome["summary"] = plan.summary()
-                except Exception as exc:  # noqa: BLE001 - reported to the page, not a 500
-                    outcome["error"] = f"{type(exc).__name__}: {exc}"[:400]
+                except Exception:  # noqa: BLE001 - reported to the page, not a 500
+                    log.exception("the live run failed")
+                    outcome["error"] = RUN_FAILED_MESSAGE
                 finally:
                     events.put(None)
+                    # Released by the run, not by the stream: a visitor who
+                    # disconnects or times out must not free the lock while the
+                    # run is still booking, or two runs race for one slot.
+                    lock.release()
 
             worker = _threading.Thread(target=run, daemon=True)
-            worker.start()
             try:
-                yield _sse(
-                    "start",
-                    {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "agent": me.did, "urn": me.urn},
-                )
-                while True:
-                    entry = events.get()
-                    if entry is None:
-                        break
-                    yield _sse("step", _step_payload(entry.to_dict()))
-                if "error" in outcome:
-                    yield _sse("error", {"message": outcome["error"]})
-                else:
-                    yield _sse("done", outcome.get("summary") or {})
-            finally:
-                worker.join(timeout=1)
+                worker.start()
+            except BaseException:
                 lock.release()
+                raise
+            deadline = time.monotonic() + RUN_STREAM_TIMEOUT_SECONDS
+            yield _sse(
+                "start",
+                {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "agent": me.did, "urn": me.urn},
+            )
+            while True:
+                try:
+                    entry = events.get(timeout=max(deadline - time.monotonic(), 0.0))
+                except queue.Empty:
+                    yield _sse(
+                        "error",
+                        {
+                            "message": "The run is taking longer than expected. It will finish on its own; "
+                            "open the replay in a few minutes."
+                        },
+                    )
+                    return
+                if entry is None:
+                    break
+                yield _sse("step", _step_payload(entry.to_dict()))
+            if "error" in outcome:
+                yield _sse("error", {"message": outcome["error"]})
+            else:
+                yield _sse("done", outcome.get("summary") or {})
 
         return StreamingResponse(
             generate(),
@@ -381,7 +461,7 @@ def build_app(identity: Identity | None = None) -> Starlette:
                     for p in PHASES
                 ],
                 "agent": {"did": me.did, "urn": me.urn},
-                "run_limit": {"per_hour": limiter.max_runs},
+                "run_limit": {"per_hour": limiter.max_runs, "global_per_hour": everyone.max_runs},
             }
         )
 
@@ -400,13 +480,54 @@ def build_app(identity: Identity | None = None) -> Starlette:
 
     async def ui_capability(request: Request) -> JSONResponse:
         """Which agent, in any organisation, claims a capability."""
-        term = (request.query_params.get("q") or "").strip()
+        term = (request.query_params.get("q") or "").strip().casefold()
         if not term:
             return JSONResponse(
                 {"error": "bad_request", "detail": 'a capability is required, as "q"'}, status_code=400
             )
-        result = await run_in_threadpool(capabilities.search, term)
-        return JSONResponse(result.to_dict())
+        if len(term) > CAPABILITY_MAX_LENGTH:
+            return JSONResponse(
+                {
+                    "error": "bad_request",
+                    "detail": f"a capability is at most {CAPABILITY_MAX_LENGTH} characters",
+                },
+                status_code=400,
+            )
+        now = _clock()
+        cached = found.get(term)
+        if cached and now - cached[0] < CAPABILITY_CACHE_SECONDS:
+            return JSONResponse(cached[1])
+
+        # Only a search that will actually go out is counted or bounded: a
+        # cached answer costs nobody anything.
+        if not search_slots.acquire(blocking=False):
+            return JSONResponse(
+                {"error": "busy", "detail": "Too many searches are running. Try again in a few seconds."},
+                status_code=503,
+                headers={"Retry-After": str(BUSY_RETRY_SECONDS)},
+            )
+        try:
+            allowed, wait = searches.try_acquire(_visitor(request))
+            if not allowed:
+                return JSONResponse(
+                    {"error": "rate_limited", "detail": "Too many searches. Try again in a minute."},
+                    status_code=429,
+                    headers={"Retry-After": str(max(1, math.ceil(wait)))},
+                )
+            result = await run_in_threadpool(capabilities.search, term)
+        finally:
+            search_slots.release()
+        payload = result.to_dict()
+        _remember_search(term, payload, now)
+        return JSONResponse(payload)
+
+    def _remember_search(term: str, payload: dict[str, Any], now: float) -> None:
+        """Keep an answer, dropping expired ones and then the oldest past the cap."""
+        for key in [k for k, (at, _) in found.items() if now - at >= CAPABILITY_CACHE_SECONDS]:
+            del found[key]
+        while len(found) >= CAPABILITY_CACHE_MAX_ENTRIES:
+            del found[next(iter(found))]
+        found[term] = (now, payload)
 
     async def ui_vocabulary(_: Request) -> JSONResponse:
         """Every capability the three organisations publish, and who publishes it."""
@@ -460,6 +581,7 @@ def build_app(identity: Identity | None = None) -> Starlette:
 
     return Starlette(
         lifespan=lifespan,
+        middleware=[Middleware(SecurityHeaders, csp=content_security_policy(page.read_text(encoding="utf-8")))],
         routes=[
             Route("/.well-known/agent-card.json", agent_card),
             Route("/.well-known/agent.json", agent_card),
