@@ -20,6 +20,13 @@ export interface JwtPayload {
   exp?: number;
 }
 
+const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** True for a session id this server issues (a UUID, see signSession). */
+function isSessionId(value: unknown): value is string {
+  return typeof value === 'string' && SESSION_ID.test(value);
+}
+
 declare module '@fastify/jwt' {
   interface FastifyJWT {
     payload: JwtPayload;
@@ -54,12 +61,18 @@ export async function registerJwtPlugin(fastify: FastifyInstance): Promise<void>
       reply.code(401).send({ error: 'UNAUTHORIZED', detail: 'missing or invalid token' });
       return;
     }
+    // We only ever issue UUID session ids; anything else is not our token.
+    const claims = request.user as JwtPayload;
+    if (claims.jti !== undefined && !isSessionId(claims.jti)) {
+      reply.code(401).send({ error: 'UNAUTHORIZED', detail: 'missing or invalid token' });
+      return;
+    }
 
     // A signature check alone cannot revoke a JWT. Comparing against the
     // user's current token_version lets a password reset end every older
     // session, and a deleted account's tokens stop working immediately.
     // A signed-out session's id is refused as well.
-    const { userId, tokenVersion, jti } = request.user as JwtPayload;
+    const { userId, tokenVersion, jti } = claims;
     const user = await findUserById(userId);
     if (!user || user.tokenVersion !== (tokenVersion ?? 0) || (jti && await isSessionRevoked(jti))) {
       reply.code(401).send({ error: 'UNAUTHORIZED', detail: 'session expired; please sign in again' });

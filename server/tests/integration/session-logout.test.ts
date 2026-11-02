@@ -83,6 +83,17 @@ describe('POST /auth/logout', () => {
     expect((await me(session)).statusCode).toBe(401);
   });
 
+  it('treats a token with a malformed session id as invalid (401, not 500)', async () => {
+    const user = await freshUser('logout-badjti@example.com');
+    for (const jti of ['not-a-uuid', '', 42]) {
+      const token = app.jwt.sign(
+        { userId: user.id, email: user.email, displayName: null, tokenVersion: user.tokenVersion, jti } as never,
+        { expiresIn: '1h' },
+      );
+      expect((await me(token)).statusCode).toBe(401);
+    }
+  });
+
   it('revokes every session for a token issued before sessions had ids', async () => {
     const user = await freshUser('logout-legacy@example.com');
     const other = await login('logout-legacy@example.com');
