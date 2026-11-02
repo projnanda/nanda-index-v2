@@ -4,18 +4,12 @@
 -- longer let an old link verify an address it was never sent to.
 ALTER TABLE users ADD COLUMN email_verify_token_email VARCHAR(255);
 
--- Keep outstanding links working when the row has not been written since the
--- link was sent (issuing one sets updated_at and email_verify_sent_at to the
--- same NOW(), and any later write, such as an email change, moves updated_at
--- on). Any other pending link is dropped; the user can resend it.
-UPDATE users
-SET email_verify_token_email = email
-WHERE email_verify_token IS NOT NULL
-  AND email_verify_sent_at >= updated_at;
-
+-- Links issued before this column existed are not bound to any address, and
+-- which address each was mailed to cannot be reconstructed safely. Drop them
+-- all (they live 24 hours at most) and clear the resend cooldown, so users
+-- can request a new link straight away.
 UPDATE users
 SET email_verify_token            = NULL,
     email_verify_token_expires_at = NULL,
     email_verify_sent_at          = NULL
-WHERE email_verify_token IS NOT NULL
-  AND email_verify_token_email IS NULL;
+WHERE email_verify_token IS NOT NULL;
