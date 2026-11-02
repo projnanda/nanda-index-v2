@@ -344,7 +344,8 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Create a new organization
   fastify.post<{ Body: CreateOrgBody }>('/api/v1/orgs', {
-    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, rejectOversizedJson],
+    preValidation: [fastify.authenticate],
+    preHandler: [fastify.requireVerifiedAccount, rejectOversizedJson],
     config: orgWriteRateLimit,
     schema: {
       tags: ['orgs'],
@@ -468,7 +469,8 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Get own org (must be member)
   fastify.get<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id', {
-    preHandler: [fastify.authenticate, requireOrgRole('member')],
+    preValidation: [fastify.authenticate],
+    preHandler: [requireOrgRole('member')],
     schema: {
       tags: ['orgs'],
       summary: 'Get your organization',
@@ -494,7 +496,8 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Issue a DNS TXT challenge for the org's domain, or return the unexpired one
   fastify.post<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/domain-challenge', {
-    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, requireOrgRole('admin')],
+    preValidation: [fastify.authenticate],
+    preHandler: [fastify.requireVerifiedAccount, requireOrgRole('admin')],
     schema: {
       tags: ['orgs'],
       summary: 'Issue a DNS TXT challenge to prove domain ownership',
@@ -540,7 +543,8 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Check the DNS TXT record and, on success, mark the domain verified + activate
   fastify.post<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/verify-domain', {
-    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, requireOrgRole('admin')],
+    preValidation: [fastify.authenticate],
+    preHandler: [fastify.requireVerifiedAccount, requireOrgRole('admin')],
     schema: {
       tags: ['orgs'],
       summary: 'Verify the DNS TXT challenge and activate the organization',
@@ -607,7 +611,8 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Update own org's index record
   fastify.put<{ Params: { org_id: string }; Body: UpdateOrgBody }>('/api/v1/orgs/:org_id', {
-    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, requireOrgRole('admin'), rejectUnknownUpdateFields, rejectOversizedJson],
+    preValidation: [fastify.authenticate],
+    preHandler: [fastify.requireVerifiedAccount, requireOrgRole('admin'), rejectUnknownUpdateFields, rejectOversizedJson],
     config: orgWriteRateLimit,
     schema: {
       tags: ['orgs'],
@@ -714,7 +719,8 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Resend the contact-email verification link (the previous one stops working).
   fastify.post<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/resend-verification', {
-    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, requireOrgRole('admin')],
+    preValidation: [fastify.authenticate],
+    preHandler: [fastify.requireVerifiedAccount, requireOrgRole('admin')],
     config: {
       rateLimit: { max: buildConfig().auth.rateLimitMax, timeWindow: buildConfig().auth.rateLimitWindow },
     },
@@ -758,7 +764,8 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Suspend org
   fastify.delete<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/suspend', {
-    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, requireOrgRole('admin'), rejectIfTakenDown],
+    preValidation: [fastify.authenticate],
+    preHandler: [fastify.requireVerifiedAccount, requireOrgRole('admin'), rejectIfTakenDown],
     schema: {
       tags: ['orgs'],
       summary: 'Suspend your organization',
@@ -784,7 +791,8 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Reactivate a suspended org
   fastify.post<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/reactivate', {
-    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, requireOrgRole('admin'), rejectIfTakenDown],
+    preValidation: [fastify.authenticate],
+    preHandler: [fastify.requireVerifiedAccount, requireOrgRole('admin'), rejectIfTakenDown],
     schema: {
       tags: ['orgs'],
       summary: 'Reactivate a suspended organization',
@@ -819,7 +827,8 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Hard-delete org
   fastify.delete<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id', {
-    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, requireOrgRole('admin')],
+    preValidation: [fastify.authenticate],
+    preHandler: [fastify.requireVerifiedAccount, requireOrgRole('admin')],
     schema: {
       tags: ['orgs'],
       summary: 'Permanently delete your organization',
