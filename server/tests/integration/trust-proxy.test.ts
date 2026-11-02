@@ -11,9 +11,9 @@ import { buildServer } from '../../src/server.js';
  * and with none, a client cannot pick its address through X-Forwarded-For.
  */
 
-const login = (app: FastifyInstance, forwardedFor: string) => app.inject({
+const login = (app: FastifyInstance, forwardedFor: string, remoteAddress = '172.18.0.2' /* the proxy */) => app.inject({
   method: 'POST', url: '/auth/login',
-  remoteAddress: '172.18.0.2', // the proxy
+  remoteAddress,
   headers: { 'x-forwarded-for': forwardedFor },
   payload: { email: 'nobody@example.com', password: 'wrong-password-123' },
 });
@@ -44,6 +44,17 @@ describe('rate limits behind a trusted proxy', () => {
     expect((await login(app, '198.51.100.1')).statusCode).toBe(429);
 
     expect((await login(app, '198.51.100.2')).statusCode).not.toBe(429);
+  });
+
+  it('ignores X-Forwarded-For from a public peer even with a trusted hop', async () => {
+    const app = await serverWith({ TRUST_PROXY_HOPS: '1', AUTH_RATE_LIMIT_MAX: '2', AUTH_MAX_LOGIN_ATTEMPTS: '1000' });
+    apps.push(app);
+
+    // A client reaching the API directly cannot rotate its address through the header.
+    await login(app, '198.51.100.1', '203.0.113.9');
+    await login(app, '198.51.100.2', '203.0.113.9');
+
+    expect((await login(app, '198.51.100.3', '203.0.113.9')).statusCode).toBe(429);
   });
 
   it('ignores X-Forwarded-For when no proxy is trusted', async () => {
