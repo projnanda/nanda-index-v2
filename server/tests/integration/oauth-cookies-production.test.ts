@@ -14,6 +14,7 @@ const PRODUCTION_ENV = {
   COOKIE_SECRET: 'a-cookie-secret-long-enough-for-production-use',
   GOOGLE_CLIENT_ID: 'test-google-client',
   GOOGLE_CLIENT_SECRET: 'test-google-secret',
+  SMTP_URL: 're_test_key',
 };
 const PROVIDER_ID = 'oauth-cookies-production-id';
 
