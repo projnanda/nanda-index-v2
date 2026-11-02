@@ -218,6 +218,30 @@ describe('fanOutAgentSearch', () => {
     expect(result.candidates.map((c) => c.org.orgId)).toEqual(['smb-y']);
   });
 
+  it('gives up on a registry whose DNS never answers within the same per-org budget', async () => {
+    const stuck = makeOrg({ orgId: 'dns-stuck', mediaType: 'application/ai-catalog+json', registryUrl: 'https://stuck.example.com' });
+    const fine = makeOrg({ orgId: 'dns-fine', mediaType: 'application/ai-catalog+json', registryUrl: 'https://fine.example.com' });
+    const entry = { identifier: 'urn:air:default.example.com:agent:a', displayName: 'A', mediaType: 'application/a2a-agent-card+json', url: 'https://fine.example.com/a' };
+    const guardedFetch = vi.fn(async () => new Response(JSON.stringify({ specVersion: '1.0', entries: [entry] }), { status: 200 }));
+    // The stuck host's lookup never settles, like an authoritative server that never answers.
+    const guard = vi.fn((url: string) => (url.includes('stuck') ? new Promise<never>(() => {}) : Promise.resolve(guardedFetch)));
+    const budgetMs = 50;
+
+    const started = Date.now();
+    const result = await Promise.race([
+      fanOutAgentSearch([stuck, fine], 'query', { urlGuard: guard, timeoutMs: budgetMs }),
+      new Promise<'stalled'>((resolve) => setTimeout(() => resolve('stalled'), 1000)),
+    ]);
+
+    expect(result).not.toBe('stalled');
+    expect(Date.now() - started).toBeLessThan(budgetMs + 500);
+    if (result === 'stalled') return;
+    expect(result.unreachable).toEqual(['dns-stuck']);
+    expect(result.candidates.map((c) => c.org.orgId)).toEqual(['dns-fine']);
+    // The well-known fallback is not tried once the budget is spent.
+    expect(guard.mock.calls.filter(([url]) => url.includes('stuck'))).toHaveLength(1);
+  });
+
   it('never fetches a registry whose URL fails the SSRF guard — it is reported unreachable', async () => {
     const org = makeOrg({ orgId: 'ssrf', mediaType: 'application/ai-catalog+json', registryUrl: 'http://169.254.169.254' });
     const fetchMock = vi.fn();

@@ -91,6 +91,9 @@ export interface ClaimsConfig {
   /** Max org create/update requests per window per client IP. */
   readonly writeRateLimitMax: number;
   readonly writeRateLimitWindow: string;
+  /** Max domain-challenge / verify-domain requests per window per client IP (each route counted apart). */
+  readonly domainVerifyRateLimitMax: number;
+  readonly domainVerifyRateLimitWindow: string;
   /** How many unproven (unverified) orgs one account may hold at once. */
   readonly maxUnprovenPerUser: number;
   /** How long an unproven org keeps its org_id slug before others may take it. */
@@ -299,6 +302,11 @@ export function buildConfig(): Config {
         'ORG_WRITE_RATE_LIMIT_MAX', optionalEnv('ORG_WRITE_RATE_LIMIT_MAX', '30'),
       ),
       writeRateLimitWindow: optionalEnv('ORG_WRITE_RATE_LIMIT_WINDOW', '1 hour'),
+      // domain-challenge and verify-domain: each verify asks four resolvers.
+      domainVerifyRateLimitMax: parsePositiveInt(
+        'DOMAIN_VERIFY_RATE_LIMIT_MAX', optionalEnv('DOMAIN_VERIFY_RATE_LIMIT_MAX', '20'),
+      ),
+      domainVerifyRateLimitWindow: optionalEnv('DOMAIN_VERIFY_RATE_LIMIT_WINDOW', '10 minutes'),
       maxUnprovenPerUser: parsePositiveInt(
         'MAX_UNPROVEN_ORGS_PER_USER', optionalEnv('MAX_UNPROVEN_ORGS_PER_USER', '5'),
       ),

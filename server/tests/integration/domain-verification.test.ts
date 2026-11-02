@@ -37,17 +37,19 @@ async function addMember(orgId: string, userId: string, role: 'admin' | 'member'
   await sql`INSERT INTO org_memberships (user_id, org_id, role) VALUES (${userId}, ${orgId}, ${role})`;
 }
 
-async function requestChallenge(fastify: FastifyInstance, token: string, orgId: string) {
+async function requestChallenge(fastify: FastifyInstance, token: string, orgId: string, remoteAddress?: string) {
   return fastify.inject({
     method: 'POST', url: `/api/v1/orgs/${orgId}/domain-challenge`,
     headers: { authorization: `Bearer ${token}` },
+    remoteAddress,
   });
 }
 
-async function verifyDomain(fastify: FastifyInstance, token: string, orgId: string) {
+async function verifyDomain(fastify: FastifyInstance, token: string, orgId: string, remoteAddress?: string) {
   return fastify.inject({
     method: 'POST', url: `/api/v1/orgs/${orgId}/verify-domain`,
     headers: { authorization: `Bearer ${token}` },
+    remoteAddress,
   });
 }
 
@@ -265,6 +267,99 @@ describe('Domain ownership verification — DNS TXT challenge', () => {
     const res = await requestChallenge(fastify, adminToken, 'dv-personal');
     expect(res.statusCode).toBe(400);
     expect(res.json().error).toBe('NO_DOMAIN');
+  });
+
+  // ── A domain change during the DNS lookup cannot verify the new domain ───────
+
+  it('refuses to verify a domain swapped in while the DNS lookup was pending (409)', async () => {
+    // The victim holds an unproven claim on their own domain.
+    await createOrg(fastify, memberToken, 'dv-victim');
+    await createOrg(fastify, adminToken, 'dv-attacker');
+    const chal = (await requestChallenge(fastify, adminToken, 'dv-attacker')).json();
+
+    // DNS answers for the attacker's own domain, but only when the test says so.
+    let release!: () => void;
+    const answer = new Promise<string[][]>((resolve) => { release = () => resolve([[chal.record_value]]); });
+    let lookupStarted!: () => void;
+    const started = new Promise<void>((resolve) => { lookupStarted = resolve; });
+    resolveTxtMock.mockImplementation(() => { lookupStarted(); return answer; });
+
+    const verifying = verifyDomain(fastify, adminToken, 'dv-attacker');
+    await started;
+    const swap = await fastify.inject({
+      method: 'PUT', url: '/api/v1/orgs/dv-attacker',
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { domain: 'dv-victim.example.com' },
+    });
+    expect(swap.statusCode).toBe(200);
+    release();
+    const res = await verifying;
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toBe('DOMAIN_CHANGED');
+    const [attacker] = await getSql()<{ domain: string; domainVerified: boolean; status: string }[]>`
+      SELECT domain, domain_verified, status FROM organizations WHERE org_id = 'dv-attacker'`;
+    expect(attacker).toEqual({ domain: 'dv-victim.example.com', domainVerified: false, status: 'pending' });
+    const victim = await getSql()`SELECT org_id FROM organizations WHERE org_id = 'dv-victim'`;
+    expect(victim).toHaveLength(1);
+  });
+
+  it('refuses a proof whose challenge was replaced while the DNS lookup was pending (409)', async () => {
+    await createOrg(fastify, adminToken, 'dv-rechal');
+    const chal = (await requestChallenge(fastify, adminToken, 'dv-rechal')).json();
+
+    let release!: () => void;
+    const answer = new Promise<string[][]>((resolve) => { release = () => resolve([[chal.record_value]]); });
+    let lookupStarted!: () => void;
+    const started = new Promise<void>((resolve) => { lookupStarted = resolve; });
+    resolveTxtMock.mockImplementation(() => { lookupStarted(); return answer; });
+
+    const verifying = verifyDomain(fastify, adminToken, 'dv-rechal');
+    await started;
+    await getSql()`UPDATE organizations SET domain_challenge = 'replaced' WHERE org_id = 'dv-rechal'`;
+    release();
+    const res = await verifying;
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toBe('DOMAIN_CHANGED');
+    const [org] = await getSql()<{ domainVerified: boolean }[]>`
+      SELECT domain_verified FROM organizations WHERE org_id = 'dv-rechal'`;
+    expect(org?.domainVerified).toBe(false);
+  });
+
+  it('removes unproven claims on the verified domain only', async () => {
+    await createOrg(fastify, adminToken, 'dv-winner');
+    await createOrg(fastify, memberToken, 'dv-bystander');
+    await getSql()`UPDATE organizations SET domain = 'dv-winner.example.com',
+                   identifier = 'urn:air:dv-winner.example.com:catalog:squat' WHERE org_id = 'dv-bystander'`;
+    await createOrg(fastify, memberToken, 'dv-other');
+    const chal = (await requestChallenge(fastify, adminToken, 'dv-winner')).json();
+    resolveTxtMock.mockResolvedValue([[chal.record_value]]);
+
+    const res = await verifyDomain(fastify, adminToken, 'dv-winner');
+
+    expect(res.statusCode).toBe(200);
+    const left = await getSql()<{ orgId: string }[]>`
+      SELECT org_id FROM organizations WHERE org_id IN ('dv-bystander', 'dv-other') ORDER BY org_id`;
+    expect(left.map((r) => r.orgId)).toEqual(['dv-other']);
+  });
+
+  // ── Rate limits ──────────────────────────────────────────────────────────────
+
+  it('rate-limits domain-challenge and verify-domain per client IP', async () => {
+    vi.stubEnv('DOMAIN_VERIFY_RATE_LIMIT_MAX', '2');
+    const limited = (await buildServer({ logger: false })).fastify;
+    await limited.ready();
+    try {
+      await createOrg(limited, adminToken, 'dv-limited');
+      resolveTxtMock.mockResolvedValue([]);
+      for (const send of [requestChallenge, verifyDomain]) {
+        expect((await send(limited, adminToken, 'dv-limited', '192.0.2.10')).statusCode).not.toBe(429);
+        expect((await send(limited, adminToken, 'dv-limited', '192.0.2.10')).statusCode).not.toBe(429);
+        expect((await send(limited, adminToken, 'dv-limited', '192.0.2.10')).statusCode).toBe(429);
+        expect((await send(limited, adminToken, 'dv-limited', '192.0.2.11')).statusCode).not.toBe(429);
+      }
+    } finally { await limited.close(); vi.unstubAllEnvs(); }
   });
 
   // ── Changing the domain invalidates a prior verification ─────────────────────
