@@ -114,3 +114,13 @@ describe("registry_url is https-only, runtime_url is not", () => {
     expect(REGISTRY_URL_ERROR).not.toContain("http://");
   });
 });
+
+describe("registry_url must not carry credentials", () => {
+  it.each([
+    "https://user:pass@example.com/c.json",
+    "https://user@example.com/c.json",
+    "https://good.com@evil.invalid/c.json",
+  ])("rejects %s", (url) => {
+    expect(validateOrgFields({ registry_url: url })).toEqual({ registry_url: REGISTRY_URL_ERROR });
+  });
+});

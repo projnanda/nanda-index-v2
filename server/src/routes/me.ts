@@ -8,7 +8,7 @@ import type { JwtPayload } from '../plugins/jwt.js';
 /** GET /api/v1/me — returns the authenticated user's profile and org memberships. */
 export async function registerMeRoute(fastify: FastifyInstance): Promise<void> {
   fastify.get('/api/v1/me', {
-    preHandler: [fastify.authenticate],
+    preValidation: [fastify.authenticate],
     schema: {
       tags: ['auth'],
       summary: 'Get the authenticated user profile',

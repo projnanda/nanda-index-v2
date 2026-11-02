@@ -16,8 +16,13 @@ function validHttpUrl(value: string, httpsOnly = false): boolean {
   // Match the server's explicit authority requirement before URL repairs input.
   if (!/^https?:\/\/[^/\\\s]/i.test(value) || /[\\\s\u0000-\u001f\u007f]/.test(value)) return false;
   const allowed = httpsOnly ? ["https:"] : ["http:", "https:"];
-  try { const url = new URL(value); return allowed.includes(url.protocol) && !!url.hostname; }
-  catch { return false; }
+  try {
+    const url = new URL(value);
+    // `https://good.com@evil.invalid/` reads as the wrong host at a glance, and
+    // a published directory entry has no business carrying credentials.
+    if (url.username || url.password) return false;
+    return allowed.includes(url.protocol) && !!url.hostname;
+  } catch { return false; }
 }
 
 /** Validate only supplied fields, so create steps and edit use the same rules. */
