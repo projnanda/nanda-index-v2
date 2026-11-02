@@ -81,7 +81,7 @@ export TOKEN="eyJ..."`,
   },
   {
     title: "Register an entry",
-    body: "Required: org_id, display_name, contact_email and registry_url (HTTP or HTTPS; use HTTPS). hosting_path is registry (default), dns-svcb, smb or personal; every path except personal needs a domain, and personal must not send one. The server derives the identifier, media type and publisher from the path and domain. A personal entry has no domain: its identifier is urn:air:host39.org:personal:<contact email, lowercased>, so that email is public once the entry is live. The entry starts as pending.",
+    body: "Required: org_id, display_name, contact_email and registry_url (HTTPS; http:// is refused unless the server runs with OUTBOUND_ALLOW_PRIVATE_HOSTS for local development). hosting_path is registry (default), dns-svcb, smb or personal; every path except personal needs a domain, and personal must not send one. The server derives the identifier, media type and publisher from the path and domain. A personal entry has no domain: its identifier is urn:air:host39.org:personal:<contact email, lowercased>, so that email is public once the entry is live. The entry starts as pending.",
     command: (api: string) => `curl -X POST "${api}/api/v1/orgs" -H "Authorization: Bearer $TOKEN" \\
   -H "Content-Type: application/json" -d '{
     "org_id": "acme", "display_name": "Acme Corp", "hosting_path": "registry",
