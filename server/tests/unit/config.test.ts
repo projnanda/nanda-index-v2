@@ -100,7 +100,7 @@ describe('buildConfig', () => {
     process.env.NODE_ENV = 'production';
     // JWT_SECRET and COOKIE_SECRET must be set in production (auth hardening)
     process.env.JWT_SECRET = 'a-secret-that-is-long-enough-for-production-use';
-    process.env.COOKIE_SECRET = 'a-production-cookie-secret';
+    process.env.COOKIE_SECRET = 'a-production-cookie-secret-of-32-plus-chars';
     process.env.SMTP_URL = 're_production_key';
     process.env.SIGNING_KEY_ID = 'custom';
     process.env.DB_MAX_CONNECTIONS = '20';
@@ -274,7 +274,7 @@ describe('buildConfig', () => {
       process.env.DATABASE_URL = 'x';
       process.env.NODE_ENV = 'production';
       process.env.JWT_SECRET = 'a-secret-that-is-long-enough-for-production-use';
-      process.env.COOKIE_SECRET = 'a-production-cookie-secret';
+      process.env.COOKIE_SECRET = 'a-production-cookie-secret-of-32-plus-chars';
     }
 
     // 'log' prints live reset and verification links to stdout (docker logs).
