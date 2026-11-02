@@ -1,6 +1,6 @@
 import { PageShell } from "@/components/PageShell";
 import Link from "next/link";
-import { DEFAULT_POSTHOG_HOST } from "@/lib/posthogHosts";
+import { configuredPostHogHost } from "@/lib/posthogHosts";
 
 import type { Metadata } from "next";
 
@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 
 const gaId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 const posthogKey = process.env.NEXT_PUBLIC_POSTHOG_KEY;
-const posthogRegion = new URL(process.env.NEXT_PUBLIC_POSTHOG_HOST ?? DEFAULT_POSTHOG_HOST).hostname.startsWith("eu.")
+const posthogRegion = new URL(configuredPostHogHost(process.env.NEXT_PUBLIC_POSTHOG_HOST)).hostname.startsWith("eu.")
   ? "the EU"
   : "the US";
 
