@@ -10,14 +10,18 @@
 // PayPal's logo is from https://www.paypalobjects.com/paypal-ui/logos/svg/paypal-wordmark-color.svg
 // Akamai Cloud's logo was supplied with Hema Seshadri's approved quote.
 // Motorola Solutions' logo was supplied by its brand team on November 2, 2026.
+// Google: https://www.gstatic.com/marketing-cms/assets/images/f5/d3/a7f9db7045429cb6dc6be56bdcbe/google-logo-about.svg
+// AG2: https://www.ag2.ai/ag2-logo-black.png
 export const CONTRIBUTOR_BITMAP = {
-  src: "/contributors/contributor-logos-tab-11-v4.png",
-  alt: "Contributor logos: Google, Cisco, Akamai Cloud, PayPal, AGI House, Cognizant, Commerce, Ericsson, GSMA, HCLTech, Hello Haven, Hexaware, Inkbox, Kyndryl, L&T Technology Services, Maritime, Mitsubishi Electric, Motorola Solutions, Nasiko, Nebius, Nutanix, Ora, Suki, TCS, TinyFish, Wand AI, Wipro, WorkOS, MIT Media Lab, and Project NANDA.",
+  src: "/contributors/contributor-logos-tab-11-v5.png",
+  alt: "Contributor logos: Google, Cisco, Akamai Cloud, PayPal, AGI House, Cognizant, Commerce, Ericsson, GSMA, HCLTech, Hello Haven, Hexaware, Inkbox, Kyndryl, L&T Technology Services, Maritime, Mitsubishi Electric, Motorola Solutions, Nasiko, Nebius, Nutanix, Ora, Suki, TCS, TinyFish, Wand AI, Wipro, WorkOS, MIT Media Lab, AG2, and Project NANDA.",
   width: 874,
   height: 802,
 } as const;
 
 export const CONTRIBUTOR_LOGOS = {
+  "Google": { name: "Google", src: "/contributors/logos/google.svg", width: 75, height: 24 },
+  "AG2": { name: "AG2", src: "/contributors/logos/ag2.png", width: 194, height: 193 },
   "Motorola Solutions": { name: "Motorola Solutions", src: "/contributors/logos/motorola-solutions.png", width: 900, height: 771 },
   "Cisco": { name: "Cisco", src: "/contributors/logos/cisco.png", width: 272, height: 148 },
   "Project NANDA": { name: "Project NANDA", src: "/contributors/logos/project-nanda.png", width: 723, height: 276 },

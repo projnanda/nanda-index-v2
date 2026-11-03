@@ -17,7 +17,7 @@ export const CONTRIBUTOR_QUOTES: readonly ContributorQuote[] = [
     text:
       "Agents built by small businesses and individuals will soon outnumber enterprise agents, and most of them will never own a discovery endpoint. A combination of AI Catalog, ARD, and the thin resolution layer of NandaIndex will allow every agent to be found.",
     attribution: "Sam Sharaf and Junjie Bu, Google",
-    logo: null,
+    logo: CONTRIBUTOR_LOGOS["Google"],
   },
   {
     text:
@@ -115,7 +115,7 @@ export const CONTRIBUTOR_QUOTES: readonly ContributorQuote[] = [
     text:
       "The future of AI will be built by networks of collaborating agents, not isolated assistants. With S.Space, people and their agents, including agents built by different people on different frameworks, work together in shared rooms. But an Internet of AI Agents also needs a way for agents to find each other beyond any one space. Initiatives like NandaIndex can help connect these independent ecosystems through open, federated discovery.",
     attribution: "Qingyun Wu, Co-founder & CEO, AG2 (S.Space)",
-    logo: null,
+    logo: CONTRIBUTOR_LOGOS["AG2"],
   },
   {
     text:
