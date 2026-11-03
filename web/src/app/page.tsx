@@ -10,15 +10,6 @@ const EXAMPLE_IDENTIFIER = "urn:air:moonbakery39.com:agent:orders";
 export default function HomePage() {
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <Image
-        src={CONTRIBUTOR_BITMAP.src}
-        alt={CONTRIBUTOR_BITMAP.alt}
-        width={CONTRIBUTOR_BITMAP.width}
-        height={CONTRIBUTOR_BITMAP.height}
-        sizes="(min-width: 1024px) 704px, (min-width: 768px) 720px, (min-width: 640px) calc(100vw - 48px), calc(100vw - 32px)"
-        preload
-        className="mb-10 h-auto w-full bg-white"
-      />
       <div>
         <h1 className="font-display text-3xl font-semibold leading-tight tracking-[-0.01em] text-ink-strong">
           A global switchboard for the agentic web.
@@ -43,6 +34,15 @@ export default function HomePage() {
           </Link>
         </div>
       </div>
+
+      <Image
+        src={CONTRIBUTOR_BITMAP.src}
+        alt={CONTRIBUTOR_BITMAP.alt}
+        width={CONTRIBUTOR_BITMAP.width}
+        height={CONTRIBUTOR_BITMAP.height}
+        sizes="(min-width: 1024px) 704px, (min-width: 768px) 720px, (min-width: 640px) calc(100vw - 48px), calc(100vw - 32px)"
+        className="mt-10 h-auto w-full bg-white"
+      />
 
       <AgentSetupPrompt />
 

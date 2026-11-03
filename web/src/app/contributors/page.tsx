@@ -7,7 +7,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Contributors",
-  description: "Nanda Index is being designed, reviewed, and supported by a large collective.",
+  description: "Nanda Index is being designed, reviewed, and supported by a large coalition.",
 };
 
 type Person = {
@@ -122,7 +122,7 @@ export default function ContributorsPage() {
   return (
     <PageShell
       title="Contributors"
-      description="Nanda Index is being designed, reviewed, and supported by a large collective."
+      description="Nanda Index is being designed, reviewed, and supported by a large coalition."
     >
       <nav aria-label="On this page" className="mb-8 flex flex-wrap gap-x-6 gap-y-2 text-sm">
         <a href="#research-authors" className="text-brand-600 hover:text-brand-700 hover:underline">
