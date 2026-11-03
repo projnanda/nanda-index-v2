@@ -134,8 +134,8 @@ export default function ContributorsPage() {
       <div className="max-w-3xl space-y-12">
         <div id="community-perspectives" className="scroll-mt-24">
           <Image
-            src="/contributors/contributor-logos-tab-11-v3.png"
-            alt="Contributor logos: Google, Cisco, Akamai Cloud, PayPal, AGI House, Cognizant, Commerce, Ericsson, GSMA, HCLTech, Hello Haven, Hexaware, Inkbox, Kyndryl, L&T Technology Services, Maritime, Mitsubishi Electric, Nasiko, Nebius, Nutanix, Ora, Suki, TCS, TinyFish, Wand AI, Wipro, WorkOS, MIT Media Lab, and Project NANDA."
+            src="/contributors/contributor-logos-tab-11-v4.png"
+            alt="Contributor logos: Google, Cisco, Akamai Cloud, PayPal, AGI House, Cognizant, Commerce, Ericsson, GSMA, HCLTech, Hello Haven, Hexaware, Inkbox, Kyndryl, L&T Technology Services, Maritime, Mitsubishi Electric, Motorola Solutions, Nasiko, Nebius, Nutanix, Ora, Suki, TCS, TinyFish, Wand AI, Wipro, WorkOS, MIT Media Lab, and Project NANDA."
             width={874}
             height={802}
             sizes="(min-width: 832px) 768px, calc(100vw - 64px)"
