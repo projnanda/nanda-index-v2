@@ -1,4 +1,7 @@
+import Image from "next/image";
 import Link from "next/link";
+import { AgentSetupPrompt } from "@/components/AgentSetupPrompt";
+import { CONTRIBUTOR_BITMAP } from "@/lib/contributor-logos";
 import { externalLinks } from "@/lib/site-data";
 
 // A live SMB entry, so the example on the page resolves on the public index.
@@ -6,10 +9,19 @@ const EXAMPLE_IDENTIFIER = "urn:air:moonbakery39.com:agent:orders";
 
 export default function HomePage() {
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+    <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <Image
+        src={CONTRIBUTOR_BITMAP.src}
+        alt={CONTRIBUTOR_BITMAP.alt}
+        width={CONTRIBUTOR_BITMAP.width}
+        height={CONTRIBUTOR_BITMAP.height}
+        sizes="(min-width: 1024px) 704px, (min-width: 768px) 720px, (min-width: 640px) calc(100vw - 48px), calc(100vw - 32px)"
+        preload
+        className="mb-10 h-auto w-full bg-white"
+      />
       <div>
         <h1 className="font-display text-3xl font-semibold leading-tight tracking-[-0.01em] text-ink-strong">
-          Federated resolution for the agentic web.
+          A global switchboard for the agentic web.
         </h1>
         <p className="mt-4 text-base leading-relaxed text-ink-medium">
           NandaIndex maps a stable resource identifier, such as{" "}
@@ -31,6 +43,8 @@ export default function HomePage() {
           </Link>
         </div>
       </div>
+
+      <AgentSetupPrompt />
 
       <div className="mt-10 space-y-5 text-base leading-relaxed text-ink-medium">
         <p>

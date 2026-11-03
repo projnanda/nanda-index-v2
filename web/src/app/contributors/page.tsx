@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { PageShell } from "@/components/PageShell";
 import { CONTRIBUTOR_QUOTES } from "@/lib/contributor-quotes";
+import { CONTRIBUTOR_BITMAP } from "@/lib/contributor-logos";
 import { externalLinks } from "@/lib/site-data";
 import type { Metadata } from "next";
 
@@ -134,10 +135,10 @@ export default function ContributorsPage() {
       <div className="max-w-3xl space-y-12">
         <div id="community-perspectives" className="scroll-mt-24">
           <Image
-            src="/contributors/contributor-logos-tab-11-v4.png"
-            alt="Contributor logos: Google, Cisco, Akamai Cloud, PayPal, AGI House, Cognizant, Commerce, Ericsson, GSMA, HCLTech, Hello Haven, Hexaware, Inkbox, Kyndryl, L&T Technology Services, Maritime, Mitsubishi Electric, Motorola Solutions, Nasiko, Nebius, Nutanix, Ora, Suki, TCS, TinyFish, Wand AI, Wipro, WorkOS, MIT Media Lab, and Project NANDA."
-            width={874}
-            height={802}
+            src={CONTRIBUTOR_BITMAP.src}
+            alt={CONTRIBUTOR_BITMAP.alt}
+            width={CONTRIBUTOR_BITMAP.width}
+            height={CONTRIBUTOR_BITMAP.height}
             sizes="(min-width: 832px) 768px, calc(100vw - 64px)"
             className="mb-8 h-auto w-full bg-white"
           />

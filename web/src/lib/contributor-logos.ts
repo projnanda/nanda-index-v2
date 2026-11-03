@@ -10,6 +10,13 @@
 // PayPal's logo is from https://www.paypalobjects.com/paypal-ui/logos/svg/paypal-wordmark-color.svg
 // Akamai Cloud's logo was supplied with Hema Seshadri's approved quote.
 // Motorola Solutions' logo was supplied by its brand team on November 2, 2026.
+export const CONTRIBUTOR_BITMAP = {
+  src: "/contributors/contributor-logos-tab-11-v4.png",
+  alt: "Contributor logos: Google, Cisco, Akamai Cloud, PayPal, AGI House, Cognizant, Commerce, Ericsson, GSMA, HCLTech, Hello Haven, Hexaware, Inkbox, Kyndryl, L&T Technology Services, Maritime, Mitsubishi Electric, Motorola Solutions, Nasiko, Nebius, Nutanix, Ora, Suki, TCS, TinyFish, Wand AI, Wipro, WorkOS, MIT Media Lab, and Project NANDA.",
+  width: 874,
+  height: 802,
+} as const;
+
 export const CONTRIBUTOR_LOGOS = {
   "Motorola Solutions": { name: "Motorola Solutions", src: "/contributors/logos/motorola-solutions.png", width: 900, height: 771 },
   "Cisco": { name: "Cisco", src: "/contributors/logos/cisco.png", width: 272, height: 148 },
