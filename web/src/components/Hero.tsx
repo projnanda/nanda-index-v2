@@ -16,11 +16,11 @@ export function Hero() {
             NandaIndex resolves a stable resource identifier (a urn:air: URN) to the
             correct next discovery object: AI Catalog, DNS-based service discovery,
             A2A Agent Card, or personal agent card. It bridges agent discovery across enterprises, small
-            businesses, and individuals without replacing existing discovery systems.
+            businesses, and personal AI agents without replacing existing discovery systems.
           </p>
 
           <div className="mt-8 flex flex-wrap gap-2">
-            {["Enterprise", "SMB", "Individual"].map((item) => (
+            {["Enterprise", "SMB", "Personal AI agents"].map((item) => (
               <span
                 key={item}
                 className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-surface-tag text-ink"

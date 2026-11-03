@@ -77,9 +77,9 @@ const CONTEXTS = [
   },
   {
     id: "personal-agent",
-    title: "Individual: john@hotmail.com",
+    title: "Personal AI agent: john@hotmail.com",
     description:
-      "John has no domain. His runtime is on Azure; his agent card is with a third-party host. No personally controlled domain is required. NandaIndex enables identity-first discovery for individuals, when the underlying account identity is verifiably bound to the resolution record.",
+      "John has no domain. His runtime is on Azure; his agent card is with a third-party host. No personally controlled domain is required. NandaIndex enables identity-first discovery for personal AI agents, when the underlying account identity is verifiably bound to the resolution record.",
     goLive:
       "Confirm the email address the entry is registered with. No domain and no DNS record are needed.",
   },

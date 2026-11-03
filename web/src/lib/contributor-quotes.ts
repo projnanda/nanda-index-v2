@@ -24,6 +24,10 @@ export const CONTRIBUTOR_QUOTES: readonly ContributorQuote[] = [
       "The agentic web won’t run on one directory. It will be many independently operated registries and platforms, and agents have to be discoverable across all of them. AGNTCY’s Agent Directory and NandaIndex solve complementary halves of that problem, and doing it on open standards is how it scales.",
     attribution: "Vijoy Pandey, SVP/GM, Outshift by Cisco",
     logo: CONTRIBUTOR_LOGOS["Cisco"],
+    post: {
+      title: "Building a Switchboard for the Internet of Agents: Integrating AGNTCY Directory and NANDA Index",
+      href: "https://outshift.cisco.com/blog/ai-ml/outshift-mit-agentic-web",
+    },
   },
   {
     text:

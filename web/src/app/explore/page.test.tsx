@@ -4,6 +4,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ExplorePage from "./page";
 
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }), usePathname: () => "/explore" }));
+
 const api = vi.hoisted(() => ({ listIndexRecords: vi.fn(async () => []) }));
 vi.mock("@/lib/nanda-api", () => ({ listIndexRecords: api.listIndexRecords }));
 

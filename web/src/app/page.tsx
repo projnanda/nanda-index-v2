@@ -21,28 +21,43 @@ export default function HomePage() {
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           <Link
-            href="/explore"
+            href="/contributors#research-authors"
             className="inline-flex items-center justify-center h-10 rounded-control bg-brand-800 px-5 text-sm font-medium text-white hover:bg-brand-700 transition"
           >
-            Explore the index
+            Research
           </Link>
-          <Link
-            href="/dashboard/orgs/new"
+          <a
+            href={externalLinks.github}
+            target="_blank"
+            rel="noopener noreferrer"
             className="inline-flex items-center justify-center h-10 rounded-control border-2 border-line px-5 text-sm font-medium text-ink hover:border-line-strong transition"
           >
-            Register your agent
-          </Link>
+            GitHub Repo
+          </a>
+          <a
+            href={externalLinks.ietfDraft}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center h-10 rounded-control border-2 border-line px-5 text-sm font-medium text-ink hover:border-line-strong transition"
+          >
+            IETF Draft
+          </a>
         </div>
       </div>
 
-      <Image
-        src={CONTRIBUTOR_BITMAP.src}
-        alt={CONTRIBUTOR_BITMAP.alt}
-        width={CONTRIBUTOR_BITMAP.width}
-        height={CONTRIBUTOR_BITMAP.height}
-        sizes="(min-width: 1024px) 704px, (min-width: 768px) 720px, (min-width: 640px) calc(100vw - 48px), calc(100vw - 32px)"
-        className="mt-10 h-auto w-full bg-white"
-      />
+      <section aria-labelledby="design-partners-heading" className="mt-10">
+        <h2 id="design-partners-heading" className="mb-6 font-display text-2xl font-semibold text-ink-strong sm:text-3xl">
+          Design Partners
+        </h2>
+        <Image
+          src={CONTRIBUTOR_BITMAP.src}
+          alt={CONTRIBUTOR_BITMAP.alt}
+          width={CONTRIBUTOR_BITMAP.width}
+          height={CONTRIBUTOR_BITMAP.height}
+          sizes="(min-width: 1024px) 704px, (min-width: 768px) 720px, (min-width: 640px) calc(100vw - 48px), calc(100vw - 32px)"
+          className="h-auto w-full bg-white"
+        />
+      </section>
 
       <AgentSetupPrompt />
 
@@ -81,7 +96,7 @@ export default function HomePage() {
 
         <section aria-labelledby="supporting-enterprises" className="space-y-4 pt-4">
           <h2 id="supporting-enterprises" className="text-lg font-bold text-ink-strong">
-            Supporting enterprises, small businesses, and individuals
+            Supporting enterprises, small businesses, and personal AI agents
           </h2>
           <p>
             For enterprises that publish AI Catalog at a well-known endpoint and
@@ -89,7 +104,7 @@ export default function HomePage() {
             the critical path. Small businesses can distribute runtime, agent card,
             and domain across separate providers and still be resolved from one
             resource identifier. NandaIndex enables identity-first discovery for
-            individuals, when the underlying account identity is verifiably bound
+            personal AI agents, when the underlying account identity is verifiably bound
             to the resolution record.
           </p>
         </section>
@@ -138,22 +153,6 @@ export default function HomePage() {
           className="inline-flex items-center justify-center h-10 rounded-control bg-brand-800 px-5 text-sm font-medium text-white hover:bg-brand-700 transition"
         >
           Read the paper
-        </a>
-        <a
-          href={externalLinks.github}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center justify-center h-10 rounded-control border-2 border-line px-5 text-sm font-medium text-ink hover:border-line-strong transition"
-        >
-          GitHub repo
-        </a>
-        <a
-          href={externalLinks.ietfDraft}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center justify-center h-10 rounded-control border-2 border-line px-5 text-sm font-medium text-ink hover:border-line-strong transition"
-        >
-          IETF Draft
         </a>
         <a
           href={externalLinks.host39}

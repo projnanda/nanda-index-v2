@@ -35,17 +35,8 @@ describe("homepage", () => {
     expect(all.slice(1).map((h) => h.tagName)).toEqual(all.slice(1).map(() => "H2"));
   });
 
-  it("offers internal actions to explore and register before any external link", async () => {
+  it("keeps internal navigation in the current tab", async () => {
     await act(async () => root.render(<HomePage />));
-    const hrefs = links().map((a) => a.getAttribute("href"));
-    const explore = hrefs.indexOf("/explore");
-    // Registration goes straight to the form; its auth guard sends signed-out
-    // visitors to sign in, while /login would bounce signed-in users.
-    const register = hrefs.indexOf("/dashboard/orgs/new");
-    const firstExternal = hrefs.findIndex((href) => /^https?:/.test(href ?? ""));
-    expect(explore).toBeGreaterThanOrEqual(0);
-    expect(register).toBeGreaterThanOrEqual(0);
-    expect(firstExternal).toBeGreaterThan(Math.max(explore, register));
     for (const internal of links().filter((a) => a.getAttribute("href")?.startsWith("/"))) {
       expect(internal.getAttribute("target")).toBeNull();
     }

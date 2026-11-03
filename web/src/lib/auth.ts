@@ -16,7 +16,7 @@ export function clearAuthToken(): void {
   window.dispatchEvent(new Event(AUTH_CHANGE_EVENT));
 }
 
-/** Notify the header after profile updates, sign-in, or sign-out in any tab. */
+/** Notify account controls after profile updates, sign-in, or sign-out in any tab. */
 export function subscribeAuthChanges(listener: () => void): () => void {
   window.addEventListener(AUTH_CHANGE_EVENT, listener);
   window.addEventListener("storage", listener);

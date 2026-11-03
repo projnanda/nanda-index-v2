@@ -3,7 +3,7 @@ import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AccountSettingsPage from './page';
-import { Header } from '@/components/Header';
+import { ExploreActions } from '@/components/ExploreActions';
 import { isPrivatePath } from '@/lib/analyticsPrivacy';
 
 const router = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn() }));
@@ -85,11 +85,11 @@ describe('Account settings', () => {
     expect(isPrivatePath('/dashboard/settings')).toBe(true);
   });
 
-  it('saves the display name and updates the header without navigating away', async () => {
+  it('saves the display name and updates account controls without navigating away', async () => {
     const user = userEvent.setup();
     render(
       <>
-        <Header />
+        <ExploreActions />
         <AccountSettingsPage />
       </>,
     );
@@ -98,7 +98,7 @@ describe('Account settings', () => {
     await user.type(name, 'Updated name');
     await user.click(screen.getByRole('button', { name: 'Save profile' }));
     await screen.findByText('Profile saved.');
-    expect(screen.getByText('Updated name')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Dashboard (Updated name)' })).toBeTruthy();
     expect(localStorage.getItem('nanda_auth_token')).toBe(token('Updated name'));
     const save = calls.find((call) => call.init?.method === 'PATCH')!;
     expect(JSON.parse(String(save.init?.body))).toEqual({ display_name: 'Updated name' });

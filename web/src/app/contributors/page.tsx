@@ -7,7 +7,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Contributors",
-  description: "Nanda Index is being designed, reviewed, and supported by a large coalition.",
+  description: "Nanda Index is being designed, reviewed, and supported by its design partners.",
 };
 
 type Person = {
@@ -122,7 +122,7 @@ export default function ContributorsPage() {
   return (
     <PageShell
       title="Contributors"
-      description="Nanda Index is being designed, reviewed, and supported by a large coalition."
+      description="Nanda Index is being designed, reviewed, and supported by its design partners."
     >
       <nav aria-label="On this page" className="mb-8 flex flex-wrap gap-x-6 gap-y-2 text-sm">
         <a href="#research-authors" className="text-brand-600 hover:text-brand-700 hover:underline">
@@ -134,6 +134,9 @@ export default function ContributorsPage() {
       </nav>
       <div className="max-w-3xl space-y-12">
         <div id="community-perspectives" className="scroll-mt-24">
+          <h2 className="mb-6 font-display text-2xl font-semibold text-ink-strong sm:text-3xl">
+            Design Partners
+          </h2>
           <Image
             src={CONTRIBUTOR_BITMAP.src}
             alt={CONTRIBUTOR_BITMAP.alt}

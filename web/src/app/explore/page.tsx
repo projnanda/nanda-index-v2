@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { listIndexRecords } from "@/lib/nanda-api";
 import { JsonPanel } from "@/components/JsonPanel";
 import { PageShell } from "@/components/PageShell";
+import { ExploreActions } from "@/components/ExploreActions";
 import type { IndexCatalogEntry, TrustManifest } from "@/lib/nanda-types";
 import { identityStatus, entryCardStatus } from "@/lib/entryStatus";
 import { entryOps } from "@/lib/air";
@@ -100,8 +101,6 @@ export default function ExplorePage() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
     listIndexRecords()
       .then((data) => {
         if (cancelled) return;
@@ -174,6 +173,7 @@ export default function ExplorePage() {
       title="Explore"
       description="Browse every entry listed in the index. Filter entries, or search by name, identifier, or domain."
     >
+      <ExploreActions />
       <div className="flex flex-col lg:flex-row gap-6">
         <FilterSidebar
           search={search}

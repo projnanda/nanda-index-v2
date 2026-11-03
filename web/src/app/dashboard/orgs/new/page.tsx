@@ -564,7 +564,7 @@ function RegistrationWizard() {
                 title="SMB Agent Card" subtitle="Small Business"
                 description="You own a domain and host an agent card at a public URL." />
               <PathCard value="personal" selected={form.hosting_path} onSelect={patchPath}
-                title="Personal Agent" subtitle="Individual"
+                title="Personal Agent" subtitle="Personal AI agent"
                 description="No personally controlled domain is required. The account identity must be verifiably bound to the resolution record." />
             </fieldset>
 
