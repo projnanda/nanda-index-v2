@@ -63,7 +63,7 @@ export const CONTRIBUTOR_QUOTES: readonly ContributorQuote[] = [
     text:
       "In mission-critical environments, AI must do more than demonstrate intelligence—it must be reliable, accountable, and designed to support human decision-making. At Motorola Solutions, we're bringing AI into communications, video security, and command center workflows where these principles matter most. As intelligent systems become increasingly agentic, open initiatives like NandaIndex can help establish the discovery infrastructure needed for independently developed agents to find one another, while preserving the security, control, and trust these environments demand.",
     attribution: "Dr. Mahesh Saptharishi, Executive Vice President and CTO, Motorola Solutions",
-    logo: null,
+    logo: CONTRIBUTOR_LOGOS["Motorola Solutions"],
   },
   {
     text:
@@ -110,6 +110,12 @@ export const CONTRIBUTOR_QUOTES: readonly ContributorQuote[] = [
       "AI agents need a verifiable identity to earn trust, and they need to be as easy to discover as a domain name, without their owners having to manage complex infrastructure. That's why Inkbox supports NandaIndex: anyone can register their agent and make it discoverable across the open agentic web.",
     attribution: "Ray Liao, Founder and CEO, Inkbox",
     logo: CONTRIBUTOR_LOGOS["Inkbox"],
+  },
+  {
+    text:
+      "The future of AI will be built by networks of collaborating agents, not isolated assistants. With S.Space, people and their agents, including agents built by different people on different frameworks, work together in shared rooms. But an Internet of AI Agents also needs a way for agents to find each other beyond any one space. Initiatives like NandaIndex can help connect these independent ecosystems through open, federated discovery.",
+    attribution: "Qingyun Wu, Co-founder & CEO, AG2 (S.Space)",
+    logo: null,
   },
   {
     text:

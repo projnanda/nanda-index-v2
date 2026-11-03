@@ -9,7 +9,9 @@
 // Nebius's logo is from https://nebius.com/logo.svg
 // PayPal's logo is from https://www.paypalobjects.com/paypal-ui/logos/svg/paypal-wordmark-color.svg
 // Akamai Cloud's logo was supplied with Hema Seshadri's approved quote.
+// Motorola Solutions' logo was supplied by its brand team on November 2, 2026.
 export const CONTRIBUTOR_LOGOS = {
+  "Motorola Solutions": { name: "Motorola Solutions", src: "/contributors/logos/motorola-solutions.png", width: 900, height: 771 },
   "Cisco": { name: "Cisco", src: "/contributors/logos/cisco.png", width: 272, height: 148 },
   "Project NANDA": { name: "Project NANDA", src: "/contributors/logos/project-nanda.png", width: 723, height: 276 },
   "GSMA": { name: "GSMA", src: "/contributors/logos/gsma.png", width: 738, height: 240 },
