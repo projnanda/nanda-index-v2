@@ -137,7 +137,7 @@ export const CONTRIBUTOR_QUOTES: readonly ContributorQuote[] = [
     text:
       "The next generation of AI agents won't live only in data centers. They will increasingly operate in robots, industrial machines, sensors, and devices at the physical edge. At Analog Devices, our work on Physical Intelligence is helping make these systems intelligent, responsive, and efficient under real-world constraints. NandaIndex is a promising initiative toward an open agentic web where cloud-based and physical AI agents can discover one another and collaborate across platforms.",
     attribution: "Massimiliano “Max” Versace, Vice President of Emergent AI, Analog Devices",
-    logo: CONTRIBUTOR_LOGOS["Analog Devices"],
+    logo: null,
   },
   {
     text:
