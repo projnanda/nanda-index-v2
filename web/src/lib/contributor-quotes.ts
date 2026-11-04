@@ -43,6 +43,12 @@ export const CONTRIBUTOR_QUOTES: readonly ContributorQuote[] = [
   },
   {
     text:
+      "DNS helped the Internet scale by allowing independent organizations to manage their own names while remaining part of a globally interoperable system. AI agents will need similar principles of openness, distributed discovery, and interoperability. NandaIndex is an promising coalition to explore how these principles can support an Internet of AI Agents, while building on the infrastructure and standards that already exist.",
+    attribution: "Paul Mockapetris, Inventor of DNS in 1983",
+    logo: null,
+  },
+  {
+    text:
       "In just the last few months, we have seen AI agents acting on behalf of consumers and businesses dramatically rise. For an open agentic economy to scale, agents must be able to discover relevant services across fragmented ecosystems. An open discovery effort like NandaIndex is an important step in that direction, and we welcome the industry conversation on how verified identity, trust, and secure commerce can be built on top of them.",
     attribution: "Arjun Chittoor, VP, PayPal",
     logo: CONTRIBUTOR_LOGOS["PayPal"],
