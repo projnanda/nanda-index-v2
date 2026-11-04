@@ -12,14 +12,16 @@
 // Motorola Solutions' logo was supplied by its brand team on November 2, 2026.
 // Google: https://www.gstatic.com/marketing-cms/assets/images/f5/d3/a7f9db7045429cb6dc6be56bdcbe/google-logo-about.svg
 // AG2: https://www.ag2.ai/ag2-logo-black.png
+// Analog Devices: supplied with Max Versace's approved quote by Ramesh Raskar on November 4, 2026.
 export const CONTRIBUTOR_BITMAP = {
-  src: "/contributors/contributor-logos-tab-11-v7.png",
-  alt: "Contributor logos: Google, Cisco, Akamai Cloud, PayPal, AGI House, Cognizant, Commerce, Ericsson, GSMA, HCLTech, Hello Haven, Hexaware, Inkbox, Kyndryl, L&T Technology Services, Maritime, Mitsubishi Electric, Motorola Solutions, Nasiko, Nebius, Nutanix, Ora, TCS, Wipro, and WorkOS; AG2, Suki, TinyFish, and Wand AI in a smaller bottom row above the divider; MIT Media Lab and Project NANDA below the divider.",
+  src: "/contributors/contributor-logos-tab-11-v8.png",
+  alt: "Contributor logos: Google, Cisco, Akamai Cloud, PayPal, AGI House, Analog Devices, Cognizant, Commerce, Ericsson, GSMA, HCLTech, Hello Haven, Hexaware, Inkbox, Kyndryl, L&T Technology Services, Maritime, Mitsubishi Electric, Motorola Solutions, Nasiko, Nebius, Nutanix, Ora, TCS, Wipro, and WorkOS; AG2, Suki, TinyFish, and Wand AI in a smaller bottom row above the divider; MIT Media Lab and Project NANDA below the divider.",
   width: 874,
-  height: 792,
+  height: 882,
 } as const;
 
 export const CONTRIBUTOR_LOGOS = {
+  "Analog Devices": { name: "Analog Devices", src: "/contributors/logos/analog-devices.png", width: 1200, height: 341 },
   "Google": { name: "Google", src: "/contributors/logos/google.svg", width: 75, height: 24 },
   "AG2": { name: "AG2", src: "/contributors/logos/ag2.png", width: 194, height: 193 },
   "Motorola Solutions": { name: "Motorola Solutions", src: "/contributors/logos/motorola-solutions.png", width: 900, height: 771 },
