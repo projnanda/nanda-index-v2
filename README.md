@@ -127,6 +127,11 @@ OAUTH_CALLBACK_BASE_URL=https://api.nandaindex.org
 SMTP_URL=re_YOUR_RESEND_API_KEY
 EMAIL_FROM=noreply@nandaindex.org
 
+# Get involved form recipients. Keep real addresses in the server environment.
+# A primary recipient is required for form delivery. CC is optional and comma-separated.
+COMMUNITY_CONTACT_EMAIL=
+COMMUNITY_CONTACT_CC=
+
 # URLs
 FRONTEND_URL=https://nandaindex.org
 NEXT_PUBLIC_NANDA_INDEX_API_URL=https://api.nandaindex.org

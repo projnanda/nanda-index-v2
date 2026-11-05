@@ -21,9 +21,11 @@ export async function sendCommunityInterestEmail(request: CommunityInterest): Pr
   const { email } = buildConfig();
   // A contact form must not report success when development log mode discards the message.
   if (email.smtpUrl === 'log') throw new Error('Contact email delivery is not configured');
+  if (!email.communityTo) throw new Error('Contact email recipient is not configured');
   const { data, error } = await new Resend(email.smtpUrl).emails.send({
     from: email.fromAddress,
-    to: 'vedh@vedhkrishnan.com',
+    to: email.communityTo,
+    ...(email.communityCc.length ? { cc: [...email.communityCc] } : {}),
     replyTo: request.email,
     subject: `NandaIndex: ${interests[request.interest]}`,
     text: [

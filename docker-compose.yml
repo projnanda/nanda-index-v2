@@ -48,6 +48,8 @@ services:
       OAUTH_CALLBACK_BASE_URL: ${OAUTH_CALLBACK_BASE_URL:-http://localhost:3001}
       SMTP_URL: ${SMTP_URL:-log}
       EMAIL_FROM: ${EMAIL_FROM:-noreply@nanda.local}
+      COMMUNITY_CONTACT_EMAIL: ${COMMUNITY_CONTACT_EMAIL:-}
+      COMMUNITY_CONTACT_CC: ${COMMUNITY_CONTACT_CC:-}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       DB_MAX_CONNECTIONS: ${DB_MAX_CONNECTIONS:-10}
       # PostHog: anonymous account/entry lifecycle counts (server/src/services/analytics.ts).

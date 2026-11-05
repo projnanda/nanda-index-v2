@@ -3,9 +3,12 @@ import rateLimit from '@fastify/rate-limit';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { registerCommunityRoutes } from '../../src/routes/community.js';
 
-const { send } = vi.hoisted(() => ({ send: vi.fn() }));
+const { send, emailConfig } = vi.hoisted(() => ({
+  send: vi.fn(),
+  emailConfig: { smtpUrl: 're_test', fromAddress: 'noreply@nandaindex.org', communityTo: 'contact@example.org', communityCc: [] as string[] },
+}));
 vi.mock('resend', () => ({ Resend: class { emails = { send }; } }));
-vi.mock('../../src/config/index.js', () => ({ buildConfig: () => ({ email: { smtpUrl: 're_test', fromAddress: 'noreply@nandaindex.org' } }) }));
+vi.mock('../../src/config/index.js', () => ({ buildConfig: () => ({ email: emailConfig }) }));
 
 let app: FastifyInstance;
 const payload = {
@@ -15,6 +18,8 @@ const payload = {
 
 beforeEach(async () => {
   send.mockReset().mockResolvedValue({ data: { id: 'email-1' }, error: null });
+  emailConfig.communityTo = 'contact@example.org';
+  emailConfig.communityCc = ['reviewer-one@example.org', 'reviewer-two@example.org'];
   app = Fastify();
   await app.register(rateLimit, { global: false });
   await registerCommunityRoutes(app);
@@ -31,12 +36,13 @@ describe('community interest submissions', () => {
     expect(send).toHaveBeenCalledTimes(1);
   });
 
-  it('delivers the submitted interest to the fixed contact and uses the visitor as reply-to', async () => {
+  it('delivers the submitted interest to configured recipients and uses the visitor as reply-to', async () => {
     const response = await app.inject({ method: 'POST', url: '/api/v1/community-interest', payload });
     expect(response.statusCode).toBe(202);
     expect(response.json()).toEqual({ status: 'accepted' });
     expect(send).toHaveBeenCalledWith(expect.objectContaining({
-      to: 'vedh@vedhkrishnan.com', from: 'noreply@nandaindex.org', replyTo: 'alice@example.org',
+      to: 'contact@example.org', cc: ['reviewer-one@example.org', 'reviewer-two@example.org'],
+      from: 'noreply@nandaindex.org', replyTo: 'alice@example.org',
       subject: 'NandaIndex: Contribute',
       text: expect.stringContaining('Name: Alice Example\n'),
     }));
@@ -45,10 +51,25 @@ describe('community interest submissions', () => {
     expect(email.text).toContain(payload.message);
   });
 
+  it('allows delivery without optional CC recipients', async () => {
+    emailConfig.communityCc = [];
+    const response = await app.inject({ method: 'POST', url: '/api/v1/community-interest', payload });
+    expect(response.statusCode).toBe(202);
+    expect(send.mock.calls[0]![0]).toMatchObject({ to: 'contact@example.org' });
+    expect(send.mock.calls[0]![0]).not.toHaveProperty('cc');
+  });
+
+  it('does not send or report success when the primary recipient is unconfigured', async () => {
+    emailConfig.communityTo = '';
+    const response = await app.inject({ method: 'POST', url: '/api/v1/community-interest', payload });
+    expect(response.statusCode).toBe(503);
+    expect(send).not.toHaveBeenCalled();
+  });
+
   it.each([
     { email: 'not-an-email' }, { email: 'alice@example.org\r\nBcc: other@example.org' },
     { name: '   ' }, { interest: 'newsletter' }, { working_groups: ['unknown'] },
-    { message: 'x'.repeat(4001) }, { to: 'other@example.org' },
+    { message: 'x'.repeat(4001) }, { to: 'other@example.org' }, { cc: ['other@example.org'] },
   ])('rejects invalid input before attempting delivery: %j', async (patch) => {
     const response = await app.inject({ method: 'POST', url: '/api/v1/community-interest', payload: { ...payload, ...patch } });
     expect(response.statusCode).toBe(400);
@@ -61,7 +82,8 @@ describe('community interest submissions', () => {
     expect(response.statusCode).toBe(503);
     expect(response.json()).toMatchObject({ error: 'DELIVERY_UNAVAILABLE' });
     expect(response.body).not.toContain('provider details');
-    expect(response.body).not.toContain('vedh@vedhkrishnan.com');
+    expect(response.body).not.toContain(emailConfig.communityTo);
+    for (const recipient of emailConfig.communityCc) expect(response.body).not.toContain(recipient);
   });
 
   it('rejects a filled spam field without sending mail', async () => {

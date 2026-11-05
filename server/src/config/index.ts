@@ -60,6 +60,8 @@ export interface JwtConfig {
 export interface EmailConfig {
   readonly smtpUrl: string;
   readonly fromAddress: string;
+  readonly communityTo: string;
+  readonly communityCc: readonly string[];
 }
 
 export interface CookieConfig {
@@ -288,6 +290,8 @@ export function buildConfig(): Config {
     email: {
       smtpUrl:     smtpUrl,
       fromAddress: optionalEnv('EMAIL_FROM', 'noreply@nanda.local'),
+      communityTo: optionalEnv('COMMUNITY_CONTACT_EMAIL', '').trim(),
+      communityCc: optionalEnv('COMMUNITY_CONTACT_CC', '').split(',').map((address) => address.trim()).filter(Boolean),
     },
     cookie: {
       secret: cookieSecret,

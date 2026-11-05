@@ -161,6 +161,23 @@ describe('buildConfig', () => {
     expect(cfg.email.smtpUrl).toBe('log');
   });
 
+  it('reads community recipients from server environment and ignores empty CC entries', () => {
+    process.env.DATABASE_URL = 'x';
+    process.env.COMMUNITY_CONTACT_EMAIL = ' contact@example.org ';
+    process.env.COMMUNITY_CONTACT_CC = ' reviewer-one@example.org, , reviewer-two@example.org, ';
+    expect(buildConfig().email).toMatchObject({
+      communityTo: 'contact@example.org',
+      communityCc: ['reviewer-one@example.org', 'reviewer-two@example.org'],
+    });
+  });
+
+  it('leaves community recipients unset until an operator configures them', () => {
+    process.env.DATABASE_URL = 'x';
+    delete process.env.COMMUNITY_CONTACT_EMAIL;
+    delete process.env.COMMUNITY_CONTACT_CC;
+    expect(buildConfig().email).toMatchObject({ communityTo: '', communityCc: [] });
+  });
+
   it('applies cookie + auth defaults', () => {
     process.env.DATABASE_URL = 'x';
     delete process.env.NODE_ENV;
