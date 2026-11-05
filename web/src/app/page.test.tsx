@@ -26,13 +26,18 @@ function links() {
 }
 
 describe("homepage", () => {
-  it("opens with exactly one h1 and keeps the section headings one level below it", async () => {
+  it("opens with exactly one h1 and nests headings without skipping levels", async () => {
     await act(async () => root.render(<HomePage />));
     const all = headings();
     expect(all[0]?.tagName).toBe("H1");
     expect(all[0]?.textContent).toMatch(/\S/);
     expect(all.filter((h) => h.tagName === "H1")).toHaveLength(1);
-    expect(all.slice(1).map((h) => h.tagName)).toEqual(all.slice(1).map(() => "H2"));
+    for (let i = 1; i < all.length; i++) {
+      const level = Number(all[i]!.tagName.slice(1));
+      const previous = Number(all[i - 1]!.tagName.slice(1));
+      expect(level).toBeGreaterThan(1);
+      expect(level).toBeLessThanOrEqual(previous + 1);
+    }
   });
 
   it("keeps internal navigation in the current tab", async () => {

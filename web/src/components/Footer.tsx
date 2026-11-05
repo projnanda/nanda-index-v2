@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CookieSettingsButton } from "@/components/CookieSettingsButton";
 import { apiDocsUrl } from "@/lib/api-docs";
+import { contactEmail } from "@/lib/community";
 
 export function Footer() {
   return (
@@ -14,6 +15,8 @@ export function Footer() {
           </p>
         </div>
         <p className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <Link href="/get-involved" className="underline hover:text-brand-600">Get involved</Link>
+          <a href={`mailto:${contactEmail}`} className="underline hover:text-brand-600">{contactEmail}</a>
           <Link href="/developers" className="underline hover:text-brand-600">Developers</Link>
           <a href={apiDocsUrl()} target="_blank" rel="noopener noreferrer" className="underline hover:text-brand-600">
             API reference

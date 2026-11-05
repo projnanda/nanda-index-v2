@@ -27,6 +27,7 @@ import { registerSearchRoutes } from './routes/search.js';
 import { registerAgenticSearchRoutes } from './routes/agentic-search.js';
 import { registerArdRoutes } from './routes/ard.js';
 import { registerResolveRoute } from './routes/resolve.js';
+import { registerCommunityRoutes } from './routes/community.js';
 
 const MAX_BODY_BYTES = 64 * 1024;
 
@@ -116,6 +117,7 @@ export async function buildServer(options: BuildServerOptions = {}) {
   await registerAgenticSearchRoutes(fastify);
   await registerArdRoutes(fastify);
   await registerResolveRoute(fastify);
+  await registerCommunityRoutes(fastify);
 
   return { fastify, config };
 }

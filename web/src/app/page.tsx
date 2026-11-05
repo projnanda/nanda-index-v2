@@ -3,6 +3,7 @@ import Link from "next/link";
 import { AgentSetupPrompt } from "@/components/AgentSetupPrompt";
 import { CONTRIBUTOR_BITMAP } from "@/lib/contributor-logos";
 import { externalLinks } from "@/lib/site-data";
+import { contactEmail, workingGroups } from "@/lib/community";
 
 // A live SMB entry, so the example on the page resolves on the public index.
 const EXAMPLE_IDENTIFIER = "urn:air:moonbakery39.com:agent:orders";
@@ -44,6 +45,23 @@ export default function HomePage() {
           </a>
         </div>
       </div>
+
+      <section aria-labelledby="working-groups-heading" className="mt-10 rounded-card border border-line bg-surface-light p-5 sm:p-6">
+        <h2 id="working-groups-heading" className="font-display text-2xl font-semibold text-ink-strong">Working groups</h2>
+        <p className="mt-2 text-sm leading-relaxed text-ink-medium">Take part in the design and implementation of NandaIndex.</p>
+        <div className="mt-5 grid gap-5 sm:grid-cols-3">
+          {workingGroups.map((group) => (
+            <div key={group.id}>
+              <h3 className="text-sm font-semibold leading-relaxed text-ink-strong">{group.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-ink-medium">{group.description}</p>
+            </div>
+          ))}
+        </div>
+        <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-3 text-sm">
+          <Link href="/get-involved" className="inline-flex min-h-10 items-center rounded-control bg-brand-800 px-4 font-medium text-white hover:bg-brand-700">Sign up to get involved</Link>
+          <a href={`mailto:${contactEmail}`} className="text-brand-600 underline">{contactEmail}</a>
+        </div>
+      </section>
 
       <section aria-labelledby="design-partners-heading" className="mt-10">
         <h2 id="design-partners-heading" className="mb-6 font-display text-2xl font-semibold text-ink-strong sm:text-3xl">

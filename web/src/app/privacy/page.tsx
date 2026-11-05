@@ -1,6 +1,7 @@
 import { PageShell } from "@/components/PageShell";
 import Link from "next/link";
 import { configuredPostHogHost } from "@/lib/posthogHosts";
+import { contactEmail } from "@/lib/community";
 
 import type { Metadata } from "next";
 
@@ -40,8 +41,17 @@ export default function PrivacyPage() {
           </p>
         </section>
         <section>
+          <h2 className="mb-2 font-display text-base font-semibold text-ink-strong">Community requests</h2>
+          <p>
+            The Get involved form collects your name, email, interest, and any organization,
+            working groups, or message you choose to provide. We send these details through Resend
+            to {contactEmail} so we can respond. The form does not create an account or publish
+            your details in the Index. You can email the same address to ask for your request to be deleted.
+          </p>
+        </section>
+        <section>
           <h2 className="mb-2 font-display text-base font-semibold text-ink-strong">Email delivery</h2>
-          <p>Verification and password-reset emails are sent through Resend.</p>
+          <p>Verification, password-reset, and community contact emails are sent through Resend.</p>
         </section>
         <section>
           <h2 className="mb-2 font-display text-base font-semibold text-ink-strong">Analytics</h2>
@@ -86,8 +96,8 @@ export default function PrivacyPage() {
             Account deletion removes your profile, sign-in email, memberships, and account tokens.
             You must first delete entries for which you are the only administrator. Shared entries
             remain published with their existing public and contact data, including any email addresses
-            in those records. To ask about other data, contact the NANDA Index team via the
-            project&apos;s GitHub repository.
+            in those records. To ask about other data, email{' '}
+            <a href={`mailto:${contactEmail}`} className="text-brand-600 underline">{contactEmail}</a>.
           </p>
         </section>
       </div>
