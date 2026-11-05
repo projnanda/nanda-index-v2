@@ -23,6 +23,9 @@ export type NandaMediaType = (typeof NANDA_MEDIA_TYPE)[keyof typeof NANDA_MEDIA_
 /** Every registrable NANDA media_type — backs the create-org schema enum. */
 export const NANDA_MEDIA_TYPES: readonly NandaMediaType[] = Object.values(NANDA_MEDIA_TYPE);
 
+/** Card formats whose declaration may be corrected in place without changing the entry's identity model. */
+export const JSON_CARD_MEDIA_TYPES: readonly NandaMediaType[] = [NANDA_MEDIA_TYPE.A2A_CARD, NANDA_MEDIA_TYPE.MCP_CARD];
+
 /** The media_type an org insert defaults to when none is specified. */
 export const DEFAULT_MEDIA_TYPE: NandaMediaType = NANDA_MEDIA_TYPE.AI_CATALOG;
 

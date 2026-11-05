@@ -1,6 +1,6 @@
 import type { PublisherBlock } from '../types/api/index-record.js';
 import { buildConfig } from '../config/index.js';
-import { NANDA_MEDIA_TYPE, NANDA_MEDIA_TYPES, SINGLE_RESOURCE_MEDIA_TYPES } from './mediaTypes.js';
+import { JSON_CARD_MEDIA_TYPES, NANDA_MEDIA_TYPE, NANDA_MEDIA_TYPES, SINGLE_RESOURCE_MEDIA_TYPES } from './mediaTypes.js';
 import {
   PERSONAL_CARD_HOST,
   buildAirUrn,
@@ -50,6 +50,7 @@ export interface EntryProfileInput {
 
 export interface EntryProfileUpdate {
   readonly domain?: string;
+  readonly mediaType?: string;
   readonly publisherDisplayName?: string;
   readonly extensions?: CatalogExtensions;
 }
@@ -374,6 +375,11 @@ export function buildEntryProfile(input: EntryProfileInput): EntryProfile {
  * extensions replace the stored ones, minus the server-owned keys.
  */
 export function updateEntryProfile(current: EntryProfile, patch: EntryProfileUpdate): EntryProfile {
+  if (patch.mediaType !== undefined
+    && (!(JSON_CARD_MEDIA_TYPES as readonly string[]).includes(current.mediaType)
+      || !(JSON_CARD_MEDIA_TYPES as readonly string[]).includes(patch.mediaType))) {
+    throw new EntryProfileError('Only existing A2A and MCP card registrations can have their media type corrected in place.');
+  }
   // An unrelated edit must not revalidate legacy metadata that was not supplied.
   validateRuntimeUrl(patch.extensions);
   validateExtensionValues(patch.extensions);
@@ -388,7 +394,7 @@ export function updateEntryProfile(current: EntryProfile, patch: EntryProfileUpd
 
   return {
     identifier: domainChanged ? reanchorAirUrn(current.identifier, newDomain) : current.identifier,
-    mediaType: current.mediaType,
+    mediaType: patch.mediaType ?? current.mediaType,
     publisher: {
       ...current.publisher,
       ...(domainChanged ? { identifier: newDomain } : {}),

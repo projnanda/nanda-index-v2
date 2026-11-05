@@ -82,6 +82,9 @@ export interface InsertOrgParams {
 
 export interface UpdateOrgParams {
   cardValidation?: CardValidation;
+  mediaType?: string;
+  /** Protect the fetched card and derived profile from concurrent updates. */
+  expectedCard?: Pick<Organization, 'mediaType' | 'registryUrl' | 'domain' | 'identifier' | 'publisher' | 'extensions'>;
   displayName?: string;
   domain?: string;
   identifier?: string;
@@ -389,6 +392,7 @@ export async function updateOrganization(
       domain           = COALESCE(${newDomain}, domain),
       identifier       = COALESCE(${patch.identifier ?? null}, identifier),
       registry_url     = COALESCE(${patch.registryUrl ?? null}, registry_url),
+      media_type       = COALESCE(${patch.mediaType ?? null}, media_type),
       ttl_seconds      = COALESCE(${patch.ttlSeconds ?? null}, ttl_seconds),
       description      = COALESCE(${patch.description ?? null}, description),
       tags             = COALESCE(${patch.tags != null ? sql.array(patch.tags) : null}, tags),
@@ -415,6 +419,13 @@ export async function updateOrganization(
         ELSE status END,
       updated_at       = NOW()
     WHERE org_id = ${orgId}
+      AND (${patch.expectedCard === undefined}
+        OR (media_type = ${patch.expectedCard?.mediaType ?? null}
+          AND registry_url IS NOT DISTINCT FROM ${patch.expectedCard?.registryUrl ?? null}::text
+          AND domain IS NOT DISTINCT FROM ${patch.expectedCard?.domain ?? null}::text
+          AND identifier = ${patch.expectedCard?.identifier ?? null}
+          AND publisher IS NOT DISTINCT FROM ${patch.expectedCard?.publisher ? sql.json(JSON.parse(JSON.stringify(patch.expectedCard.publisher))) : null}::jsonb
+          AND extensions = ${patch.expectedCard ? sql.json(toJsonObject(patch.expectedCard.extensions)) : null}::jsonb))
     RETURNING *
   `;
   return rows[0] ?? null;

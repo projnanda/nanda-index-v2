@@ -5,6 +5,27 @@ const card = { name: 'Example', description: 'A demo', version: '1', url: 'https
 const guard = (body: unknown, status = 200): UrlGuard => async () => async () => new Response(JSON.stringify(body), { status });
 const type = 'application/a2a-agent-card+json';
 describe('registration card validation', () => {
+  it('explains when an A2A card was registered as MCP', async () => {
+    const result = await validateRegistrationCard('https://example.org/card.json', 'application/mcp-server-card+json', { guard: guard(card) });
+    expect(result.status).toBe('invalid');
+    expect(result.detail).toContain('matches application/a2a-agent-card+json');
+    expect(result.detail).toContain('declares application/mcp-server-card+json');
+    expect(result.detail).toContain('media_type');
+  });
+  it('explains when an MCP card was registered as A2A', async () => {
+    const mcp = { $schema: 'https://static.modelcontextprotocol.io/schemas/v1/server-card.schema.json', name: 'org.example/demo', description: 'Demo', version: '1' };
+    const result = await validateRegistrationCard('https://example.org/card.json', type, { guard: guard(mcp) });
+    expect(result.status).toBe('invalid');
+    expect(result.detail).toContain('matches application/mcp-server-card+json');
+    expect(result.detail).toContain('declares application/a2a-agent-card+json');
+  });
+  it('names missing discovery fields instead of calling valid JSON malformed', async () => {
+    const result = await validateRegistrationCard('https://example.org/card.json', type, { guard: guard({ ...card, capabilities: undefined, defaultOutputModes: [] }) });
+    expect(result.status).toBe('invalid');
+    expect(result.detail).toContain('capabilities');
+    expect(result.detail).toContain('defaultOutputModes');
+    expect(result.detail).not.toContain('not valid JSON');
+  });
   it('fetches the card and records a bounded structural check with a timestamp', async () => {
     const result = await validateRegistrationCard('https://example.org/card.json', type, { guard: guard(card) });
     expect(result.status).toBe('valid');
