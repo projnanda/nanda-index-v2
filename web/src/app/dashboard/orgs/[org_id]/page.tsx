@@ -9,10 +9,12 @@ import { PageShell } from "@/components/PageShell";
 import { StatusBadge } from "@/components/StatusBadge";
 import { JsonPanel } from "@/components/JsonPanel";
 import { DomainVerification } from "@/components/DomainVerification";
+import { CardCheckSummary, CardFormatField } from "@/components/CardFormat";
+import { cardFormatOf, type CardFormat } from "@/lib/cardFormats";
 import { ApiError, getOrgAsOwner, updateOrg, suspendOrg, reactivateOrg, deleteOrg, resendVerification } from "@/lib/nanda-api";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { applyRuntimeSettings, readRuntimeSettings, RUNTIME_FIELDS, RUNTIME_PROVIDERS } from "@/lib/org-runtime-settings";
-import { orgFormError, validateOrgFields, type OrgFieldErrors, type OrgFormField } from "@/lib/org-validation";
+import { CARD_CHANGED_RELOAD_MESSAGE, isCardChanged, orgFormError, validateOrgFields, type OrgFieldErrors, type OrgFormField } from "@/lib/org-validation";
 import { nandaField } from "@/lib/air";
 import { ORG_FIELD_HELP } from "@/lib/org-field-help";
 import type { IndexRecord, Moderation } from "@/lib/nanda-types";
@@ -62,6 +64,9 @@ export default function OrgDetailPage() {
   const [tags, setTags] = useState("");
   const [version, setVersion] = useState("");
   const [ttlSeconds, setTtlSeconds] = useState("86400");
+  // Only A2A and MCP cards can be relabeled in place; null hides the choice.
+  const storedCardFormat = cardFormatOf(org?.media_type);
+  const [cardFormat, setCardFormat] = useState<CardFormat | null>(null);
   const advancedRef = useRef<HTMLDetailsElement>(null);
   const ttlRef = useRef<HTMLInputElement>(null);
   const runtimeUrlRef = useRef<HTMLInputElement>(null);
@@ -127,6 +132,7 @@ export default function OrgDetailPage() {
         setVersion(data.version ?? "");
         setTtlSeconds(String(data.ttl_seconds));
         setRuntime(readRuntimeSettings(data.extensions));
+        setCardFormat(cardFormatOf(data.media_type));
       })
       .catch((err) => {
         if (cancelled) return;
@@ -164,6 +170,8 @@ export default function OrgDetailPage() {
         display_name: displayName.trim(),
         // Unchanged values are left out entirely rather than echoed back.
         ...(registryUrlChanged && registryUrl.trim() ? { registry_url: registryUrl.trim() } : {}),
+        // A changed format makes the server recheck the stored (or new) URL against it.
+        ...(storedCardFormat && cardFormat && cardFormat !== storedCardFormat ? { media_type: cardFormat } : {}),
         ...(org?.domain && newDomain && newDomain !== org.domain ? { domain: newDomain } : {}),
         description: description || undefined,
         tags: tagList.length ? tagList : [],
@@ -177,6 +185,11 @@ export default function OrgDetailPage() {
       const failure = orgFormError(err);
       showFieldErrors(failure.fields);
       setError(failure.message);
+      // The save lost a race. Rebase the draft on the current record (the form
+      // stays locked meanwhile) so a retry does not write back stale extensions.
+      if (isCardChanged(err)) {
+        await getOrgAsOwner(orgId).then(setOrg).catch(() => setError(CARD_CHANGED_RELOAD_MESSAGE));
+      }
     } finally {
       setSaving(false);
     }
@@ -248,6 +261,7 @@ export default function OrgDetailPage() {
     setVersion(org.version ?? "");
     setTtlSeconds(String(org.ttl_seconds));
     setRuntime(readRuntimeSettings(org.extensions));
+    setCardFormat(cardFormatOf(org.media_type));
     pendingAdvancedFocus.current = null;
     setError(null);
     setFieldErrors({});
@@ -332,6 +346,10 @@ export default function OrgDetailPage() {
               <input id={`${fid}-url`} {...fieldProps("registry_url")} value={registryUrl} onChange={(e) => { setRegistryUrl(e.target.value); clearFieldError("registry_url"); }} className={inputCls} placeholder="https://catalog.example.com" />
               {fieldError("registry_url")}
             </div>
+            {storedCardFormat && (
+              <CardFormatField id={`${fid}-card-format`} value={cardFormat ?? storedCardFormat} stored={storedCardFormat}
+                storedPasses={org.card_validation?.status === "valid"} onChange={setCardFormat} />
+            )}
             <div>
               <FieldLabel htmlFor={`${fid}-description`} label="Description" info={ORG_FIELD_HELP.description} optional />
               <textarea id={`${fid}-description`} {...fieldProps("description")} value={description} onChange={(e) => { setDescription(e.target.value); clearFieldError("description"); }} rows={3} className={`${inputCls} resize-none`} placeholder="Describe your registry or agent catalog." />
@@ -424,6 +442,7 @@ export default function OrgDetailPage() {
               <div><span className="font-medium">TTL:</span> {org.ttl_seconds}s</div>
               <div><span className="font-medium">Created:</span> {formatTimestamp(org.created_at)}</div>
             </div>
+            {storedCardFormat && <CardCheckSummary format={storedCardFormat} check={org.card_validation} />}
           </div>
         )}
 

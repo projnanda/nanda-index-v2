@@ -60,8 +60,20 @@ function formField(path: string | undefined): OrgFormField | undefined {
   return field && Object.hasOwn(FIELD_LABELS, field) ? field as OrgFormField : undefined;
 }
 
+/** Server code for an update that raced another edit while the card was being fetched (409). */
+const CARD_CHANGED = "CARD_CHANGED";
+export const CARD_CHANGED_MESSAGE =
+  "This entry changed while its card was being checked, so nothing was saved. Your changes are still here; review them and save again.";
+export const CARD_CHANGED_RELOAD_MESSAGE =
+  "This entry changed while its card was being checked, and the latest version could not be loaded. Reload the page before saving again.";
+
+export function isCardChanged(error: unknown): boolean {
+  return error instanceof ApiError && error.code === CARD_CHANGED;
+}
+
 export function orgFormError(error: unknown): { fields: OrgFieldErrors; message: string | null } {
   if (isAccountNotVerified(error)) return { fields: {}, message: ACCOUNT_NOT_VERIFIED_MESSAGE };
+  if (isCardChanged(error)) return { fields: {}, message: CARD_CHANGED_MESSAGE };
   if (!(error instanceof ApiError)) return { fields: {}, message: error instanceof TypeError
     ? "Could not reach the server. Check your connection and try again."
     : "Could not save your changes. Please try again." };
