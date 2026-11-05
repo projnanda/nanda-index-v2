@@ -51,7 +51,7 @@ export const CONTRIBUTOR_QUOTES: readonly ContributorQuote[] = [
     text:
       "In just the last few months, we have seen AI agents acting on behalf of consumers and businesses dramatically rise. For an open agentic economy to scale, agents must be able to discover relevant services across fragmented ecosystems. An open discovery effort like NandaIndex is an important step in that direction, and we welcome the industry conversation on how verified identity, trust, and secure commerce can be built on top of them.",
     attribution: "Arjun Chittoor, VP, PayPal",
-    logo: CONTRIBUTOR_LOGOS["PayPal"],
+    logo: null,
   },
   {
     text:
