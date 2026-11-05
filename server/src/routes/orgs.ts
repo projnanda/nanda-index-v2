@@ -1,4 +1,5 @@
 import { validateRegistrationCard } from '../services/cardValidation.js';
+import { JSON_CARD_MEDIA_TYPES } from '../lib/mediaTypes.js';
 import { allowAnyUrl, publicUrlGuard, assertPublicHttpUrl, OutboundUrlError, defaultHostLookup, withLookupTimeout } from '../lib/outboundUrl.js';
 import { randomBytes } from 'node:crypto';
 import { isIP } from 'node:net';
@@ -54,6 +55,7 @@ const UPDATE_ORG_BODY_SCHEMA = {
     display_name:     { type: 'string', minLength: 1, maxLength: 255 },
     domain:           { type: 'string', maxLength: 255 },
     registry_url:     { type: 'string', maxLength: 512 },
+    media_type:       { type: 'string', enum: JSON_CARD_MEDIA_TYPES, description: 'Correct an existing A2A or MCP card declaration. Rechecks the submitted registry_url, or the stored URL when omitted, and preserves identity verification.' },
     ttl_seconds:      { type: 'integer', minimum: 3600, maximum: 604800 },
     description:      { type: 'string', maxLength: 1000 },
     tags:             { type: 'array', items: { type: 'string', maxLength: 64 }, maxItems: 20 },
@@ -158,6 +160,7 @@ interface CreateOrgBody {
 
 interface UpdateOrgBody {
   display_name?: string;
+  media_type?: string;
   domain?: string;
   registry_url?: string | null;
   ttl_seconds?: number;
@@ -805,6 +808,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
     try {
       next = updateEntryProfile(profileOf(current), {
         domain: body.domain,
+        mediaType: body.media_type,
         publisherDisplayName: body.publisher?.displayName,
         extensions: body.extensions,
       });
@@ -830,8 +834,9 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
           )
         : undefined;
 
-    const cardValidation = body.registry_url !== undefined
-      ? await validateRegistrationCard(body.registry_url, current.mediaType, {
+    const recheckCard = body.registry_url !== undefined || body.media_type !== undefined;
+    const cardValidation = recheckCard
+      ? await validateRegistrationCard(body.registry_url ?? current.registryUrl, next.mediaType, {
           guard: buildConfig().outbound.allowPrivateHosts ? allowAnyUrl : publicUrlGuard,
         })
       : undefined;
@@ -842,6 +847,9 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
         domain:          body.domain?.toLowerCase(),
         identifier:      next.identifier,
         registryUrl:     body.registry_url,
+        // Only write the supplied type; unrelated edits must not restore a stale one.
+        mediaType:       body.media_type,
+        expectedCard:    recheckCard ? current : undefined,
         ttlSeconds:      body.ttl_seconds,
         description:     body.description,
         tags:            body.tags,
@@ -862,6 +870,9 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       throw err;
     }
     if (!updated) {
+      if (recheckCard && await findByOrgId(request.params.org_id)) {
+        return reply.code(409).send({ error: 'CARD_CHANGED', detail: 'The card or entry profile changed during validation. Fetch the current record and retry your update.' });
+      }
       return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
     }
 

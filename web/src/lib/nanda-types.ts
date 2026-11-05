@@ -257,6 +257,8 @@ export interface CreateOrgPayload {
 
 export interface UpdateOrgPayload {
   display_name?: string;
+  /** Correct an existing JSON card format and re-run its structural check. */
+  media_type?: "application/a2a-agent-card+json" | "application/mcp-server-card+json";
   domain?: string;
   registry_url?: string | null;
   ttl_seconds?: number;

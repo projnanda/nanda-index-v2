@@ -517,6 +517,29 @@ Apache License 2.0 — see [LICENSE](LICENSE).
 
 Email and DNS TXT verification prove control of the registered identity. They do not prove that a card or agent runtime works. Explore labels the proof type explicitly. Proof timestamps are shown when recorded; older email proofs have an unknown timestamp.
 
-Registration and a submitted card URL update run a server-side check for A2A and MCP JSON cards. The check uses the public-address outbound guard, pinned DNS, no redirects, a three-second deadline, and a 256 KiB response limit. Results and check times are stored in a server-owned database column. A2A legacy URL and modern supported-interface cards are checked for required discovery fields; MCP checks use the experimental Server Card core fields. Optional fields and protocol behavior are not certified. Unsupported artifacts and A2A custom protocol bindings show Not checked. A failed check warns the registrant and remains visible in Explore; it does not replace the identity activation requirement. Save the card URL again to recheck it.
+Registration and any update that supplies `registry_url` or `media_type` run a server-side check for A2A and MCP JSON cards. The check uses the public-address outbound guard, pinned DNS, no redirects, a three-second deadline, and a 256 KiB response limit. Results and check times are stored in a server-owned database column. Optional fields and protocol behavior are not certified. Unsupported artifacts and A2A custom protocol bindings show Not checked. A failed check warns the registrant and remains visible in Explore; it does not replace the identity activation requirement.
+
+The required discovery fields are also listed in the API reference at `/docs`:
+
+| Format | Required structural checks |
+| --- | --- |
+| Both | A JSON object with nonempty string `name`, `description`, and `version`. |
+| A2A | A nonempty `supportedInterfaces` array with nonempty `protocolBinding` and `protocolVersion` strings and an absolute URL without credentials in each entry. Core `JSONRPC`, `GRPC`, and `HTTP+JSON` bindings require HTTP(S) URLs. If `supportedInterfaces` is absent, a legacy HTTP(S) `url` is required. |
+| A2A | `capabilities` is an object; `defaultInputModes` and `defaultOutputModes` are nonempty arrays of nonempty strings. `skills` is an array, possibly empty. Each skill has nonempty `id`, `name`, and `description`, plus a `tags` array of nonempty strings, possibly empty. |
+| MCP | `$schema` equals `https://static.modelcontextprotocol.io/schemas/v1/server-card.schema.json`. `name` matches `^[a-zA-Z0-9.-]+/[a-zA-Z0-9._-]+$`. If `remotes` is present, it is an array whose entries have `type` of `streamable-http` or `sse` and an HTTP(S) `url` without credentials. |
+
+The API version supporting this correction must be deployed before owners can use it; older deployments reject `media_type` in updates. For an A2A card mistakenly registered as MCP, an authenticated entry administrator with a verified account can correct the declaration:
+
+```http
+PUT /api/v1/orgs/<org_id>
+Authorization: Bearer <entry-administrator-token>
+Content-Type: application/json
+
+{"media_type":"application/a2a-agent-card+json"}
+```
+
+The server uses the stored card URL when `registry_url` is omitted. It saves the type and the new validation result together, preserving the entry's identifier and verification evidence. Check the returned `card_validation.status`; correcting a label does not make a malformed or unreachable card valid. Corrections are limited to existing A2A and MCP card registrations; catalog and other artifact conversions are not supported. The reverse correction uses `application/mcp-server-card+json`.
+
+Re-saving only `registry_url` rechecks the existing declared type and cannot correct a mislabeled record. If the fetched card matches the other supported format, the validation detail identifies the mismatch. Other structural failures name the missing or invalid fields. The server does not silently infer or change the declaration. If another update changes the URL, type, domain, identifier, publisher, or extensions during validation, the API returns `409 CARD_CHANGED`; fetch the current record and retry.
 
 Endpoint availability remains Not checked. The card check never invokes the advertised runtime or follows nested URLs. Apply migration `022_card_checks_and_identity_timestamps.sql` before deploying this version; it leaves historical results unknown.
