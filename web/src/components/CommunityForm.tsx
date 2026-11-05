@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import { contactEmail, workingGroups } from '@/lib/community';
+import { workingGroups } from '@/lib/community';
 
 const inputClass = 'mt-2 block w-full rounded-control border border-line bg-white px-3 py-2.5 text-sm text-ink focus:border-brand-600 focus:outline-2 focus:outline-brand-600';
 const apiBase = process.env.NEXT_PUBLIC_NANDA_INDEX_API_URL ?? '';
@@ -32,8 +32,8 @@ export function CommunityForm() {
       });
       if (!response.ok) {
         setError(response.status === 429
-          ? `Too many requests. Please try again later or email ${contactEmail}.`
-          : `Your request could not be sent. Please try again or email ${contactEmail}.`);
+          ? 'Too many requests. Please try again later.'
+          : 'Your request could not be sent. Please try again.');
         return;
       }
       const result = await response.json();
@@ -41,7 +41,7 @@ export function CommunityForm() {
       form.reset();
       setSubmitted(true);
     } catch {
-      setError(`We could not confirm your submission. Please try again or email ${contactEmail}.`);
+      setError('We could not confirm your submission. Please try again.');
     } finally {
       setPending(false);
     }
@@ -50,7 +50,6 @@ export function CommunityForm() {
   if (submitted) return (
     <div role="status" className="rounded-card border border-line bg-surface-light p-6 text-ink">
       <p className="font-semibold">Your request was submitted.</p>
-      <p className="mt-2 text-sm text-ink-medium">For anything else, email <a className="text-brand-600 underline" href={`mailto:${contactEmail}`}>{contactEmail}</a>.</p>
     </div>
   );
 
@@ -93,7 +92,7 @@ export function CommunityForm() {
         <label>Leave this field empty<input name="website" tabIndex={-1} autoComplete="off" /></label>
       </div>
       <p className="text-sm leading-relaxed text-ink-medium">
-        Your details will be emailed to <a href={`mailto:${contactEmail}`} className="text-brand-600 underline">{contactEmail}</a> to respond to your request.
+        Your details will be emailed to the NandaIndex team so we can respond to your request.
         {' '}They will not be published in the Index. <Link href="/privacy" className="text-brand-600 underline">Privacy details</Link>.
       </p>
       {error && <p role="alert" className="rounded-control border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}

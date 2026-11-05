@@ -3,7 +3,7 @@ import Link from "next/link";
 import { AgentSetupPrompt } from "@/components/AgentSetupPrompt";
 import { CONTRIBUTOR_BITMAP } from "@/lib/contributor-logos";
 import { externalLinks } from "@/lib/site-data";
-import { contactEmail, workingGroups } from "@/lib/community";
+import { workingGroups } from "@/lib/community";
 
 // A live SMB entry, so the example on the page resolves on the public index.
 const EXAMPLE_IDENTIFIER = "urn:air:moonbakery39.com:agent:orders";
@@ -59,7 +59,6 @@ export default function HomePage() {
         </div>
         <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-3 text-sm">
           <Link href="/get-involved" className="inline-flex min-h-10 items-center rounded-control bg-brand-800 px-4 font-medium text-white hover:bg-brand-700">Sign up to get involved</Link>
-          <a href={`mailto:${contactEmail}`} className="text-brand-600 underline">{contactEmail}</a>
         </div>
       </section>
 

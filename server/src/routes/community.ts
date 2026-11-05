@@ -46,7 +46,7 @@ export async function registerCommunityRoutes(fastify: FastifyInstance): Promise
       return reply.code(202).send({ status: 'accepted' });
     } catch {
       request.log.warn('Community contact email could not be sent');
-      return reply.code(503).send({ error: 'DELIVERY_UNAVAILABLE', detail: 'Please try again or email vedh@vedhkrishnan.com.' });
+      return reply.code(503).send({ error: 'DELIVERY_UNAVAILABLE', detail: 'Please try again later.' });
     }
   });
 }

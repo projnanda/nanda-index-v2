@@ -1,7 +1,6 @@
 import { PageShell } from "@/components/PageShell";
 import Link from "next/link";
 import { configuredPostHogHost } from "@/lib/posthogHosts";
-import { contactEmail } from "@/lib/community";
 
 import type { Metadata } from "next";
 
@@ -45,8 +44,9 @@ export default function PrivacyPage() {
           <p>
             The Get involved form collects your name, email, interest, and any organization,
             working groups, or message you choose to provide. We send these details through Resend
-            to {contactEmail} so we can respond. The form does not create an account or publish
-            your details in the Index. You can email the same address to ask for your request to be deleted.
+            to the NandaIndex team so we can respond. The form does not create an account or publish
+            your details in the Index. You can use the{' '}
+            <Link href="/get-involved" className="text-brand-600 underline">Get involved form</Link> to ask for your request to be deleted.
           </p>
         </section>
         <section>
@@ -96,8 +96,8 @@ export default function PrivacyPage() {
             Account deletion removes your profile, sign-in email, memberships, and account tokens.
             You must first delete entries for which you are the only administrator. Shared entries
             remain published with their existing public and contact data, including any email addresses
-            in those records. To ask about other data, email{' '}
-            <a href={`mailto:${contactEmail}`} className="text-brand-600 underline">{contactEmail}</a>.
+            in those records. To ask about other data, use the{' '}
+            <Link href="/get-involved" className="text-brand-600 underline">Get involved form</Link>.
           </p>
         </section>
       </div>

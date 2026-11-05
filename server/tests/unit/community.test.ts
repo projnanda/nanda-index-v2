@@ -61,6 +61,7 @@ describe('community interest submissions', () => {
     expect(response.statusCode).toBe(503);
     expect(response.json()).toMatchObject({ error: 'DELIVERY_UNAVAILABLE' });
     expect(response.body).not.toContain('provider details');
+    expect(response.body).not.toContain('vedh@vedhkrishnan.com');
   });
 
   it('rejects a filled spam field without sending mail', async () => {

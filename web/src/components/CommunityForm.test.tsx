@@ -35,12 +35,13 @@ describe('community signup form', () => {
     });
   });
 
-  it('preserves input and offers the contact email when delivery fails', async () => {
+  it('preserves input and offers a retry without revealing the recipient when delivery fails', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 503 })));
     render(<CommunityForm />);
     fillForm();
     fireEvent.click(screen.getByRole('button', { name: 'Send request' }));
-    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('vedh@vedhkrishnan.com'));
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Please try again'));
+    expect(screen.getByRole('alert').textContent).not.toContain('@');
     expect((screen.getByLabelText('Email') as HTMLInputElement).value).toBe('alice@example.org');
     expect(screen.queryByRole('status')).toBeNull();
   });

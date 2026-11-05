@@ -1,5 +1,3 @@
-export const contactEmail = 'vedh@vedhkrishnan.com';
-
 export const workingGroups = [
   {
     id: 'discovery', title: 'Discovery without DNS anchored agents',
