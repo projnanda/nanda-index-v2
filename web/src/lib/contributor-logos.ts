@@ -14,8 +14,8 @@
 // AG2: https://www.ag2.ai/ag2-logo-black.png
 // Analog Devices: supplied with Max Versace's approved quote by Ramesh Raskar on November 4, 2026.
 export const CONTRIBUTOR_BITMAP = {
-  src: "/contributors/contributor-logos-tab-11-v11.png",
-  alt: "Contributor logos: Google, Cisco, Akamai Cloud, AGI House, Cognizant, Commerce, Ericsson, GSMA, HCLTech, Hello Haven, Hexaware, Inkbox, Kyndryl, L&T Technology Services, Maritime, Mitsubishi Electric, Motorola Solutions, Nasiko, Nebius, Nutanix, Ora, TCS, Wipro, and WorkOS; AG2, Suki, TinyFish, and Wand AI in a smaller final row above the divider; MIT Media Lab and Project NANDA below the divider.",
+  src: "/contributors/contributor-logos-tab-11-v12.png",
+  alt: "Contributor logos: Google, Cisco, Akamai Cloud, and GSMA in the top row; Cognizant, Commerce, Ericsson, HCLTech, Hello Haven, Hexaware, Inkbox, Kyndryl, L&T Technology Services, Maritime, Mitsubishi Electric, Motorola Solutions, Nasiko, Nebius, Nutanix, Ora, TCS, Wipro, WorkOS, AG2, AGI House, Suki, TinyFish, and Wand AI below; AG2, AGI House, Suki, TinyFish, and Wand AI use smaller logos, with AGI House in the bottom company row; MIT Media Lab and Project NANDA below the divider.",
   width: 874,
   height: 792,
 } as const;
