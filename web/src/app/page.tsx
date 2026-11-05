@@ -48,11 +48,13 @@ export default function HomePage() {
 
       <section aria-labelledby="working-groups-heading" className="mt-10 rounded-card border border-line bg-surface-light p-5 sm:p-6">
         <h2 id="working-groups-heading" className="font-display text-2xl font-semibold text-ink-strong">Working groups</h2>
-        <p className="mt-2 text-sm leading-relaxed text-ink-medium">Take part in the design and implementation of NandaIndex.</p>
+        <p className="mt-2 text-sm leading-relaxed text-ink-medium">Join the discussions on GitHub to take part in the design and implementation of NandaIndex.</p>
         <div className="mt-5 grid gap-5 sm:grid-cols-3">
           {workingGroups.map((group) => (
             <div key={group.id}>
-              <h3 className="text-sm font-semibold leading-relaxed text-ink-strong">{group.title}</h3>
+              <h3 className="text-sm font-semibold leading-relaxed text-ink-strong">
+                <a href={group.discussionUrl} target="_blank" rel="noopener noreferrer" className="text-brand-600 underline underline-offset-4 hover:text-brand-800">{group.title}</a>
+              </h3>
               <p className="mt-2 text-sm leading-relaxed text-ink-medium">{group.description}</p>
             </div>
           ))}
