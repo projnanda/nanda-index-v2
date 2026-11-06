@@ -8,13 +8,13 @@
 // LTTS's logo was supplied and approved with its quote.
 // Nebius's logo is from https://nebius.com/logo.svg
 // PayPal's logo is from https://www.paypalobjects.com/paypal-ui/logos/svg/paypal-wordmark-color.svg
-// Akamai Cloud's logo was supplied with Hema Seshadri's approved quote.
+// Akamai supplied its stacked logo for white backgrounds on November 6, 2026.
 // Motorola Solutions' logo was supplied by its brand team on November 2, 2026.
 // Google: https://www.gstatic.com/marketing-cms/assets/images/f5/d3/a7f9db7045429cb6dc6be56bdcbe/google-logo-about.svg
 // AG2: https://www.ag2.ai/ag2-logo-black.png
 // Analog Devices: supplied with Max Versace's approved quote by Ramesh Raskar on November 4, 2026.
 export const CONTRIBUTOR_BITMAP = {
-  src: "/contributors/contributor-logos-tab-11-v12.png",
+  src: "/contributors/contributor-logos-tab-11-v13.png",
   alt: "Contributor logos: Google, Cisco, Akamai Cloud, and GSMA in the top row; Cognizant, Commerce, Ericsson, HCLTech, Hello Haven, Hexaware, Inkbox, Kyndryl, L&T Technology Services, Maritime, Mitsubishi Electric, Motorola Solutions, Nasiko, Nebius, Nutanix, Ora, TCS, Wipro, WorkOS, AG2, AGI House, Suki, TinyFish, and Wand AI below; AG2, AGI House, Suki, TinyFish, and Wand AI use smaller logos, with AGI House in the bottom company row; MIT Media Lab and Project NANDA below the divider.",
   width: 874,
   height: 792,
@@ -45,7 +45,7 @@ export const CONTRIBUTOR_LOGOS = {
   "WorkOS": { name: "WorkOS", src: "/contributors/logos/workos.png", width: 374, height: 225 },
   "MIT Media Lab": { name: "MIT Media Lab", src: "/contributors/logos/mit-media-lab.png", width: 284, height: 177 },
   "PayPal": { name: "PayPal", src: "/contributors/logos/paypal.svg", width: 135, height: 48 },
-  "Akamai Cloud": { name: "Akamai Cloud", src: "/contributors/logos/akamai-cloud-supplied.png", width: 870, height: 480 },
+  "Akamai Cloud": { name: "Akamai Cloud", src: "/contributors/logos/akamai-cloud-stacked.png", width: 469, height: 260 },
   "Wipro": { name: "Wipro", src: "/contributors/logos/wipro.svg", width: 393.35, height: 157.54 },
   "Wand AI": { name: "Wand AI", src: "/contributors/logos/wand-ai.svg", width: 3120, height: 868 },
   "Suki": { name: "Suki", src: "/contributors/logos/suki.svg", width: 73, height: 35 },
