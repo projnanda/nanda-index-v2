@@ -13,8 +13,8 @@ import { useAnalyticsConsent } from "@/lib/consent";
  *
  * posthog-js is only downloaded once the visitor accepts, and never starts
  * on a private page; events are anonymous (no identify, no person profiles).
- * Replays show the public page content but mask every input, every email
- * address and anything marked with REPLAY_MASK_CLASS. Traffic goes through
+ * Replays show the public page content but mask every input, email
+ * addresses and anything marked with PERSONAL_DATA_CLASS. Traffic goes through
  * this site's /ingest rewrite (next.config.ts), so the CSP stays 'self'.
  */
 

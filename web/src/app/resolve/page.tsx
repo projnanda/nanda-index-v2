@@ -9,6 +9,7 @@ import { resolutionSummary, type HopStatus } from "@/lib/resolutionStatus";
 import { resolveExamples, type ExampleKind } from "@/lib/resolveExamples";
 import { cn } from "@/lib/utils";
 import { noUrlExplanation } from "@/lib/svcbPointer";
+import { PERSONAL_DATA_CLASS } from "@/lib/analyticsPrivacy";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -24,9 +25,11 @@ const IDLE: HopState = { status: "idle" };
 // ── Components ────────────────────────────────────────────────────────────────
 
 function HopCard({
-  n, label, subtitle, hop, children, onRetry, busy,
+  n, label, subtitle, hop, children, onRetry, busy, echoesInput = false,
 }: {
   n: number; label: string; subtitle: string; hop: HopState; children?: React.ReactNode; onRetry?: () => void; busy?: boolean;
+  /** The hop's URL or response repeats what the visitor typed: hide them from session replays. */
+  echoesInput?: boolean;
 }) {
   const colors: Record<HopStatus, string> = {
     idle:    "border-black/10 bg-white",
@@ -56,7 +59,7 @@ function HopCard({
           <p className="font-semibold text-slate-950">{label}</p>
           <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>
           {hop.url && (
-            <p className="mt-1 break-all font-mono text-[11px] text-slate-400">{hop.url}</p>
+            <p className={cn(echoesInput && PERSONAL_DATA_CLASS, "mt-1 break-all font-mono text-[11px] text-slate-400")}>{hop.url}</p>
           )}
         </div>
       </div>
@@ -71,7 +74,7 @@ function HopCard({
 
       {hop.status === "error" && (
         <div className="ml-12 mt-3 space-y-2">
-          <p className="text-sm text-rose-700">{hop.error}</p>
+          <p className={cn(PERSONAL_DATA_CLASS, "text-sm text-rose-700")}>{hop.error}</p>
           {onRetry && <button type="button" disabled={busy} onClick={onRetry} className="rounded-xl border border-rose-300 px-3 py-1 text-sm text-rose-800 disabled:opacity-50">Retry {label}</button>}
         </div>
       )}
@@ -81,7 +84,7 @@ function HopCard({
           <summary className="cursor-pointer text-xs text-slate-400 hover:text-slate-700">
             View response
           </summary>
-          <pre className="mt-2 overflow-x-auto rounded-2xl border border-black/5 bg-slate-950 p-4 text-xs text-slate-200">
+          <pre className={cn(echoesInput && PERSONAL_DATA_CLASS, "mt-2 overflow-x-auto rounded-2xl border border-black/5 bg-slate-950 p-4 text-xs text-slate-200")}>
             {JSON.stringify(hop.data, null, 2)}
           </pre>
         </details>
@@ -347,6 +350,7 @@ export default function ResolvePage() {
               label={traceExample ? "Example Index" : "NANDA Index"}
               subtitle="Each entry points to the correct next discovery object for a given resource identifier."
               hop={hop1}
+              echoesInput
               busy={resolving || talking}
               onRetry={() => void runResolve(traceLocator, 1, traceExample)}
             />
@@ -386,6 +390,7 @@ export default function ResolvePage() {
                           label="Talk with agent"
                           subtitle="Invoke the selected resource through its supported protocol."
                           hop={hop4}
+                          echoesInput
               busy={resolving || talking}
               onRetry={() => void talkToAgent()}
                         >

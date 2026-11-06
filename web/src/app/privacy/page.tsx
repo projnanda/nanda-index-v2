@@ -59,7 +59,7 @@ export default function PrivacyPage() {
           {(gaId || posthogKey) && (
             <p>
               Analytics load only if you accept them. They receive the page path (never the query string),
-              and sign-in, password-reset and verification pages are never measured. If you decline,
+              and sign-in, account dashboard, password-reset and verification pages are never measured. If you decline,
               nothing is loaded. You can change your choice at any time via &ldquo;Cookie settings&rdquo; in
               the footer.
             </p>
@@ -70,7 +70,8 @@ export default function PrivacyPage() {
               <p className="mt-3">
                 PostHog counts page views and clicks and records sessions: how pages are scrolled and
                 clicked, and the public content they showed. Every form input is masked, so nothing you
-                type is captured, and your name and any email address on the page are hidden. It never
+                type is captured, even where a page shows it back to you, and your name and any email
+                address on the page are hidden. It never
                 receives the query string of a page or link, or an email address, and does not link your
                 activity to your account.
               </p>

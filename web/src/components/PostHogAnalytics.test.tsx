@@ -18,7 +18,9 @@ const posthog = vi.hoisted(() => ({
 }));
 vi.mock("posthog-js", () => ({ default: posthog }));
 
-import { PostHogAnalytics } from "./PostHogAnalytics";
+// Imported fresh for each test: the component keeps posthog-js state at module level.
+let PostHogAnalytics: typeof import("./PostHogAnalytics").PostHogAnalytics;
+let analyticsPrivacy: typeof import("@/lib/analyticsPrivacy");
 
 const pageview = (): CaptureResult => ({ uuid: "0190-test", event: "$pageview", properties: {} });
 const beforeSend = (event: CaptureResult) => (posthog.config!.before_send as (e: CaptureResult) => CaptureResult | null)(event);
@@ -28,7 +30,13 @@ function show(pathname: string) {
   return <PostHogAnalytics apiKey="phc_test" uiHost="https://us.posthog.com" />;
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  vi.clearAllMocks();
+  vi.resetModules();
+  posthog.__loaded = false;
+  posthog.config = null;
+  ({ PostHogAnalytics } = await import("./PostHogAnalytics"));
+  analyticsPrivacy = await import("@/lib/analyticsPrivacy");
   window.localStorage.setItem("nanda_analytics_consent", "granted");
   posthog.init.mockImplementation((_key: string, config: Partial<PostHogConfig>) => {
     posthog.__loaded = true;
@@ -42,15 +50,15 @@ afterEach(() => {
 
 it("records page text readably in replays, masking only inputs and personal data", async () => {
   render(show("/explore"));
-  await waitFor(() => expect(posthog.config).not.toBeNull());
+  await waitFor(() => expect(posthog.init).toHaveBeenCalledTimes(1));
   const replay = posthog.config!.session_recording!;
 
   expect(replay.maskAllInputs).toBe(true);
   // Every text node is routed through maskTextFn, which replaces rrweb's
   // default of starring out all masked text.
   expect(replay.maskTextSelector).toBe("*");
-  expect(replay.maskTextFn?.("Weather agent")).toBe("Weather agent");
-  expect(replay.maskTextFn?.("ada@example.org")).toBe("[email]");
+  expect(replay.maskTextFn).toBe(analyticsPrivacy.scrubReplayText);
+  expect(replay.maskAttributeFn).toBe(analyticsPrivacy.scrubReplayAttribute);
 });
 
 it("stops replay and drops events after client-side navigation into a private page, and resumes on leaving", async () => {
