@@ -46,6 +46,22 @@ export default function HomePage() {
         </div>
       </div>
 
+      <section aria-labelledby="design-partners-heading" className="mt-10">
+        <h2 id="design-partners-heading" className="mb-6 font-display text-2xl font-semibold text-ink-strong sm:text-3xl">
+          Design Partners
+        </h2>
+        <Image
+          src={CONTRIBUTOR_BITMAP.src}
+          alt={CONTRIBUTOR_BITMAP.alt}
+          width={CONTRIBUTOR_BITMAP.width}
+          height={CONTRIBUTOR_BITMAP.height}
+          sizes="(min-width: 1024px) 704px, (min-width: 768px) 720px, (min-width: 640px) calc(100vw - 48px), calc(100vw - 32px)"
+          className="h-auto w-full bg-white"
+        />
+      </section>
+
+      <AgentSetupPrompt />
+
       <section aria-labelledby="working-groups-heading" className="mt-10 rounded-card border border-line bg-surface-light p-5 sm:p-6">
         <h2 id="working-groups-heading" className="font-display text-2xl font-semibold text-ink-strong">Working groups</h2>
         <p className="mt-2 text-sm leading-relaxed text-ink-medium">Join the discussions on GitHub to take part in the design and implementation of NandaIndex.</p>
@@ -63,22 +79,6 @@ export default function HomePage() {
           <Link href="/get-involved" className="inline-flex min-h-10 items-center rounded-control bg-brand-800 px-4 font-medium text-white hover:bg-brand-700">Sign up to get involved</Link>
         </div>
       </section>
-
-      <section aria-labelledby="design-partners-heading" className="mt-10">
-        <h2 id="design-partners-heading" className="mb-6 font-display text-2xl font-semibold text-ink-strong sm:text-3xl">
-          Design Partners
-        </h2>
-        <Image
-          src={CONTRIBUTOR_BITMAP.src}
-          alt={CONTRIBUTOR_BITMAP.alt}
-          width={CONTRIBUTOR_BITMAP.width}
-          height={CONTRIBUTOR_BITMAP.height}
-          sizes="(min-width: 1024px) 704px, (min-width: 768px) 720px, (min-width: 640px) calc(100vw - 48px), calc(100vw - 32px)"
-          className="h-auto w-full bg-white"
-        />
-      </section>
-
-      <AgentSetupPrompt />
 
       <div className="mt-10 space-y-5 text-base leading-relaxed text-ink-medium">
         <p>
