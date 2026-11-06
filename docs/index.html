@@ -657,9 +657,10 @@
               </tbody>
             </table>
           </div>
-          <div class="note teal"><strong>Signed records.</strong> Index and EntityOwner records are signed with Ed25519
-            over a canonical-JSON projection (keys sorted, no whitespace), so any implementation can verify a record
-            byte-for-byte.</div>
+          <div class="note teal"><strong>Unsigned responses.</strong> Index responses are not signed yet: a resolved
+            record is protected by TLS only. Index-issued Ed25519 assertions over canonical JSON are proposed in
+            <a href="https://github.com/projnanda/nanda-index-v2/blob/main/server/TRUST_CONTRACT.md">TRUST_CONTRACT.md</a>
+            and tracked in <a href="https://github.com/projnanda/nanda-index-v2/issues/92">#92</a>.</div>
         </section>
 
         <!-- ARCHITECTURE -->
@@ -885,18 +886,6 @@ POST &lt;agentCard.url&gt;/run
                 <tr>
                   <td><code>org_memberships</code></td>
                   <td>User ↔ org links with a <code>role</code> of <code>admin</code> or <code>member</code></td>
-                </tr>
-                <tr>
-                  <td><code>entity_owners</code></td>
-                  <td>Signed EntityOwner records (public key, DMARC policy, signature)</td>
-                </tr>
-                <tr>
-                  <td><code>pending_registrations</code></td>
-                  <td>In-flight challenge/registration state</td>
-                </tr>
-                <tr>
-                  <td><code>audit_log</code></td>
-                  <td>Change diffs</td>
                 </tr>
               </tbody>
             </table>
@@ -1382,7 +1371,8 @@ curl https://api.nandaindex.org/health</pre>
                 <tr>
                   <td><code>SIGNING_PRIVATE_KEY</code> / <code>SIGNING_KEY_ID</code></td>
                   <td>no</td>
-                  <td>Ed25519 key for signing records</td>
+                  <td>Reserved for signed responses (<a href="https://github.com/projnanda/nanda-index-v2/issues/92">#92</a>);
+                    not read by any route yet</td>
                 </tr>
               </tbody>
             </table>
@@ -1419,7 +1409,7 @@ curl https://api.nandaindex.org/health</pre>
                 </tr>
                 <tr>
                   <td>Signing</td>
-                  <td>Ed25519 over canonical JSON</td>
+                  <td>Planned: Ed25519 over canonical JSON (<a href="https://github.com/projnanda/nanda-index-v2/issues/92">#92</a>)</td>
                 </tr>
                 <tr>
                   <td>Proxy</td>
