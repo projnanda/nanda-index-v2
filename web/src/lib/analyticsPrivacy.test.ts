@@ -1,10 +1,13 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import type { CaptureResult, CapturedNetworkRequest } from "posthog-js";
 import {
+  REPLAY_MASK_CLASS,
   isPrivatePath,
   scrubEvent,
   scrubNetworkRequest,
   scrubReplayAttribute,
+  scrubReplayText,
   stripQueryAndHash,
 } from "./analyticsPrivacy";
 
@@ -143,6 +146,38 @@ describe("scrubReplayAttribute", () => {
 
   it("leaves other attributes unchanged", () => {
     expect(scrubReplayAttribute("class", "h-9 rounded-control")).toBe("h-9 rounded-control");
+  });
+});
+
+describe("scrubReplayText", () => {
+  function element(html: string, selector: string): HTMLElement {
+    const root = document.createElement("div");
+    root.innerHTML = html;
+    return root.querySelector<HTMLElement>(selector)!;
+  }
+
+  it("keeps ordinary page text readable", () => {
+    const heading = element("<h2>Weather agent</h2>", "h2");
+    expect(scrubReplayText("Weather agent · verified by acme.example", heading)).toBe("Weather agent · verified by acme.example");
+  });
+
+  it("redacts email addresses shown on the page", () => {
+    const identity = element("<span>owner</span>", "span");
+    expect(scrubReplayText("Identity: Ada@Example.org (email)", identity)).toBe("Identity: [email] (email)");
+  });
+
+  it("masks every character of text marked as personal, keeping its shape", () => {
+    const name = element(`<span class="${REPLAY_MASK_CLASS}">x</span>`, "span");
+    expect(scrubReplayText("(Ada Lovelace)", name)).toBe("**** *********");
+  });
+
+  it("masks text nested anywhere inside an element marked as personal", () => {
+    const inner = element(`<div class="${REPLAY_MASK_CLASS}"><p><b>x</b></p></div>`, "b");
+    expect(scrubReplayText("Ada", inner)).toBe("***");
+  });
+
+  it("still redacts email addresses when the recorder gives no element", () => {
+    expect(scrubReplayText("write to ada@example.org")).toBe("write to [email]");
   });
 });
 

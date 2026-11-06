@@ -40,6 +40,19 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
+it("records page text readably in replays, masking only inputs and personal data", async () => {
+  render(show("/explore"));
+  await waitFor(() => expect(posthog.config).not.toBeNull());
+  const replay = posthog.config!.session_recording!;
+
+  expect(replay.maskAllInputs).toBe(true);
+  // Every text node is routed through maskTextFn, which replaces rrweb's
+  // default of starring out all masked text.
+  expect(replay.maskTextSelector).toBe("*");
+  expect(replay.maskTextFn?.("Weather agent")).toBe("Weather agent");
+  expect(replay.maskTextFn?.("ada@example.org")).toBe("[email]");
+});
+
 it("stops replay and drops events after client-side navigation into a private page, and resumes on leaving", async () => {
   const { rerender } = render(show("/explore"));
   await waitFor(() => expect(posthog.init).toHaveBeenCalledTimes(1));
