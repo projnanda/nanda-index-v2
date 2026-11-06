@@ -21,6 +21,24 @@ type Paper = {
   authors: Person[];
 };
 
+const ADVISORS: Person[] = [
+  { name: "Mike Hamilton", organization: "Former CIO at Cloudflare" },
+  { name: "Andrew Trask", organization: "OpenMined" },
+];
+
+const COMMITTEES = [
+  {
+    id: "steering-committee",
+    title: "Steering Committee",
+    members: ["Ramesh Raskar", "Vijoy Pandey", "Sam Sharaf", "Rahul Todkar"],
+  },
+  {
+    id: "technical-steering-committee",
+    title: "Technical Steering Committee",
+    members: ["Pradyumna Chari", "Luca Muscariello", "Ankit Kumar Nath", "Hema Seshadri", "John Zinky"],
+  },
+] as const;
+
 const CONTRIBUTORS: Person[] = [
   { name: "Ankit Kumar Nath", organization: "Nasiko and ProjectNANDA.org" },
   { name: "Vedh Krishnan", organization: "MIT and ProjectNANDA.org" },
@@ -92,7 +110,15 @@ const PAPERS: Paper[] = [
   },
 ];
 
-function PeopleTable({ caption, people }: { caption: string; people: Person[] }) {
+function PeopleTable({
+  caption,
+  people,
+  organizationHeading = "Organization",
+}: {
+  caption: string;
+  people: Person[];
+  organizationHeading?: string;
+}) {
   return (
     <table className="w-full table-fixed border-collapse text-left text-sm">
       <caption className="sr-only">{caption}</caption>
@@ -102,7 +128,7 @@ function PeopleTable({ caption, people }: { caption: string; people: Person[] })
             Name
           </th>
           <th scope="col" className="py-2 text-xs font-bold uppercase tracking-wide text-ink-weak">
-            Organization
+            {organizationHeading}
           </th>
         </tr>
       </thead>
@@ -125,6 +151,14 @@ export default function ContributorsPage() {
       description="Nanda Index is being designed, reviewed, and supported by its design partners."
     >
       <nav aria-label="On this page" className="mb-8 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+        <a href="#advisors" className="text-brand-600 hover:text-brand-700 hover:underline">
+          Advisors
+        </a>
+        {COMMITTEES.map(({ id, title }) => (
+          <a key={id} href={`#${id}`} className="text-brand-600 hover:text-brand-700 hover:underline">
+            {title}
+          </a>
+        ))}
         <a href="#research-authors" className="text-brand-600 hover:text-brand-700 hover:underline">
           Research authors
         </a>
@@ -179,6 +213,26 @@ export default function ContributorsPage() {
               </figure>
             ))}
           </div>
+        </div>
+
+        <section id="advisors" aria-labelledby="advisors-heading" className="scroll-mt-24">
+          <h2 id="advisors-heading" className="mb-4 font-display text-lg font-semibold text-ink-strong">
+            Advisors
+          </h2>
+          <PeopleTable caption="NandaIndex advisors" people={ADVISORS} organizationHeading="Role or affiliation" />
+        </section>
+
+        <div className="grid gap-8 sm:grid-cols-2">
+          {COMMITTEES.map(({ id, title, members }) => (
+            <section key={id} id={id} aria-labelledby={`${id}-heading`} className="scroll-mt-24">
+              <h2 id={`${id}-heading`} className="mb-4 font-display text-lg font-semibold text-ink-strong">
+                {title}
+              </h2>
+              <ul className="list-disc space-y-1.5 pl-5 text-sm text-ink">
+                {members.map((name) => <li key={name}>{name}</li>)}
+              </ul>
+            </section>
+          ))}
         </div>
 
         <section id="research-authors" aria-labelledby="research-authors-heading" className="scroll-mt-24">
