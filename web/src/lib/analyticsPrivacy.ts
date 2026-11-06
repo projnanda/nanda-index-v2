@@ -86,6 +86,24 @@ export function scrubReplayAttribute(name: string, value: string): string {
 }
 
 /**
+ * PostHog's own marker class for text that a replay must never show. Put it
+ * on any element that renders personal data on a public page, such as the
+ * signed-in visitor's name.
+ */
+export const REPLAY_MASK_CLASS = "ph-mask";
+
+/**
+ * PostHog `session_recording.maskTextFn`. With `maskTextSelector: "*"` the
+ * recorder passes every text node here instead of starring it out, so page
+ * content stays readable in replays while email addresses are redacted and
+ * text inside a `REPLAY_MASK_CLASS` element is masked in full.
+ */
+export function scrubReplayText(text: string, element?: HTMLElement | null): string {
+  if (element?.closest(`.${REPLAY_MASK_CLASS}`)) return text.replace(/\S/g, "*");
+  return text.replace(EMAIL, "[email]");
+}
+
+/**
  * PostHog `session_recording.maskCapturedNetworkRequestFn`. The recorder
  * passes both network requests and every page URL it records through this,
  * so it is where replay URLs lose their query strings.

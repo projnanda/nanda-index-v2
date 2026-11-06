@@ -68,10 +68,11 @@ export default function PrivacyPage() {
           {posthogKey && (
             <>
               <p className="mt-3">
-                PostHog counts page views and clicks and records sessions (how pages are scrolled and
-                clicked) with every piece of text and every form input masked, so neither what the page
-                shows nor what you type is captured. It never receives the query string of a page or link,
-                or an email address, and does not link your activity to your account.
+                PostHog counts page views and clicks and records sessions: how pages are scrolled and
+                clicked, and the public content they showed. Every form input is masked, so nothing you
+                type is captured, and your name and any email address on the page are hidden. It never
+                receives the query string of a page or link, or an email address, and does not link your
+                activity to your account.
               </p>
               <p className="mt-3">
                 To tell visits apart, PostHog keeps a random identifier in a cookie and in your

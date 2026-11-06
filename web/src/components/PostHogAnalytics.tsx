@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import type { PostHog, PostHogConfig } from "posthog-js";
-import { isPrivatePath, scrubEvent, scrubNetworkRequest, scrubReplayAttribute } from "@/lib/analyticsPrivacy";
+import { isPrivatePath, scrubEvent, scrubNetworkRequest, scrubReplayAttribute, scrubReplayText } from "@/lib/analyticsPrivacy";
 import { useAnalyticsConsent } from "@/lib/consent";
 
 /**
@@ -12,8 +12,9 @@ import { useAnalyticsConsent } from "@/lib/consent";
  * leaves the browser (lib/analyticsPrivacy.ts).
  *
  * posthog-js is only downloaded once the visitor accepts, and never starts
- * on a private page; events are anonymous (no identify, no person profiles)
- * and replays mask every input and every piece of text. Traffic goes through
+ * on a private page; events are anonymous (no identify, no person profiles).
+ * Replays show the public page content but mask every input, every email
+ * address and anything marked with REPLAY_MASK_CLASS. Traffic goes through
  * this site's /ingest rewrite (next.config.ts), so the CSP stays 'self'.
  */
 
@@ -27,7 +28,10 @@ const OPTIONS: Partial<PostHogConfig> = {
   before_send: (event) => (onPrivatePage ? null : scrubEvent(event, window.location.pathname)),
   session_recording: {
     maskAllInputs: true,
+    // Route every text node through scrubReplayText, which redacts only
+    // personal data; without maskTextFn this selector would star out all text.
     maskTextSelector: "*",
+    maskTextFn: scrubReplayText,
     maskAttributeFn: scrubReplayAttribute,
     recordHeaders: false,
     recordBody: false,
