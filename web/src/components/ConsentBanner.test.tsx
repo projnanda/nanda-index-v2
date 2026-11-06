@@ -8,25 +8,36 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
-it("asks about analytics without naming the tools, which /privacy lists", () => {
-  render(<ConsentBanner recordsSessions />);
-  const banner = screen.getByRole("dialog", { name: "Analytics consent" });
+const bannerText = () => screen.getByRole("dialog", { name: "Analytics consent" }).textContent;
 
-  expect(banner.textContent).toContain("We'd like to use analytics to understand how the site is used");
-  expect(banner.textContent).not.toMatch(/PostHog|Google Analytics/);
+it("names Google Analytics and describes PostHog as session recordings", () => {
+  render(<ConsentBanner googleAnalytics recordsSessions />);
+
+  expect(bannerText()).toContain(
+    "We'd like to use Google Analytics and session recordings to understand how the site is used, with form inputs and personal details masked in recordings.",
+  );
+  expect(bannerText()).not.toContain("PostHog");
   expect(screen.getByRole("link", { name: "Privacy" }).getAttribute("href")).toBe("/privacy");
 });
 
-it("mentions recordings only when sessions are recorded", () => {
-  const { rerender } = render(<ConsentBanner recordsSessions />);
-  expect(screen.getByRole("dialog").textContent).toContain("recordings of page interactions with form inputs and personal details masked");
+it("mentions only Google Analytics when sessions are not recorded", () => {
+  render(<ConsentBanner googleAnalytics recordsSessions={false} />);
 
-  rerender(<ConsentBanner recordsSessions={false} />);
-  expect(screen.getByRole("dialog").textContent).not.toContain("recordings");
+  expect(bannerText()).toContain("We'd like to use Google Analytics to understand how the site is used.");
+  expect(bannerText()).not.toContain("recordings");
+});
+
+it("mentions only session recordings when Google Analytics is off", () => {
+  render(<ConsentBanner googleAnalytics={false} recordsSessions />);
+
+  expect(bannerText()).toContain(
+    "We'd like to use session recordings to understand how the site is used, with form inputs and personal details masked in recordings.",
+  );
+  expect(bannerText()).not.toContain("Google Analytics");
 });
 
 it("stays hidden once the visitor has chosen", () => {
   window.localStorage.setItem("nanda_analytics_consent", "denied");
-  render(<ConsentBanner recordsSessions />);
+  render(<ConsentBanner googleAnalytics recordsSessions />);
   expect(screen.queryByRole("dialog")).toBeNull();
 });
