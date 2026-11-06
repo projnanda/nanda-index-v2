@@ -56,7 +56,7 @@ export default function RootLayout({
           <main className="flex-1">{children}</main>
           <Footer />
         </div>
-        {(gaId || posthogKey) && <ConsentBanner googleAnalytics={!!gaId} posthog={!!posthogKey} />}
+        {(gaId || posthogKey) && <ConsentBanner recordsSessions={!!posthogKey} />}
         {gaId && <Analytics gaId={gaId} />}
         {posthogKey && <PostHogAnalytics apiKey={posthogKey} uiHost={posthogHosts(posthogHost).ui} />}
       </body>
