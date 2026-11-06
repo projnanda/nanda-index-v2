@@ -21,6 +21,8 @@ export const ORG_FIELD_HELP = {
     `The URL of your A2A Agent Card, the JSON file describing your agent's skills and endpoint. You can host the card on ${PERSONAL_CARD_HOST} or with another provider, then paste its public URL here.`,
   registry_url:
     "Where resolvers fetch this record's details: your AI Catalog URL (usually https://<your-domain>/.well-known/ai-catalog.json) if you run a catalog, or your A2A Agent Card URL if you registered a single agent.",
+  media_type:
+    "The format of the card your URL serves. An A2A agent card lists supportedInterfaces and skills; an MCP server card declares the MCP Server Card $schema. Resolvers read the card according to this format, so it must match the file.",
   agent_id:
     "A short name for this agent under your domain, used in its identifier: urn:air:<domain>:agent:<id>, e.g. orders. Letters, numbers, dots, hyphens, underscores and tildes. Leave blank to use your Org ID.",
   runtime_provider:
