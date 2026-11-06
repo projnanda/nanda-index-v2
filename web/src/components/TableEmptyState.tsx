@@ -1,8 +1,9 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 
 type Props = {
   title: string;
-  description: string;
+  description: ReactNode;
   actionLabel?: string;
   actionHref?: string;
 };
