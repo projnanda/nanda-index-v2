@@ -49,6 +49,12 @@ export const CONTRIBUTOR_QUOTES: readonly ContributorQuote[] = [
   },
   {
     text:
+      "As we move toward an Internet where AI agents act on behalf of people and organizations, discovery and trust will become foundational challenges. NandaIndex offers a evolving approach to connecting independent agent discovery systems, and I'm encouraged to see the community exploring how these pieces can work together through open standards.",
+    attribution: "Ken Adler, Technical Fellow, Agentic IAM (individual contributor)",
+    logo: null,
+  },
+  {
+    text:
       "In just the last few months, we have seen AI agents acting on behalf of consumers and businesses dramatically rise. For an open agentic economy to scale, agents must be able to discover relevant services across fragmented ecosystems. An open discovery effort like NandaIndex is an important step in that direction, and we welcome the industry conversation on how verified identity, trust, and secure commerce can be built on top of them.",
     attribution: "Arjun Chittoor, VP, PayPal",
     logo: null,
