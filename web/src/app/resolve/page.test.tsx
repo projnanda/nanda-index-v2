@@ -2,7 +2,8 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import ResolvePage from "./page";
-import { fetchFactsUrl, fetchRegistryHop, resolveAgent } from "@/lib/nanda-api";
+import { ApiError, fetchFactsUrl, fetchRegistryHop, resolveAgent } from "@/lib/nanda-api";
+import { PERSONAL_DATA_CLASS, REPLAY_MASK_CLASS } from "@/lib/analyticsPrivacy";
 import type { CatalogEntry } from "@/lib/nanda-types";
 
 vi.mock("@/lib/nanda-api", async () => {
@@ -86,4 +87,19 @@ it("lists a catalog named by an exact identifier and stops before the card hop",
   await submit();
   expect(await screen.findByText(/names a catalog of 1 entry/)).toBeTruthy();
   expect(fetchFactsUrl).not.toHaveBeenCalled();
+});
+it("hides the typed identifier from session replays wherever the trace shows it back", async () => {
+  const typed = "urn:air:host39.org:personal:ada@example.org";
+  vi.mocked(resolveAgent).mockRejectedValue(new ApiError(`invalid identifier "${typed}"`, 400));
+  render(<ResolvePage />);
+  fireEvent.change(screen.getByRole("textbox", { name: "Resource identifier" }), { target: { value: typed } });
+  fireEvent.click(screen.getByRole("button", { name: "Resolve" }));
+
+  const error = await screen.findByText(`HTTP 400: invalid identifier "${typed}"`);
+  const requestUrl = screen.getByText(/\/api\/v1\/resolve\?locator=/);
+  for (const element of [error, requestUrl]) {
+    expect(element.className.split(" ")).toEqual(expect.arrayContaining(PERSONAL_DATA_CLASS.split(" ")));
+  }
+  // The hop's own label is site copy and stays readable.
+  expect(screen.getByText("NANDA Index").closest(`.${REPLAY_MASK_CLASS}`)).toBeNull();
 });

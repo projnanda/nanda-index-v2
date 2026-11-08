@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { REPLAY_MASK_CLASS } from "@/lib/analyticsPrivacy";
+import { PERSONAL_DATA_CLASS } from "@/lib/analyticsPrivacy";
 import { clearAuthToken, getAuthToken, isTokenExpired, parseJwtPayload, subscribeAuthChanges } from "@/lib/auth";
 import { logout } from "@/lib/nanda-api";
 
@@ -33,7 +33,7 @@ export function ExploreActions() {
         <>
           <Link href="/dashboard" className={`${actionClass} max-w-full gap-2`}>
             Dashboard
-            <span className={`${REPLAY_MASK_CLASS} max-w-40 truncate text-xs text-ink-weak`}>({displayName})</span>
+            <span className={`${PERSONAL_DATA_CLASS} max-w-40 truncate text-xs text-ink-weak`}>({displayName})</span>
           </Link>
           <button onClick={() => void signOut()} className={actionClass}>Sign out</button>
         </>
