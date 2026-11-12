@@ -423,9 +423,14 @@ function buildProfileOrError(body: CreateOrgBody, path: HostingPath): EntryProfi
  *   'member' — any member (admin or member) may proceed (read access)
  *   'admin'  — only admins may proceed (mutations: update/suspend/reactivate/delete)
  *
- * On failure it responds 403 and short-circuits the route. `checkMembership`
- * returns the full membership row, so the role comes from the same lookup that
- * confirms membership — no extra query.
+ * On failure it short-circuits the route: 404 NOT_FOUND when no org holds the
+ * org_id (never created, or deleted — deletion is a hard DELETE that cascades
+ * the memberships), 403 FORBIDDEN when it exists and the caller is not a member
+ * or lacks the role. The 404 reveals nothing new: any signed-in user can
+ * already learn whether an org_id is taken from GET /api/v1/availability.
+ * `checkMembership` returns the full membership row, so the role comes from the
+ * same lookup that confirms membership; the existence lookup runs only on the
+ * refusal path.
  */
 function requireOrgRole(level: 'member' | 'admin') {
   return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
@@ -434,6 +439,10 @@ function requireOrgRole(level: 'member' | 'admin') {
 
     const membership = await checkMembership(userId, org_id);
     if (!membership) {
+      if (!(await findByOrgId(org_id))) {
+        reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${org_id}" not found` });
+        return;
+      }
       reply.code(403).send({ error: 'FORBIDDEN', detail: 'you are not a member of this organization' });
       return;
     }
