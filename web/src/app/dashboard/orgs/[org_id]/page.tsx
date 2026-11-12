@@ -8,6 +8,7 @@ import { FieldLabel } from "@/components/FieldLabel";
 import { PageShell } from "@/components/PageShell";
 import { StatusBadge } from "@/components/StatusBadge";
 import { JsonPanel } from "@/components/JsonPanel";
+import { ListingStatus } from "@/components/ListingStatus";
 import { DomainVerification } from "@/components/DomainVerification";
 import { CardCheckSummary, CardFormatField } from "@/components/CardFormat";
 import { cardFormatOf, type CardFormat } from "@/lib/cardFormats";
@@ -327,6 +328,8 @@ export default function OrgDetailPage() {
             the previous domain's DNS record. */}
         {org.domain && <DomainVerification key={org.domain} org={org} onVerified={setOrg} />}
 
+        <ListingStatus org={org} />
+
         {editing ? (
           <fieldset disabled={saving} className="min-w-0 rounded-3xl border border-black/10 bg-white p-5 shadow-sm space-y-4">
             <div>
@@ -439,7 +442,6 @@ export default function OrgDetailPage() {
                   ))}
                 </div>
               )}
-              <div><span className="font-medium">TTL:</span> {org.ttl_seconds}s</div>
               <div><span className="font-medium">Created:</span> {formatTimestamp(org.created_at)}</div>
             </div>
             {storedCardFormat && <CardCheckSummary format={storedCardFormat} check={org.card_validation} />}
