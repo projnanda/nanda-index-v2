@@ -753,7 +753,7 @@ POST &lt;agentCard.url&gt;/run
   display_name:    <span class="k">string</span>;
   domain:          <span class="k">string</span> | <span class="k">null</span>;   <span class="c">// null for personal (email-identity) entries</span>
   registry_url:    <span class="k">string</span> | <span class="k">null</span>;   <span class="c">// catalog URL or agent card URL</span>
-  ttl_seconds:     <span class="k">number</span>;          <span class="c">// 3600–604800 (default 86400 / 24h)</span>
+  ttl_seconds:     <span class="k">number</span>;          <span class="c">// resolver cache hint, 3600–604800 (default 86400 / 24h); not an expiry</span>
   status:          <span class="s">"pending"</span> | <span class="s">"active"</span> | <span class="s">"suspended"</span>;
   email_verified:  <span class="k">boolean</span>;
   domain_verified: <span class="k">boolean</span>;         <span class="c">// activation is gated on this</span>

@@ -16,7 +16,7 @@ import {
   lookupDomainToken,
   CHALLENGE_TTL_MS,
 } from '../services/domainVerification.js';
-import { INDEX_RECORD_SCHEMA, TRUST_MANIFEST_SCHEMA, EXTENSIONS_SCHEMA } from '../types/api/index-record.js';
+import { INDEX_RECORD_SCHEMA, TRUST_MANIFEST_SCHEMA, EXTENSIONS_SCHEMA, TTL_SECONDS_DESCRIPTION } from '../types/api/index-record.js';
 import { apiErrorSchema } from '../types/api/common.js';
 import type { JwtPayload } from '../plugins/jwt.js';
 import type { TrustManifest } from '../types/api/index-record.js';
@@ -56,7 +56,7 @@ const UPDATE_ORG_BODY_SCHEMA = {
     domain:           { type: 'string', maxLength: 255 },
     registry_url:     { type: 'string', maxLength: 512 },
     media_type:       { type: 'string', enum: JSON_CARD_MEDIA_TYPES, description: 'Correct an existing A2A or MCP card declaration. Rechecks the submitted registry_url, or the stored URL when omitted, and preserves identity verification.' },
-    ttl_seconds:      { type: 'integer', minimum: 3600, maximum: 604800 },
+    ttl_seconds:      { type: 'integer', minimum: 3600, maximum: 604800, description: TTL_SECONDS_DESCRIPTION },
     description:      { type: 'string', maxLength: 1000 },
     tags:             { type: 'array', items: { type: 'string', maxLength: 64 }, maxItems: 20 },
     version:          { type: 'string', maxLength: 64 },
@@ -500,7 +500,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
           domain:        { type: 'string', maxLength: 255 },
           contact_email: { type: 'string', format: 'email' },
           registry_url:  { type: 'string', maxLength: 512 },
-          ttl_seconds:   { type: 'integer', minimum: 3600, maximum: 604800 },
+          ttl_seconds:   { type: 'integer', minimum: 3600, maximum: 604800, description: TTL_SECONDS_DESCRIPTION },
           identifier:    { type: 'string', maxLength: 512 },
           media_type:    { type: 'string', maxLength: 128, enum: ALLOWED_MEDIA_TYPES },
           description:   { type: 'string', maxLength: 1000 },

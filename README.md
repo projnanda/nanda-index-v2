@@ -323,7 +323,7 @@ interface IndexRecord {
   display_name:   string;
   domain:         string | null;   // null for personal (email-identity) entries
   registry_url:   string | null;   // catalog URL or agent card URL
-  ttl_seconds:    number;
+  ttl_seconds:    number;          // resolver cache hint (3600–604800, default 86400); listings never expire
   status:         "pending" | "active" | "suspended";
   email_verified: boolean;
   created_at:     string;
