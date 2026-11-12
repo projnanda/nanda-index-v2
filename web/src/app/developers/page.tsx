@@ -108,7 +108,7 @@ curl -X POST "${api}/api/v1/verify-email" -H "Content-Type: application/json" -d
   },
   {
     title: "Update",
-    body: "Editable fields: display_name, domain, registry_url, ttl_seconds (3600 to 604800), description, tags, version, publisher.displayName, extensions, entry_data and trust_manifest. Anything else, including org_id, contact_email, hosting_path and the identifier, answers 400 UNKNOWN_FIELDS. Changing the domain means proving the new one.",
+    body: "Editable fields: display_name, domain, registry_url, ttl_seconds (3600 to 604800; how long resolvers may cache the record, not an expiry: listings do not expire), description, tags, version, publisher.displayName, extensions, entry_data and trust_manifest. Anything else, including org_id, contact_email, hosting_path and the identifier, answers 400 UNKNOWN_FIELDS. Changing the domain means proving the new one.",
     command: (api: string) => `curl -X PUT "${api}/api/v1/orgs/acme" -H "Authorization: Bearer $TOKEN" \\
   -H "Content-Type: application/json" -d '{"description":"Acme agents and tools.","ttl_seconds":21600}'
 # 200 {... the updated record ...}`,

@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi from '@fastify/swagger-ui';
 import { CARD_VALIDATION_REQUIREMENTS } from '../services/cardValidation.js';
+import { TTL_SECONDS_DESCRIPTION } from '../types/api/index-record.js';
 
 /**
  * Generates an OpenAPI 3 spec from the JSON schemas already declared on
@@ -22,6 +23,7 @@ export async function registerSwagger(fastify: FastifyInstance): Promise<void> {
         description:
           'GARR v2 — NANDA Index Server. Stores IndexRecords pointing to Registry Servers. ' +
           'Registry Servers store AgentRecords with card_url links to A2A cards.\n\n' +
+          '### ttl_seconds\n\n' + TTL_SECONDS_DESCRIPTION + '\n\n' +
           '### Card validation and media type corrections\n\n' + CARD_VALIDATION_REQUIREMENTS,
         version: '2.0.0',
       },
