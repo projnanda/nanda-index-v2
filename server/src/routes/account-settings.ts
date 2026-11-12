@@ -37,6 +37,33 @@ const errorResponses = {
 };
 const currentPasswordSchema = { type: 'string', minLength: 1, maxLength: 128 } as const;
 
+/**
+ * The body schema leaves both proofs optional because which one applies depends
+ * on the account, and Fastify strips unknown properties, so `{ password }`
+ * arrives as no proof at all. Name the missing field (400) rather than letting
+ * it fall through to "the current password is incorrect" (403) or count as a
+ * failed password attempt.
+ */
+function requireDeletionProof(
+  user: User,
+  body: { current_password?: string; deletion_code?: string },
+): void {
+  if (user.passwordHash && !body.current_password)
+    throw missingField('current_password', 'accounts that sign in with a password confirm deletion with it');
+  if (!user.passwordHash && !body.deletion_code)
+    throw missingField('deletion_code', 'request a deletion code by email and send it here');
+}
+
+function missingField(field: string, hint: string): AccountSettingsError {
+  return new AccountSettingsError(
+    400,
+    'FST_ERR_VALIDATION',
+    `body must have required property '${field}'; ${hint}`,
+    undefined,
+    field,
+  );
+}
+
 export async function registerAccountSettingsRoutes(app: FastifyInstance): Promise<void> {
   const config = buildConfig();
   const passwords = createPasswordHasher(config.auth.maxConcurrentHashes);
@@ -81,6 +108,7 @@ export async function registerAccountSettingsRoutes(app: FastifyInstance): Promi
       .send({
         error: error.code,
         detail: error.message,
+        ...(error.field && { field: error.field }),
         ...(error.organizations && {
           organizations: error.organizations.map((org) => ({
             org_id: org.orgId,
@@ -295,6 +323,7 @@ export async function registerAccountSettingsRoutes(app: FastifyInstance): Promi
     async (request, reply) => {
       try {
         const user = await account(request);
+        requireDeletionProof(user, request.body);
         if (user.passwordHash) await verifyPassword(request, user, request.body.current_password);
         await deleteAccount(user.id, version(request), {
           ...(user.passwordHash && { verifiedPasswordHash: user.passwordHash }),
