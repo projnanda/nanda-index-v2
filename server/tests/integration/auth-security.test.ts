@@ -104,21 +104,36 @@ describe('auth security hardening', () => {
       expect(await failureCount(email, ATTACKER_IP)).toBe(0);
     });
 
-    it('backs off exponentially when failures continue after a lock expires', async () => {
+    it('starts with a short lock, then doubles it when failures continue after it expires', async () => {
       const email = 'lockout-backoff@example.com';
       await resetUser(email);
 
       for (let i = 0; i < 3; i++) await login(app, email, 'wrong-password', ATTACKER_IP);
       const first = await lockSeconds(email, ATTACKER_IP);
-      expect(first).toBeGreaterThan(14 * 60);
-      expect(first).toBeLessThanOrEqual(15 * 60);
+      expect(first).toBeGreaterThan(50);
+      expect(first).toBeLessThanOrEqual(60);
 
       await getSql()`UPDATE login_failures SET locked_until = NOW() - INTERVAL '1 second' WHERE email = ${email}`;
       expect((await login(app, email, 'wrong-password', ATTACKER_IP)).statusCode).toBe(401);
 
       const second = await lockSeconds(email, ATTACKER_IP);
-      expect(second).toBeGreaterThan(29 * 60);
-      expect(second).toBeLessThanOrEqual(30 * 60);
+      expect(second).toBeGreaterThan(110);
+      expect(second).toBeLessThanOrEqual(120);
+    });
+
+    it('never locks longer than AUTH_LOCKOUT_MINUTES however long the streak gets', async () => {
+      const email = 'lockout-backoff-cap@example.com';
+      await resetUser(email);
+
+      for (let i = 0; i < 3; i++) await login(app, email, 'wrong-password', ATTACKER_IP);
+      for (let i = 0; i < 6; i++) {
+        await getSql()`UPDATE login_failures SET locked_until = NOW() - INTERVAL '1 second' WHERE email = ${email}`;
+        expect((await login(app, email, 'wrong-password', ATTACKER_IP)).statusCode).toBe(401);
+      }
+
+      const capped = await lockSeconds(email, ATTACKER_IP);
+      expect(capped).toBeGreaterThan(14 * 60);
+      expect(capped).toBeLessThanOrEqual(15 * 60);
     });
 
     it('resets the failure counter on a successful login', async () => {

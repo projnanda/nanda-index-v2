@@ -75,7 +75,10 @@ export interface AuthConfig {
   readonly rateLimitWindow: string;
   /** Failed logins before an account is temporarily locked. */
   readonly maxLoginAttempts: number;
-  /** How long an account stays locked after hitting the threshold. */
+  /** Length of the first lock after hitting the threshold; each further
+   *  failure in the streak doubles it, up to lockoutMinutes. */
+  readonly initialLockoutMinutes: number;
+  /** Longest a lock may last (and the flat account-wide lock length). */
   readonly lockoutMinutes: number;
   /** Failed logins for one email, from every network together, before each
    *  further attempt waits out a lock of lockoutMinutes. */
@@ -306,6 +309,9 @@ export function buildConfig(): Config {
       rateLimitWindow: optionalEnv('AUTH_RATE_LIMIT_WINDOW', '1 minute'),
       maxLoginAttempts: parsePositiveInt(
         'AUTH_MAX_LOGIN_ATTEMPTS', optionalEnv('AUTH_MAX_LOGIN_ATTEMPTS', '5'),
+      ),
+      initialLockoutMinutes: parsePositiveInt(
+        'AUTH_INITIAL_LOCKOUT_MINUTES', optionalEnv('AUTH_INITIAL_LOCKOUT_MINUTES', '1'),
       ),
       lockoutMinutes: parsePositiveInt(
         'AUTH_LOCKOUT_MINUTES', optionalEnv('AUTH_LOCKOUT_MINUTES', '15'),

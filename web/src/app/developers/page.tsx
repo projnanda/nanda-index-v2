@@ -126,7 +126,7 @@ curl -X DELETE "${api}/api/v1/orgs/acme" -H "Authorization: Bearer $TOKEN"
 const RATE_LIMITS = [
   { routes: "Public reads: /api/v1/index, /api/v1/index/:org_id, /api/v1/search, /api/v1/resolve, GET /api/ard/agents, POST /api/ard/explore", limit: "120 requests per minute per IP address, counted separately for each route" },
   { routes: "Agentic search: /api/v1/agentic-search, /api/ard/search", limit: "30 requests per minute per IP address, counted separately for each route" },
-  { routes: "Account routes: /auth/register, /auth/login, password reset, account verification, resend", limit: "10 requests per minute per IP address, counted separately for each route; sign-in locks for 15 minutes after 5 failed attempts for one email from one network, doubling on further failures" },
+  { routes: "Account routes: /auth/register, /auth/login, password reset, account verification, resend", limit: "10 requests per minute per IP address, counted separately for each route; sign-in locks for 1 minute after 5 failed attempts for one email from one network, doubling on further failures up to 15 minutes" },
   { routes: "Entry writes: POST /api/v1/orgs, PUT /api/v1/orgs/:org_id, POST /api/v1/orgs/:org_id/claim", limit: "30 requests per hour per IP address, counted separately for each route; claim also has a 30 per hour budget per account across all IP addresses" },
 ];
 
