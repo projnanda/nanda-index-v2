@@ -186,6 +186,7 @@ describe('buildConfig', () => {
     delete process.env.AUTH_MAX_LOGIN_ATTEMPTS;
     delete process.env.AUTH_LOCKOUT_MINUTES;
     delete process.env.AUTH_RESET_TOKEN_TTL_MINUTES;
+    delete process.env.AUTH_UNVERIFIED_RECLAIM_HOURS;
 
     const cfg = buildConfig();
     expect(cfg.cookie.secret).toBe('dev-cookie-secret-change-in-production');
@@ -194,6 +195,7 @@ describe('buildConfig', () => {
     expect(cfg.auth.maxLoginAttempts).toBe(5);
     expect(cfg.auth.lockoutMinutes).toBe(15);
     expect(cfg.auth.resetTokenTtlMinutes).toBe(60);
+    expect(cfg.auth.unverifiedReclaimHours).toBe(48);
   });
 
   it('throttles domain verification per IP by default, overridable from env', () => {

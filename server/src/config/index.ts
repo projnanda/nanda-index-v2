@@ -82,6 +82,9 @@ export interface AuthConfig {
   readonly maxAccountLoginAttempts: number;
   /** Lifetime of a password-reset token. */
   readonly resetTokenTtlMinutes: number;
+  /** Hours an unverified email/password account holds its email. After
+   *  that, registering the same email replaces it (see passwordRegistration.ts). */
+  readonly unverifiedReclaimHours: number;
   /**
    * Password hashes allowed to run at once (see lib/password.ts). Defaults to
    * one less than the CPU count, leaving a core for the event loop. Set it
@@ -312,6 +315,9 @@ export function buildConfig(): Config {
       ),
       resetTokenTtlMinutes: parsePositiveInt(
         'AUTH_RESET_TOKEN_TTL_MINUTES', optionalEnv('AUTH_RESET_TOKEN_TTL_MINUTES', '60'),
+      ),
+      unverifiedReclaimHours: parsePositiveInt(
+        'AUTH_UNVERIFIED_RECLAIM_HOURS', optionalEnv('AUTH_UNVERIFIED_RECLAIM_HOURS', '48'),
       ),
       maxConcurrentHashes: parsePositiveInt(
         'AUTH_MAX_CONCURRENT_HASHES',
