@@ -131,7 +131,7 @@ const RATE_LIMITS = [
 ];
 
 const ERROR_CODES = [
-  { status: 400, code: "FST_ERR_VALIDATION", meaning: "The request does not match the route's schema; detail names the field." },
+  { status: 400, code: "FST_ERR_VALIDATION", meaning: "The request does not match the route's schema; detail describes the problem and field names the property (for example current_password). Unknown body properties are dropped, so a misspelled name reads as a missing one." },
   { status: 400, code: "VALIDATION", meaning: "A registration rule was broken: domain, hosting_path, registry_url or identifier." },
   { status: 400, code: "UNKNOWN_FIELDS", meaning: "PUT named a field that cannot be changed; detail lists the editable ones." },
   { status: 400, code: "PAYLOAD_TOO_LARGE", meaning: "extensions, entry_data or trust_manifest is over 16 KB or nested deeper than 6 levels." },
@@ -143,14 +143,15 @@ const ERROR_CODES = [
   { status: 400, code: "invalid_locator", meaning: "The resolve locator is not a valid urn:air: identifier." },
   { status: 401, code: "UNAUTHORIZED", meaning: "Wrong email or password on sign-in, or no valid session token (missing, expired or revoked); sign in again." },
   { status: 403, code: "ACCOUNT_NOT_VERIFIED", meaning: "Confirm your account email before writing to the index." },
-  { status: 403, code: "FORBIDDEN", meaning: "You are not an admin of that entry." },
+  { status: 403, code: "FORBIDDEN", meaning: "The entry exists but you are not a member of it, or not an admin of it." },
   { status: 403, code: "MODERATED", meaning: "An index operator took the entry down; it cannot be suspended or reactivated by its owner (edits and deletion still work)." },
-  { status: 404, code: "NOT_FOUND", meaning: "No such entry, or it is not live (index reads), or the verify-email token was not found, already used or expired." },
-  { status: 404, code: "not_found", meaning: "Resolve found no live entry for the locator." },
+  { status: 404, code: "NOT_FOUND", meaning: "No such entry (never registered, or deleted), or it is not live (index reads), or the verify-email token was not found, already used or expired." },
+  { status: 404, code: "not_found", meaning: "Resolve found no live entry for the locator, or no API route matches the method and path." },
   { status: 409, code: "CONFLICT", meaning: "Already taken: the account email, an org_id held by another registration, or a domain or personal identity that another registration has already proven." },
   { status: 409, code: "ALREADY_VERIFIED", meaning: "The contact email is already verified." },
   { status: 409, code: "NOT_SUSPENDED", meaning: "Only a suspended entry can be reactivated." },
   { status: 422, code: "query_too_short", meaning: "Search needs at least 2 non-space characters." },
+  { status: 429, code: "RATE_LIMITED", meaning: "Over a route's request limit; wait for Retry-After seconds." },
   { status: 429, code: "TOO_MANY_ATTEMPTS", meaning: "Sign-in is locked for this email and network after repeated failures." },
   { status: 429, code: "TOO_MANY_UNVERIFIED", meaning: "You already hold 5 unverified registrations from the last 48 hours; verify or delete one first." },
   { status: 429, code: "RESEND_COOLDOWN", meaning: "A verification email was sent less than 60 seconds ago." },
@@ -233,7 +234,8 @@ export default function DevelopersPage() {
             Defaults for this index; an operator can change them. Each limited route has its own per-IP budget,
             so hitting the limit on one route does not block the others. Over a route limit, the API answers 429 with a
             Retry-After header (seconds) and X-RateLimit-Limit, X-RateLimit-Remaining and X-RateLimit-Reset
-            headers; the body&apos;s error text says how long to wait, for example &quot;retry in 1 minute&quot;.
+            headers; the body&apos;s error is RATE_LIMITED and its detail says how long to wait, for example
+            &quot;retry in 1 minute&quot;.
             The 429 codes below that the application raises itself (TOO_MANY_ATTEMPTS, TOO_MANY_UNVERIFIED,
             RESEND_COOLDOWN) carry no Retry-After header; the claim route&apos;s per-account limit does. Request
             bodies are capped at 64 KB (413).
@@ -260,6 +262,7 @@ export default function DevelopersPage() {
           <h2 id="dev-errors" className={h2Class}>Errors</h2>
           <p>
             Errors are JSON: <code className="font-mono text-ink">{`{ "error": "<code>", "detail": "<message>" }`}</code>.
+            Validation errors add <code className="font-mono text-ink">field</code>, the property the error is about.
             Server failures answer 500 with <code className="font-mono text-ink">internal_server_error</code> and no
             detail. Codes are quoted exactly as the API sends them.
           </p>

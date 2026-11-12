@@ -1,7 +1,19 @@
 import type { FastifyInstance } from 'fastify';
-import rateLimit from '@fastify/rate-limit';
+import rateLimit, { type errorResponseBuilderContext } from '@fastify/rate-limit';
 import { buildConfig } from '../config/index.js';
 import { clientNetworkKey } from '../lib/clientNetwork.js';
+
+/**
+ * The plugin's default error has no `code`, so its message landed in the
+ * envelope's `error` field. Give it a stable code; the wait stays in `detail`.
+ * Thrown (not sent) so the global error handler shapes and logs it.
+ */
+function rateLimitedError(_request: unknown, context: errorResponseBuilderContext): Error {
+  return Object.assign(new Error(`Rate limit exceeded, retry in ${context.after}`), {
+    statusCode: context.statusCode,
+    code: 'RATE_LIMITED',
+  });
+}
 
 /**
  * Registers @fastify/rate-limit in opt-in mode (`global: false`).
@@ -22,6 +34,7 @@ export async function registerRateLimit(fastify: FastifyInstance): Promise<void>
     max: config.auth.rateLimitMax,
     timeWindow: config.auth.rateLimitWindow,
     keyGenerator: (request) => clientNetworkKey(request.ip),
+    errorResponseBuilder: rateLimitedError,
   });
 }
 

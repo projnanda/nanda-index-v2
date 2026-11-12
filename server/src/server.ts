@@ -3,6 +3,7 @@ import Fastify, { type FastifyServerOptions } from 'fastify';
 import { buildConfig } from './config/index.js';
 import { serializeRequest } from './lib/logRedaction.js';
 import { trustPrivateProxyHops } from './lib/trustProxy.js';
+import { formatSchemaErrors } from './lib/validationErrors.js';
 import { registerErrorHandler } from './plugins/errorHandler.js';
 import { registerHelmet } from './plugins/helmet.js';
 import { registerCors } from './plugins/cors.js';
@@ -78,6 +79,9 @@ export async function buildServer(options: BuildServerOptions = {}) {
     // 16 KB (lib/jsonLimits.ts). 64 KB leaves headroom for that and rejects
     // anything bigger before it is parsed (Fastify's default is 1 MB).
     bodyLimit: MAX_BODY_BYTES,
+    // Same text as Fastify's default, except a `const` failure names
+    // the expected value ("must be equal to \"DELETE\"").
+    schemaErrorFormatter: formatSchemaErrors,
     // Behind Caddy, request.ip must be the visitor's address, not the proxy's —
     // otherwise every per-IP rate limit is one bucket shared by all users.
     // Only the configured number of hops, each on a private network, is

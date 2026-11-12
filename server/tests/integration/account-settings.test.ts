@@ -295,6 +295,46 @@ describe('account deletion and ownership', () => {
     expect(await findUserById(owner.row.id)).not.toBeNull();
   });
 
+  it('names current_password when a password account sends a differently named field', async () => {
+    const owner = await user();
+    const res = await remove(owner.token, { password: PASSWORD });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({
+      error: 'FST_ERR_VALIDATION',
+      field: 'current_password',
+      detail: expect.stringContaining("'current_password'"),
+    });
+    expect(await findUserById(owner.row.id)).not.toBeNull();
+    // A request that never named a password is not a failed password attempt.
+    expect(
+      (await sql()`SELECT 1 FROM login_failures WHERE email = ${owner.row.email}`).length,
+    ).toBe(0);
+  });
+
+  it('names confirmation and its expected value when the confirmation is wrong', async () => {
+    const owner = await user();
+    const res = await remove(owner.token, { current_password: PASSWORD, confirmation: 'yes' });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({
+      error: 'FST_ERR_VALIDATION',
+      field: 'confirmation',
+      detail: 'body/confirmation must be equal to "DELETE"',
+    });
+  });
+
+  it('names current_password when change-password receives a differently named field', async () => {
+    const owner = await user();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/change-password',
+      headers: auth(owner.token),
+      payload: { password: PASSWORD, new_password: NEW_PASSWORD },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: 'FST_ERR_VALIDATION', field: 'current_password' });
+    expect((await findUserById(owner.row.id))?.passwordHash).toBe(hash);
+  });
+
   it('blocks sole administrators and returns entry links without deleting any account data', async () => {
     const owner = await user();
     const member = await user();
@@ -413,7 +453,9 @@ describe('OAuth deletion proofs', () => {
     const owner = await user('google');
     const other = await user('google');
     const code = await deletionCode(owner.token);
-    expect((await remove(owner.token, {})).statusCode).toBe(403);
+    const missing = await remove(owner.token, {});
+    expect(missing.statusCode).toBe(400);
+    expect(missing.json()).toMatchObject({ error: 'FST_ERR_VALIDATION', field: 'deletion_code' });
     expect((await remove(other.token, { deletion_code: code })).statusCode).toBe(403);
     expect((await remove(owner.token, { deletion_code: code })).statusCode).toBe(204);
     expect(

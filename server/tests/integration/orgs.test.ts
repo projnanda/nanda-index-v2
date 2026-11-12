@@ -428,4 +428,54 @@ describe('Org management routes — protected CRUD', () => {
     });
     expect(deleted.statusCode).toBe(204);
   });
+
+  // ── Missing vs forbidden ──────────────────────────────────────────────────
+  // An org_id with no row (never created, or hard-deleted) is 404; an existing
+  // org the caller does not belong to stays 403. Any signed-in user can already
+  // learn whether an org_id is taken from GET /api/v1/availability, so the 404
+  // reveals nothing new.
+
+  it('returns 404 NOT_FOUND to the former admin after the org is deleted', async () => {
+    await createOrg(fastify, token, 'org-gone');
+    const deleted = await fastify.inject({
+      method: 'DELETE', url: '/api/v1/orgs/org-gone',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(deleted.statusCode).toBe(204);
+
+    const res = await fastify.inject({
+      method: 'GET', url: '/api/v1/orgs/org-gone',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toEqual({ error: 'NOT_FOUND', detail: 'org "org-gone" not found' });
+  });
+
+  it.each([
+    ['GET',    '/api/v1/orgs/org-never-existed', undefined],
+    ['PUT',    '/api/v1/orgs/org-never-existed', { registry_url: 'https://nope.example.com/r' }],
+    ['DELETE', '/api/v1/orgs/org-never-existed', undefined],
+    ['POST',   '/api/v1/orgs/org-never-existed/domain-challenge', undefined],
+    ['POST',   '/api/v1/orgs/org-never-existed/verify-domain', undefined],
+    ['POST',   '/api/v1/orgs/org-never-existed/resend-verification', undefined],
+    ['DELETE', '/api/v1/orgs/org-never-existed/suspend', undefined],
+    ['POST',   '/api/v1/orgs/org-never-existed/reactivate', undefined],
+  ] as const)('returns 404 NOT_FOUND for %s %s on an org that does not exist', async (method, url, payload) => {
+    const res = await fastify.inject({
+      method, url, payload,
+      headers: { authorization: `Bearer ${memberToken}` },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toMatchObject({ error: 'NOT_FOUND' });
+  });
+
+  it('still returns 403 to a non-member reading an org that exists', async () => {
+    await createOrg(fastify, token, 'org-not-mine');
+    const res = await fastify.inject({
+      method: 'GET', url: '/api/v1/orgs/org-not-mine',
+      headers: { authorization: `Bearer ${memberToken}` },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual({ error: 'FORBIDDEN', detail: 'you are not a member of this organization' });
+  });
 });

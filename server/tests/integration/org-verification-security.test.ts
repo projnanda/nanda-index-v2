@@ -193,7 +193,7 @@ describe('organization verification security', () => {
     const blocked = await verify(entry.token, limited, '198.51.100.1', { 'x-forwarded-for': '203.0.113.3' });
     expect(blocked.statusCode).toBe(429);
     expect(Number(blocked.headers['retry-after'])).toBeGreaterThan(0);
-    expect(blocked.json().error).toMatch(/rate limit exceeded/i);
+    expect(blocked.json()).toMatchObject({ error: 'RATE_LIMITED', detail: expect.stringMatching(/rate limit exceeded/i) });
     expect(blocked.body).not.toContain(entry.token);
     expect(await row(entry.orgId)).toMatchObject({ verifyToken: digest(entry.token), emailVerified: false });
     expect((await verify(entry.token, limited, '198.51.100.2')).statusCode).toBe(200);
