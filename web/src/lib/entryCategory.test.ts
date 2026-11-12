@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { IndexCatalogEntry } from "@/lib/nanda-types";
-import { categoryOf } from "./entryCategory";
+import { categoryOf, tallyCategories } from "./entryCategory";
 
 const A2A = "application/a2a-agent-card+json";
 const MCP = "application/mcp-server-card+json";
@@ -107,5 +107,21 @@ describe("categoryOf", () => {
 
   it("returns null for an unrecognised media type", () => {
     expect(categoryOf(entry("application/json"))).toBeNull();
+  });
+});
+
+describe("tallyCategories", () => {
+  it("counts each category and keeps uncategorised entries in the total", () => {
+    const tally = tallyCategories(["enterprise", "personal", "enterprise", null]);
+    expect(tally.counts.get("enterprise")).toBe(2);
+    expect(tally.counts.get("personal")).toBe(1);
+    expect(tally.counts.get("skill")).toBeUndefined();
+    expect(tally).toMatchObject({ uncategorised: 1, total: 4 });
+  });
+
+  it("returns an empty tally for an empty index", () => {
+    const tally = tallyCategories([]);
+    expect(tally.counts.size).toBe(0);
+    expect(tally).toMatchObject({ uncategorised: 0, total: 0 });
   });
 });
