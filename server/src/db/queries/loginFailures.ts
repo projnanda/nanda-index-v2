@@ -19,21 +19,27 @@ import type { Config } from '../../config/index.js';
  * have themselves failed for the email in the current streak: each attacker
  * network gets at most one more guess per lock period, while a clean network
  * (the owner's) can still sign in, so the lock cannot shut the owner out.
- * It never grows past lockoutMinutes, and a password reset clears it. The
+ *
+ * Per-network locks back off progressively: the first lock is short
+ * (initialLockoutMinutes, so a user who mistypes a few times waits about a
+ * minute), and each further failure within the streak doubles it, up to
+ * lockoutMinutes. The account-wide lock is a flat lockoutMinutes and
+ * never grows past it, and a password reset clears it. The
  * signed-in password re-check in account settings ignores it entirely.
  */
 
 /** login_failures.ip_address of the row counting every network together. */
 const ACCOUNT_WIDE = '*';
-/** Longest a single lock may last, however long the failure streak gets. */
-const MAX_LOCKOUT_MINUTES = 24 * 60;
 /** A streak with no new failure for this long starts over from zero. */
 const STREAK_RESET_HOURS = 24;
 
 export interface LockoutPolicy {
   /** Failures (per email+network) before the first lock. */
   readonly maxAttempts: number;
-  /** Length of the first lock; each further failure doubles it. */
+  /** Length of the first per-network lock; each further failure in the
+   *  streak doubles it. */
+  readonly initialLockoutMinutes: number;
+  /** Longest a per-network lock may last, and the account-wide lock length. */
   readonly lockoutMinutes: number;
   /** Failures (per email, all networks) before each attempt waits out a
    *  lock of lockoutMinutes. */
@@ -42,21 +48,23 @@ export interface LockoutPolicy {
 
 /**
  * Lock length after `failedCount` failures: none below the threshold, then
- * lockoutMinutes doubling with every failure past it, capped at a day.
+ * initialLockoutMinutes doubling with every failure past it, capped at
+ * lockoutMinutes.
  */
 export function lockoutMinutesFor(
   failedCount: number,
-  policy: Pick<LockoutPolicy, 'maxAttempts' | 'lockoutMinutes'>,
+  policy: Pick<LockoutPolicy, 'maxAttempts' | 'initialLockoutMinutes' | 'lockoutMinutes'>,
 ): number {
   if (failedCount < policy.maxAttempts) return 0;
   const doublings = failedCount - policy.maxAttempts;
-  return Math.min(policy.lockoutMinutes * 2 ** doublings, MAX_LOCKOUT_MINUTES);
+  return Math.min(policy.initialLockoutMinutes * 2 ** doublings, policy.lockoutMinutes);
 }
 
 /** The lockout policy configured for password checks (AUTH_* env). */
 export function lockoutPolicy(config: Pick<Config, 'auth'>): LockoutPolicy {
   return {
     maxAttempts:        config.auth.maxLoginAttempts,
+    initialLockoutMinutes: config.auth.initialLockoutMinutes,
     lockoutMinutes:     config.auth.lockoutMinutes,
     maxAccountAttempts: config.auth.maxAccountLoginAttempts,
   };
@@ -104,7 +112,8 @@ export async function loginLock(
  * `accountWide: false`) the account-wide counter, and past their thresholds
  * sets their locks. Callers reject while locked, so the counts only grow
  * between locks — each per-network lock that expires and is followed by
- * another failure doubles.
+ * another failure doubles, up to lockoutMinutes. A streak with no failure
+ * for STREAK_RESET_HOURS starts over at the short first lock.
  */
 export async function recordLoginFailure(
   email: string,

@@ -16,7 +16,7 @@ import {
   lookupDomainToken,
   CHALLENGE_TTL_MS,
 } from '../services/domainVerification.js';
-import { INDEX_RECORD_SCHEMA, TRUST_MANIFEST_SCHEMA, EXTENSIONS_SCHEMA } from '../types/api/index-record.js';
+import { INDEX_RECORD_SCHEMA, TRUST_MANIFEST_SCHEMA, EXTENSIONS_SCHEMA, TTL_SECONDS_DESCRIPTION } from '../types/api/index-record.js';
 import { apiErrorSchema } from '../types/api/common.js';
 import type { JwtPayload } from '../plugins/jwt.js';
 import type { TrustManifest } from '../types/api/index-record.js';
@@ -56,7 +56,7 @@ const UPDATE_ORG_BODY_SCHEMA = {
     domain:           { type: 'string', maxLength: 255 },
     registry_url:     { type: 'string', maxLength: 512 },
     media_type:       { type: 'string', enum: JSON_CARD_MEDIA_TYPES, description: 'Correct an existing A2A or MCP card declaration. Rechecks the submitted registry_url, or the stored URL when omitted, and preserves identity verification.' },
-    ttl_seconds:      { type: 'integer', minimum: 3600, maximum: 604800 },
+    ttl_seconds:      { type: 'integer', minimum: 3600, maximum: 604800, description: TTL_SECONDS_DESCRIPTION },
     description:      { type: 'string', maxLength: 1000 },
     tags:             { type: 'array', items: { type: 'string', maxLength: 64 }, maxItems: 20 },
     version:          { type: 'string', maxLength: 64 },
@@ -423,9 +423,14 @@ function buildProfileOrError(body: CreateOrgBody, path: HostingPath): EntryProfi
  *   'member' — any member (admin or member) may proceed (read access)
  *   'admin'  — only admins may proceed (mutations: update/suspend/reactivate/delete)
  *
- * On failure it responds 403 and short-circuits the route. `checkMembership`
- * returns the full membership row, so the role comes from the same lookup that
- * confirms membership — no extra query.
+ * On failure it short-circuits the route: 404 NOT_FOUND when no org holds the
+ * org_id (never created, or deleted — deletion is a hard DELETE that cascades
+ * the memberships), 403 FORBIDDEN when it exists and the caller is not a member
+ * or lacks the role. The 404 reveals nothing new: any signed-in user can
+ * already learn whether an org_id is taken from GET /api/v1/availability.
+ * `checkMembership` returns the full membership row, so the role comes from the
+ * same lookup that confirms membership; the existence lookup runs only on the
+ * refusal path.
  */
 function requireOrgRole(level: 'member' | 'admin') {
   return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
@@ -434,6 +439,10 @@ function requireOrgRole(level: 'member' | 'admin') {
 
     const membership = await checkMembership(userId, org_id);
     if (!membership) {
+      if (!(await findByOrgId(org_id))) {
+        reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${org_id}" not found` });
+        return;
+      }
       reply.code(403).send({ error: 'FORBIDDEN', detail: 'you are not a member of this organization' });
       return;
     }
@@ -491,7 +500,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
           domain:        { type: 'string', maxLength: 255 },
           contact_email: { type: 'string', format: 'email' },
           registry_url:  { type: 'string', maxLength: 512 },
-          ttl_seconds:   { type: 'integer', minimum: 3600, maximum: 604800 },
+          ttl_seconds:   { type: 'integer', minimum: 3600, maximum: 604800, description: TTL_SECONDS_DESCRIPTION },
           identifier:    { type: 'string', maxLength: 512 },
           media_type:    { type: 'string', maxLength: 128, enum: ALLOWED_MEDIA_TYPES },
           description:   { type: 'string', maxLength: 1000 },

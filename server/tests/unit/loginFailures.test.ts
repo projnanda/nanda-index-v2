@@ -1,24 +1,30 @@
 import { describe, it, expect } from 'vitest';
 import { lockoutMinutesFor, accountLockoutMinutesFor } from '../../src/db/queries/loginFailures.js';
 
-const policy = { maxAttempts: 5, lockoutMinutes: 15 };
+const policy = { maxAttempts: 5, initialLockoutMinutes: 1, lockoutMinutes: 15 };
 
 describe('lockoutMinutesFor', () => {
   it('does not lock below the threshold', () => {
     expect(lockoutMinutesFor(4, policy)).toBe(0);
   });
 
-  it('locks for the base window at the threshold', () => {
-    expect(lockoutMinutesFor(5, policy)).toBe(15);
+  it('starts with a short lock at the threshold', () => {
+    expect(lockoutMinutesFor(5, policy)).toBe(1);
   });
 
-  it('doubles the window for each failure past the threshold', () => {
-    expect(lockoutMinutesFor(6, policy)).toBe(30);
-    expect(lockoutMinutesFor(7, policy)).toBe(60);
+  it('doubles the lock for each failure past the threshold', () => {
+    expect(lockoutMinutesFor(6, policy)).toBe(2);
+    expect(lockoutMinutesFor(7, policy)).toBe(4);
+    expect(lockoutMinutesFor(8, policy)).toBe(8);
   });
 
-  it('caps a single lock at one day', () => {
-    expect(lockoutMinutesFor(50, policy)).toBe(24 * 60);
+  it('caps a single lock at lockoutMinutes', () => {
+    expect(lockoutMinutesFor(9, policy)).toBe(15);
+    expect(lockoutMinutesFor(500, policy)).toBe(15);
+  });
+
+  it('never starts above the cap', () => {
+    expect(lockoutMinutesFor(5, { ...policy, initialLockoutMinutes: 30 })).toBe(15);
   });
 });
 

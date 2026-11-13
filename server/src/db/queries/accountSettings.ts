@@ -13,6 +13,8 @@ export class AccountSettingsError extends Error {
     public code: string,
     message: string,
     public organizations?: DeletionBlocker[],
+    /** The request field a 400 is about, sent as the envelope's `field`. */
+    public field?: string,
   ) {
     super(message);
   }

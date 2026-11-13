@@ -3,7 +3,6 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import {
   upsertUser,
   findUserByEmail,
-  createUserWithPassword,
   wasJustCreated,
   type User,
 } from '../db/queries/users.js';
@@ -21,6 +20,7 @@ import {
   completePasswordReset,
   hashResetToken,
 } from '../db/queries/passwordResetTokens.js';
+import { registerPasswordAccount } from '../db/queries/passwordRegistration.js';
 import { issueAccountVerifyToken } from '../db/queries/accountVerification.js';
 import {
   createLoginExchangeCode,
@@ -305,14 +305,20 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
       // avoid while sign-up returns a session straight away: it cannot hand
       // out a session for someone else's account, and a fake 201 would break
       // the client. The per-IP rate limit on this route bounds probing, and
-      // the dashboard stays locked until the email is verified.
-      const existing = await findUserByEmail(email);
-      if (existing) {
+      // the dashboard stays locked until the email is verified. An unverified
+      // password account stops holding its email after a grace window and is
+      // replaced here instead (see passwordRegistration.ts), so registering
+      // someone else's address cannot lock its owner out for good.
+      const passwordHash = await passwords.hash(password);
+      const user = await registerPasswordAccount({
+        email,
+        passwordHash,
+        displayName: display_name ?? null,
+        reclaimAfterHours: config.auth.unverifiedReclaimHours,
+      });
+      if (!user) {
         return reply.code(409).send({ error: 'CONFLICT', detail: 'email already registered' });
       }
-
-      const passwordHash = await passwords.hash(password);
-      const user = await createUserWithPassword(email, passwordHash, display_name ?? null);
       fastify.analytics.capture('user_signed_up', { method: 'email' });
 
       // The session is returned even though the email is unverified, so the

@@ -8,9 +8,10 @@ import { ExploreActions } from "@/components/ExploreActions";
 import type { IndexCatalogEntry, TrustManifest } from "@/lib/nanda-types";
 import { identityStatus, entryCardStatus } from "@/lib/entryStatus";
 import { entryOps } from "@/lib/air";
-import { categoryOf, type Category } from "@/lib/entryCategory";
+import { categoryOf, tallyCategories, type Category, type CategoryTally } from "@/lib/entryCategory";
 
 const PAGE_SIZE = 9;
+const SKELETON_TILES = 6;
 
 // ── Categories ──────────────────────────────────────────────────────────────
 // Which category an entry belongs to is decided in lib/entryCategory.ts.
@@ -128,13 +129,11 @@ export default function ExplorePage() {
     setPage(1);
   }
 
-  const categoryCounts = useMemo(() => {
-    const counts = new Map<Category, number>();
-    rows.forEach((r) => {
-      if (r.category) counts.set(r.category, (counts.get(r.category) ?? 0) + 1);
-    });
-    return counts;
-  }, [rows]);
+  // Null until the index has loaded, so the sidebar never shows a "0" it hasn't counted.
+  const categoryTally = useMemo<CategoryTally | null>(
+    () => (loading || error ? null : tallyCategories(rows.map((r) => r.category))),
+    [rows, loading, error],
+  );
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -182,7 +181,7 @@ export default function ExplorePage() {
             setPage(1);
           }}
           categoryFilters={categoryFilters}
-          categoryCounts={categoryCounts}
+          categoryTally={categoryTally}
           onToggleCategory={toggleCategory}
           onClear={() => {
             setCategoryFilters(new Set());
@@ -193,14 +192,7 @@ export default function ExplorePage() {
 
         <div className="flex-1 min-w-0">
           {loading ? (
-            <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="bg-surface-strong h-[200px] rounded-card animate-pulse"
-                />
-              ))}
-            </div>
+            <LoadingSkeleton />
           ) : error ? (
             <div className="flex items-center justify-center py-12">
               <div className="bg-surface-light rounded-card border border-line/70 shadow-card p-6 max-w-md text-center">
@@ -255,7 +247,7 @@ function FilterSidebar(props: {
   search: string;
   onSearchChange: (v: string) => void;
   categoryFilters: Set<Category>;
-  categoryCounts: Map<Category, number>;
+  categoryTally: CategoryTally | null;
   onToggleCategory: (v: Category) => void;
   onClear: () => void;
 }) {
@@ -286,25 +278,16 @@ function FilterSidebar(props: {
           </span>
           <div className="space-y-1.5">
             {CATEGORIES.map(({ key, label }) => (
-              <label
+              <CategoryOption
                 key={key}
-                className="flex items-center justify-between gap-2 text-sm text-ink cursor-pointer"
-              >
-                <span className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={props.categoryFilters.has(key)}
-                    onChange={() => props.onToggleCategory(key)}
-                    className="rounded border-line-strong text-brand-500 focus:ring-brand-500"
-                  />
-                  <span>{label}</span>
-                </span>
-                <span className="text-xs text-ink-weak tabular-nums">
-                  {props.categoryCounts.get(key) ?? 0}
-                </span>
-              </label>
+                label={label}
+                count={props.categoryTally ? props.categoryTally.counts.get(key) ?? 0 : null}
+                checked={props.categoryFilters.has(key)}
+                onToggle={() => props.onToggleCategory(key)}
+              />
             ))}
           </div>
+          {props.categoryTally && <CategorySummary tally={props.categoryTally} />}
         </div>
 
         {hasActive && (
@@ -317,6 +300,66 @@ function FilterSidebar(props: {
         )}
       </div>
     </aside>
+  );
+}
+
+interface CategoryOptionProps {
+  label: string;
+  /** Null until the index has loaded. */
+  count: number | null;
+  checked: boolean;
+  onToggle: () => void;
+}
+
+function CategoryOption({ label, count, checked, onToggle }: CategoryOptionProps) {
+  const isEmpty = count === 0;
+  return (
+    <label
+      data-category
+      data-empty={String(isEmpty)}
+      className={`flex items-center justify-between gap-2 text-sm cursor-pointer ${
+        isEmpty ? "text-ink-weak opacity-60" : "text-ink"
+      }`}
+    >
+      <span className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={onToggle}
+          className="rounded border-line-strong text-brand-500 focus:ring-brand-500"
+        />
+        <span data-category-label>{label}</span>
+      </span>
+      <span data-category-count className="text-xs text-ink-weak tabular-nums">
+        {count === null ? "–" : count}
+      </span>
+    </label>
+  );
+}
+
+function CategorySummary({ tally }: { tally: CategoryTally }) {
+  const noun = tally.total === 1 ? "entry" : "entries";
+  return (
+    <p data-category-summary className="mt-2 text-xs text-ink-weak">
+      {tally.total} {noun}
+      {tally.uncategorised > 0 && ` · ${tally.uncategorised} uncategorised`}
+    </p>
+  );
+}
+
+function LoadingSkeleton() {
+  return (
+    <div role="status" aria-busy="true" aria-live="polite">
+      <span className="sr-only">Loading entries…</span>
+      <noscript>
+        <p className="text-sm text-ink-medium">Explore needs JavaScript to load index entries.</p>
+      </noscript>
+      <div aria-hidden="true" className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+        {Array.from({ length: SKELETON_TILES }, (_, i) => (
+          <div key={i} className="bg-surface-strong h-[200px] rounded-card animate-pulse" />
+        ))}
+      </div>
+    </div>
   );
 }
 
