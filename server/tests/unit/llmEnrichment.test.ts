@@ -69,6 +69,53 @@ describe('generateRepresentativeQueries', () => {
     expect(result).toEqual(['good query']);
   });
 
+  it('cuts an over-long query to 120 characters', async () => {
+    const stuffed = Array.from({ length: 200 }, (_, i) => `keyword${i}`).join(' ');
+    createMock.mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify({ queries: [stuffed, 'find a bakery'] }) } }],
+    });
+
+    const result = await generateRepresentativeQueries(
+      { displayName: 'X', description: null, tags: [] },
+      cfg(),
+    );
+    expect(result).toEqual([stuffed.slice(0, 120).trimEnd(), 'find a bakery']);
+    expect(result[0]!.length).toBeLessThanOrEqual(120);
+  });
+
+  it('does not cut through a surrogate pair at the limit', async () => {
+    const bread = '\u{1F35E}';
+    createMock.mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify({ queries: ['a'.repeat(119) + bread + bread] }) } }],
+    });
+
+    const result = await generateRepresentativeQueries(
+      { displayName: 'X', description: null, tags: [] },
+      cfg(),
+    );
+    expect(result).toEqual(['a'.repeat(119) + bread]);
+  });
+
+  it('replaces control characters and collapses whitespace', async () => {
+    createMock.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              queries: ['help me\n\nbake\tbread\u0000​ now', '\u0000​\n'],
+            }),
+          },
+        },
+      ],
+    });
+
+    const result = await generateRepresentativeQueries(
+      { displayName: 'X', description: null, tags: [] },
+      cfg(),
+    );
+    expect(result).toEqual(['help me bake bread now']);
+  });
+
   it('returns [] when the response content is not valid JSON', async () => {
     createMock.mockResolvedValue({ choices: [{ message: { content: 'not json' } }] });
     const result = await generateRepresentativeQueries(
