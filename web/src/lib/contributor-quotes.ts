@@ -49,8 +49,8 @@ export const CONTRIBUTOR_QUOTES: readonly ContributorQuote[] = [
   },
   {
     text:
-      "As we move toward an Internet where AI agents act on behalf of people and organizations, discovery and trust will become foundational challenges. NandaIndex offers a evolving approach to connecting independent agent discovery systems, and I'm encouraged to see the community exploring how these pieces can work together through open standards.",
-    attribution: "Ken Adler, Technical Fellow, Agentic IAM (individual contributor)",
+      "As we move toward an Internet where AI agents act on behalf of people and organizations, discovery and trust will become foundational challenges. NandaIndex offers an evolving approach to connecting independent agent discovery systems, and I'm encouraged to see the community exploring how these pieces can work together through open standards.",
+    attribution: "Ken Adler, Technical Fellow, Agentic IAM, Indeed",
     logo: null,
   },
   {
