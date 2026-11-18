@@ -229,3 +229,29 @@ describe("scrubNetworkRequest", () => {
     expect(scrubNetworkRequest(pageUrl)).toEqual({ name: "https://nandaindex.org/auth/callback" });
   });
 });
+
+// Explore, Discover and Resolve keep personal values in the link fragment.
+describe("shareable discovery links", () => {
+  const fragment = "#urn=urn%3Aair%3Ahost39.org%3Apersonal%3Aada%40example.org";
+
+  it("strips a personal fragment from events and autocaptured links", () => {
+    const scrubbed = scrubEvent(event({ properties: {
+      $current_url: `https://nandaindex.org/resolve${fragment}`,
+      $elements: [{ attr__href: `/resolve${fragment}` }],
+      $el_text: "urn:air:host39.org:personal:ada@example.org",
+    } }), "/resolve");
+    expect(scrubbed?.properties.$current_url).toBe("https://nandaindex.org/resolve");
+    expect(scrubbed?.properties.$elements).toEqual([{ attr__href: "/resolve" }]);
+    expect(JSON.stringify(scrubbed)).not.toContain("ada");
+  });
+
+  it("strips a view's query string from events, replay links and network records", () => {
+    const view = "?owner=personal&q=cake&entry=urn%3Aair%3Aexample.org%3Aagent%3Atea";
+    const scrubbed = scrubEvent(event({ properties: { $current_url: `https://nandaindex.org/explore${view}` } }), "/explore");
+    expect(scrubbed?.properties.$current_url).toBe("https://nandaindex.org/explore");
+    expect(scrubReplayAttribute("href", `/resolve${fragment}`)).toBe("/resolve");
+    expect(scrubReplayAttribute("href", `/explore${view}`)).toBe("/explore");
+    expect(scrubNetworkRequest({ name: `https://nandaindex.org/resolve${fragment}` } as CapturedNetworkRequest).name)
+      .toBe("https://nandaindex.org/resolve");
+  });
+});

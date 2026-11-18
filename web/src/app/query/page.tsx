@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageShell } from "@/components/PageShell";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -13,11 +13,25 @@ import type { IndexRecord, IndexCatalogEntry, SearchResponse, ResolveResponse, C
 import { entryOps } from "@/lib/air";
 import { noUrlExplanation } from "@/lib/svcbPointer";
 import { PERSONAL_DATA_CLASS } from "@/lib/analyticsPrivacy";
+import { LINK_PRIVACY_NOTE, isPersonalValue, navigateDiscovery, useDiscoveryLocation } from "@/lib/discoveryLocation";
 
 // urn:air:<publisher-FQDN>:<namespace...>:<short-name>
 const URN_RE = /^urn:air:[^:\s]+(:[^:\s]+){2,}$/i;
 
 type Mode = "org_id" | "search" | "agentic";
+
+// Agentic search is hidden for now; add "agentic" back first here to re-enable it.
+const VISIBLE_MODES: readonly Mode[] = ["search", "org_id"];
+const DEFAULT_MODE: Mode = "search";
+
+/**
+ * The mode a link asks for. A mode the page does not offer falls back to the
+ * default, so a shared link cannot run a search the page itself has hidden.
+ */
+function modeFromLink(value: string | undefined): Mode {
+  return VISIBLE_MODES.find((mode) => mode === value) ?? DEFAULT_MODE;
+}
+
 type ResultKind = "single" | "search" | "resolve" | "agentic";
 
 interface QueryResult {
@@ -81,68 +95,101 @@ function IndexRecordCard({ org }: { org: IndexRecord }) {
   );
 }
 
+/** Hop 2 of a URN query: follow the index entry to its registry, or explain why that is not possible. */
+async function followRegistry(indexData: ResolveResponse): Promise<Pick<QueryResult, "agent" | "catalog" | "agentError">> {
+  if (!indexData.entry.url) return { agent: null, agentError: noUrlExplanation(indexData.entry) };
+  try {
+    const hop = await fetchRegistryHop(indexData);
+    return hop.kind === "catalog" ? { agent: null, catalog: hop.document } : { agent: hop.entry };
+  } catch (err) {
+    const agentError = err instanceof ApiError
+      ? `Registry returned ${err.status}: ${err.message}`
+      : err instanceof CatalogEntryNotFound
+        ? err.message
+        : "Could not reach the registry server.";
+    return { agent: null, agentError };
+  }
+}
+
+/**
+ * Run one query. `isCurrent` is asked between hops, so a query the visitor has
+ * already navigated away from stops instead of contacting the registry.
+ */
+async function executeQuery(q: string, mode: Mode, isCurrent: () => boolean): Promise<QueryResult | null> {
+  // URN input: hop 1 resolves via NANDA Index, hop 2 fetches the agent from the registry
+  if (URN_RE.test(q)) {
+    const indexData = await resolveAgent(q);
+    if (!isCurrent()) return null;
+    return { kind: "resolve", resolve: indexData, ...(await followRegistry(indexData)) };
+  }
+  if (mode === "org_id") return { kind: "single", single: await getIndexRecord(q) };
+  if (mode === "agentic") return { kind: "agentic", agentic: await agenticSearch(q) };
+  return { kind: "search", search: await searchIndexRecords(q) };
+}
+
+function queryErrorMessage(err: unknown): string {
+  return err instanceof ApiError ? `${err.status}: ${err.message}` : "Query failed. Check your input and try again.";
+}
+
+// The query and mode live in the address bar, so a result survives a reload,
+// follows back and forward, and can be shared as a link.
 export default function QueryPage() {
-  const [mode, setMode] = useState<Mode>("search");
-  const [query, setQuery] = useState("");
+  const { state } = useDiscoveryLocation();
+  const query = (state.locator ?? state.q ?? "").trim();
+  const mode = modeFromLink(state.mode);
+  // Each address gets a fresh view: its own form, result and in-flight request.
+  // The outgoing view's cleanup stops its response from appearing in the new one.
+  return <QueryView key={JSON.stringify([query, mode])} initialQuery={query} initialMode={mode} />;
+}
+
+function QueryView({ initialQuery, initialMode }: { initialQuery: string; initialMode: Mode }) {
+  const [mode, setMode] = useState<Mode>(initialMode);
+  const [query, setQuery] = useState(initialQuery);
   const [result, setResult] = useState<QueryResult | null>(null);
   const [latency, setLatency] = useState<number | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(initialQuery !== "");
   const [error, setError] = useState<string | null>(null);
+  // Bumped to run the same query again.
+  const [attempt, setAttempt] = useState(0);
 
   // Detect whether input looks like a URN, which affects the placeholder and routing
   const isUrn = URN_RE.test(query.trim());
 
-  async function runQuery(e: React.FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    if (!initialQuery) return;
+    let active = true;
+    const started = performance.now();
+    executeQuery(initialQuery, initialMode, () => active)
+      .then((value) => {
+        if (active) setResult(value);
+      })
+      .catch((err: unknown) => {
+        if (active) setError(queryErrorMessage(err));
+      })
+      .finally(() => {
+        if (!active) return;
+        setLatency(Math.round(performance.now() - started));
+        setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [initialQuery, initialMode, attempt]);
+
+  function runQuery(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const q = query.trim();
     if (!q) return;
-
+    const urn = URN_RE.test(q);
+    // A new query changes the address, which mounts a fresh view that runs it.
+    navigateDiscovery({ q: urn ? "" : q, locator: urn ? q : "", mode: mode === DEFAULT_MODE ? "" : mode });
+    if (q !== initialQuery || mode !== initialMode) return;
+    // The same query again: the address has not changed, so run it here.
     setLoading(true);
     setError(null);
     setResult(null);
-    const t0 = performance.now();
-
-    try {
-      // URN input: hop 1 resolves via NANDA Index, hop 2 fetches the agent from the registry
-      if (URN_RE.test(q)) {
-        const indexData = await resolveAgent(q);
-        let agent: CatalogEntry | null = null;
-        let catalog: CatalogDocument | undefined;
-        let agentError: string | undefined;
-        if (!indexData.entry.url) {
-          agentError = noUrlExplanation(indexData.entry);
-        } else {
-          try {
-            const hop = await fetchRegistryHop(indexData);
-            if (hop.kind === "catalog") catalog = hop.document;
-            else agent = hop.entry;
-          } catch (err) {
-            agentError = err instanceof ApiError
-              ? `Registry returned ${err.status}: ${err.message}`
-              : err instanceof CatalogEntryNotFound
-                ? err.message
-                : "Could not reach the registry server.";
-          }
-        }
-        setResult({ kind: "resolve", resolve: indexData, agent, catalog, agentError });
-      } else if (mode === "org_id") {
-        const data = await getIndexRecord(q);
-        setResult({ kind: "single", single: data });
-      } else if (mode === "agentic") {
-        const data = await agenticSearch(q);
-        setResult({ kind: "agentic", agentic: data });
-      } else {
-        const data = await searchIndexRecords(q);
-        setResult({ kind: "search", search: data });
-      }
-      setLatency(Math.round(performance.now() - t0));
-    } catch (err) {
-      if (err instanceof ApiError) setError(`${err.status}: ${err.message}`);
-      else setError("Query failed. Check your input and try again.");
-      setLatency(Math.round(performance.now() - t0));
-    } finally {
-      setLoading(false);
-    }
+    setLatency(null);
+    setAttempt((value) => value + 1);
   }
 
   const placeholder =
@@ -166,8 +213,7 @@ export default function QueryPage() {
         {/* Mode selector, hidden when URN is detected */}
         {!isUrn && (
           <div className="flex flex-wrap gap-2">
-            {/* Agentic search is hidden for now; add "agentic" back first here and as the default mode to re-enable it. */}
-            {(["search", "org_id"] as Mode[]).map((key) => (
+            {VISIBLE_MODES.map((key) => (
               <button
                 key={key}
                 type="button"
@@ -192,6 +238,7 @@ export default function QueryPage() {
 
         <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
           <input
+            aria-label="Discovery query"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={placeholder}
@@ -210,6 +257,8 @@ export default function QueryPage() {
           <p className="text-xs text-slate-400">Latency: {latency} ms</p>
         )}
       </form>
+
+      {isPersonalValue(initialQuery) && <p className="mt-4 text-xs text-slate-600">{LINK_PRIVACY_NOTE}</p>}
 
       <div className="mt-6 space-y-4">
         {error && (

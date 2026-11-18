@@ -505,6 +505,27 @@ and expiry values before starting the old version; users must request new links.
 Excess requests return `429` with `Retry-After` without consuming tokens. Client
 IP selection follows `TRUST_PROXY_HOPS`. GET remains a non-consuming redirect.
 
+## Shareable Discovery Links
+
+The Explore, Discover and Resolve pages keep their view in the address bar, so a view survives a reload, follows the browser's back and forward buttons, and can be shared as a link.
+
+| Page | Parameters |
+|------|------------|
+| Explore | `q` (search text), `owner` and `protocol` (comma-separated selections), `page`, `entry` (the open entry's identifier) |
+| Discover | `q` (keyword or org ID) or `locator` (a URN), `mode` (`org_id`; keyword search is the default) |
+| Resolve | `urn`, and `example` for a hosted demonstration |
+
+Opening a Discover or Resolve link runs its discovery requests straight away. For a URN that includes fetching the registry and card URLs the entry points to, which are hosts chosen by whoever registered the entry. The runtime request on Resolve is never sent until the visitor presses Send. A link cannot select a search mode the page does not offer, and `example` only takes effect together with that demonstration's own identifier.
+
+Email addresses and personal identifiers (`urn:air:<host>:personal:…`) are written to the link fragment (`#`) instead of the query string. Browsers do not send fragments with page requests, so these values stay out of web server and CDN access logs. This is the only protection the fragment gives:
+
+- The value is still in the visitor's browser history and in any link they share.
+- Search and resolution still send it to the API.
+- Other free text typed into a search box (a name or a phone number, for example) stays in the query string.
+- An older link that carries a personal value in its query string is rewritten in the browser, but its first page request has already been logged.
+
+Google Analytics receives only the origin and path. PostHog strips query strings and fragments from event, link, replay and network URLs. Query parameters that are not part of a view, such as campaign tags, are left in place when the view changes.
+
 ## Health Check
 
 ```bash

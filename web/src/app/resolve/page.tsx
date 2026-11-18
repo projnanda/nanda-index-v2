@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { PageShell } from "@/components/PageShell";
 import { ApiError, resolveAgent, fetchRegistryHop, fetchFactsUrl } from "@/lib/nanda-api";
 import { CatalogEntryNotFound, isSingleResourceType, planRegistryHop } from "@/lib/catalogHop";
@@ -10,6 +10,7 @@ import { resolveExamples, type ExampleKind } from "@/lib/resolveExamples";
 import { cn } from "@/lib/utils";
 import { noUrlExplanation } from "@/lib/svcbPointer";
 import { PERSONAL_DATA_CLASS } from "@/lib/analyticsPrivacy";
+import { LINK_PRIVACY_NOTE, isPersonalValue, navigateDiscovery, useDiscoveryLocation } from "@/lib/discoveryLocation";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -106,12 +107,24 @@ function hopError(error: unknown): string {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
+// The identifier lives in the address bar, so a trace survives a reload,
+// follows back and forward, and can be shared as a link. Opening a link runs
+// the discovery hops; the runtime request at hop 4 always waits for Send.
 export default function ResolvePage() {
-  const [locator, setLocator]   = useState("");
+  const { state } = useDiscoveryLocation();
+  const locator = (state.urn ?? "").trim();
+  // A link may ask for a hosted demonstration only by naming both the fixture
+  // and its own identifier. Anything else resolves through the public index.
+  const example = resolveExamples.find((item) => item.kind === state.example && item.identifier === locator)?.kind ?? null;
+  // Each address gets a fresh trace; the outgoing one's cleanup discards its pending hops.
+  return <ResolveTrace key={JSON.stringify([locator, example])} initialLocator={locator} initialExample={example} />;
+}
+
+function ResolveTrace({ initialLocator, initialExample }: { initialLocator: string; initialExample: ExampleKind | null }) {
+  const [locator, setLocator]   = useState(initialLocator);
   const [traceLocator, setTraceLocator] = useState("");
   const [traceExample, setTraceExample] = useState<ExampleKind | null>(null);
   const generation = useRef(0);
-  useEffect(() => () => { generation.current += 1; }, []);
   const [resolving, setResolving] = useState(false);
   const [latency, setLatency]   = useState<number | null>(null);
 
@@ -127,7 +140,17 @@ export default function ResolvePage() {
 
   async function onResolve(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
-    await runResolve(locator);
+    // Submitting a demonstration's identifier unchanged keeps it a demonstration.
+    startResolve(locator, locator.trim() === initialLocator ? initialExample : null);
+  }
+
+  function startResolve(value: string, example: ExampleKind | null = null) {
+    const urn = value.trim();
+    if (!urn) return;
+    // A new identifier changes the address, which mounts a fresh trace that runs it.
+    navigateDiscovery({ urn, example: example ?? "" });
+    // The same identifier again: the address has not changed, so run it here.
+    if (urn === initialLocator && example === initialExample) void runResolve(urn, 1, example);
   }
 
   async function runResolve(value: string, from: 1 | 2 | 3 = 1, example: ExampleKind | null = null) {
@@ -287,6 +310,17 @@ export default function ResolvePage() {
     }
   }
 
+  // Run the trace this address names, and discard its pending hops on the way out.
+  const restoreTrace = useEffectEvent((urn: string, example: ExampleKind | null) => {
+    void runResolve(urn, 1, example);
+  });
+  useEffect(() => {
+    if (initialLocator) restoreTrace(initialLocator, initialExample);
+    return () => {
+      generation.current += 1;
+    };
+  }, [initialLocator, initialExample]);
+
   const anyActive = [hop1, hop2, hop3, hop4].some((h) => h.status !== "idle");
 
   return (
@@ -318,12 +352,13 @@ export default function ResolvePage() {
           {resolveExamples.map((example) => (
             <button key={example.kind} type="button" disabled={resolving || talking}
               className="rounded-full border border-slate-300 px-3 py-1.5 text-sm disabled:opacity-50"
-              onClick={() => { setLocator(example.identifier); void runResolve(example.identifier, 1, example.kind); }}>
+              onClick={() => startResolve(example.identifier, example.kind)}>
               {example.label}
             </button>
           ))}
         </div>
       </div>
+      {isPersonalValue(traceLocator) && <p className="mb-4 text-xs text-slate-600">{LINK_PRIVACY_NOTE}</p>}
       {traceExample && <p role="note" className="mb-4 text-sm text-slate-600">Demonstration trace: the first hop uses a controlled sample index. Results do not describe a registered production entry.</p>}
 
       {latency !== null && (
