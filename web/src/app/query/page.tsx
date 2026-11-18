@@ -12,6 +12,7 @@ import { CatalogEntryNotFound } from "@/lib/catalogHop";
 import type { IndexRecord, IndexCatalogEntry, SearchResponse, ResolveResponse, CatalogEntry, CatalogDocument, AgenticSearchResponse } from "@/lib/nanda-types";
 import { entryOps } from "@/lib/air";
 import { noUrlExplanation } from "@/lib/svcbPointer";
+import { PERSONAL_DATA_CLASS } from "@/lib/analyticsPrivacy";
 
 // urn:air:<publisher-FQDN>:<namespace...>:<short-name>
 const URN_RE = /^urn:air:[^:\s]+(:[^:\s]+){2,}$/i;
@@ -212,7 +213,7 @@ export default function QueryPage() {
 
       <div className="mt-6 space-y-4">
         {error && (
-          <div className="rounded-3xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+          <div className={`${PERSONAL_DATA_CLASS} rounded-3xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700`}>
             {error}
           </div>
         )}
@@ -234,12 +235,12 @@ export default function QueryPage() {
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
               {result.search.count === 0
                 ? "No results"
-                : `${result.search.count} result${result.search.count !== 1 ? "s" : ""} for "${result.search.query}"`}
+                : <>{result.search.count} result{result.search.count !== 1 ? "s" : ""} for &ldquo;<span className={PERSONAL_DATA_CLASS}>{result.search.query}</span>&rdquo;</>}
             </p>
             {result.search.results.length === 0 ? (
               <TableEmptyState
                 title="No organizations found"
-                description={`No active organizations match "${result.search.query}".`}
+                description={<>No active organizations match &ldquo;<span className={PERSONAL_DATA_CLASS}>{result.search.query}</span>&rdquo;.</>}
               />
             ) : (
               <div className="space-y-2">
@@ -248,7 +249,7 @@ export default function QueryPage() {
                 ))}
               </div>
             )}
-            <JsonPanel data={result.search} />
+            <JsonPanel data={result.search} mask />
           </>
         )}
 
@@ -258,7 +259,7 @@ export default function QueryPage() {
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
               {result.agentic.count === 0
                 ? "No candidates"
-                : `${result.agentic.count} candidate${result.agentic.count !== 1 ? "s" : ""} for "${result.agentic.query}"`}
+                : <>{result.agentic.count} candidate{result.agentic.count !== 1 ? "s" : ""} for &ldquo;<span className={PERSONAL_DATA_CLASS}>{result.agentic.query}</span>&rdquo;</>}
               <span className="ml-2 normal-case text-slate-400">
                 ({result.agentic.orgsQueried} org{result.agentic.orgsQueried !== 1 ? "s" : ""} queried, {result.agentic.tookMs}ms)
               </span>
@@ -271,7 +272,7 @@ export default function QueryPage() {
             {result.agentic.candidates.length === 0 ? (
               <TableEmptyState
                 title="No agent candidates found"
-                description={`No active agents match "${result.agentic.query}".`}
+                description={<>No active agents match &ldquo;<span className={PERSONAL_DATA_CLASS}>{result.agentic.query}</span>&rdquo;.</>}
               />
             ) : (
               <div className="space-y-2">
@@ -284,7 +285,7 @@ export default function QueryPage() {
                 ))}
               </div>
             )}
-            <JsonPanel data={result.agentic} />
+            <JsonPanel data={result.agentic} mask />
           </>
         )}
 
@@ -292,7 +293,7 @@ export default function QueryPage() {
         {result?.kind === "resolve" && result.resolve && (
           <>
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
-              Index match: <span className="font-mono normal-case">{result.resolve.locator}</span>
+              Index match: <span className={`${PERSONAL_DATA_CLASS} font-mono normal-case`}>{result.resolve.locator}</span>
             </p>
 
             {/* Hop 1: NANDA Index record */}
@@ -324,7 +325,7 @@ export default function QueryPage() {
                   </ul>
                 </div>
               ) : result.agentError ? (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                <div className={`${PERSONAL_DATA_CLASS} rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700`}>
                   {result.agentError}
                 </div>
               ) : result.agent ? (
@@ -355,7 +356,7 @@ export default function QueryPage() {
               ) : null}
             </div>
 
-            <JsonPanel data={{ hop1_index: result.resolve, hop2: result.catalog ?? result.agent }} />
+            <JsonPanel data={{ hop1_index: result.resolve, hop2: result.catalog ?? result.agent }} mask />
           </>
         )}
 

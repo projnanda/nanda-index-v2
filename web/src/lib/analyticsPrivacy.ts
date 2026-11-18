@@ -34,11 +34,19 @@ const ABSOLUTE_URL = /^https?:\/\//i;
 // Link targets inside an autocaptured `$elements_chain`, e.g. attr__href="/x?token=…".
 const HREF_ATTRIBUTE_QUERY = /(href=")([^"?#]*)[?#][^"]*"/g;
 const HREF_KEYS = new Set(["href", "attr__href"]);
-const EMAIL = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+// Also matches a URL-encoded "@" (%40), apostrophes and non-ASCII letters.
+const EMAIL = /[\p{L}\p{N}._%+'-]+(?:@|%40)[\p{L}\p{N}.-]+\.\p{L}{2,}/giu;
+const MAY_HOLD_EMAIL = /@|%40/i;
+
+/** Replaces every email address, plain or URL-encoded, with "[email]". */
+export function redactEmails(value: string): string {
+  // Cheap pre-check: replay runs this on every text node on the page.
+  return MAY_HOLD_EMAIL.test(value) ? value.replace(EMAIL, "[email]") : value;
+}
 
 function scrubString(value: string, key: string): string {
   const url = HREF_KEYS.has(key) || ABSOLUTE_URL.test(value) ? stripQueryAndHash(value) : value;
-  return url.replace(HREF_ATTRIBUTE_QUERY, '$1$2"').replace(EMAIL, "[email]");
+  return redactEmails(url.replace(HREF_ATTRIBUTE_QUERY, '$1$2"'));
 }
 
 function scrubValue(value: unknown, key = ""): unknown {
@@ -76,21 +84,28 @@ export function scrubEvent(event: CaptureResult | null, pathname: string): Captu
 const LINK_ATTRIBUTES = new Set(["href", "action", "formaction"]);
 
 /**
- * PostHog `session_recording.maskAttributeFn`. Text masking hides text nodes
- * but not attributes, so a link on screen would otherwise reach the replay
- * with its query string (?token=…, a search term) and a mailto: its address.
+ * PostHog `session_recording.maskAttributeFn`. Replay text goes through
+ * `scrubReplayText`, but attributes are recorded separately, so a link on
+ * screen would otherwise reach the replay with its query string (?token=…,
+ * a search term) and a mailto: its address.
  */
 export function scrubReplayAttribute(name: string, value: string): string {
   const target = LINK_ATTRIBUTES.has(name) ? stripQueryAndHash(value) : value;
-  return target.replace(EMAIL, "[email]");
+  return redactEmails(target);
 }
 
-/**
- * PostHog's own marker class for text that a replay must never show. Put it
- * on any element that renders personal data on a public page, such as the
- * signed-in visitor's name.
- */
+/** PostHog's own class for text that a replay must never show. */
 export const REPLAY_MASK_CLASS = "ph-mask";
+const REPLAY_MASK_SELECTOR = `.${REPLAY_MASK_CLASS}`;
+
+/**
+ * Put this on any element on a public page that shows personal data or
+ * repeats what the visitor typed (the signed-in name, a search term in
+ * "results for …", an error quoting the input). `ph-mask` stars its text out
+ * of replays; `ph-sensitive` keeps its text out of autocaptured click events
+ * (`$el_text`), which replay masking does not touch.
+ */
+export const PERSONAL_DATA_CLASS = `${REPLAY_MASK_CLASS} ph-sensitive`;
 
 /**
  * PostHog `session_recording.maskTextFn`. With `maskTextSelector: "*"` the
@@ -99,8 +114,8 @@ export const REPLAY_MASK_CLASS = "ph-mask";
  * text inside a `REPLAY_MASK_CLASS` element is masked in full.
  */
 export function scrubReplayText(text: string, element?: HTMLElement | null): string {
-  if (element?.closest(`.${REPLAY_MASK_CLASS}`)) return text.replace(/\S/g, "*");
-  return text.replace(EMAIL, "[email]");
+  if (element?.closest(REPLAY_MASK_SELECTOR)) return text.replace(/\S/g, "*");
+  return redactEmails(text);
 }
 
 /**

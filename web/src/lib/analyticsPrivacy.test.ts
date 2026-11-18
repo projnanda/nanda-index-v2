@@ -2,8 +2,10 @@
 import { describe, expect, it } from "vitest";
 import type { CaptureResult, CapturedNetworkRequest } from "posthog-js";
 import {
+  PERSONAL_DATA_CLASS,
   REPLAY_MASK_CLASS,
   isPrivatePath,
+  redactEmails,
   scrubEvent,
   scrubNetworkRequest,
   scrubReplayAttribute,
@@ -178,6 +180,33 @@ describe("scrubReplayText", () => {
 
   it("still redacts email addresses when the recorder gives no element", () => {
     expect(scrubReplayText("write to ada@example.org")).toBe("write to [email]");
+    expect(scrubReplayText("write to ada@example.org", null)).toBe("write to [email]");
+  });
+
+  it("stars out an email inside a personal-data element rather than redacting it", () => {
+    const name = element(`<span class="${PERSONAL_DATA_CLASS}">x</span>`, "span");
+    expect(scrubReplayText("ada@example.org", name)).toBe("***************");
+  });
+});
+
+describe("PERSONAL_DATA_CLASS", () => {
+  it("masks replays and keeps the text out of autocaptured clicks", () => {
+    expect(PERSONAL_DATA_CLASS.split(" ")).toEqual([REPLAY_MASK_CLASS, "ph-sensitive"]);
+  });
+});
+
+describe("redactEmails", () => {
+  it.each([
+    ["every address in a string", "ada@example.org, bob@example.net", "[email], [email]"],
+    ["a URL-encoded @, as in a request URL", "/api/v1/resolve?locator=urn%3Aair%3Ahost39.org%3Apersonal%3Aada%40example.org", "/api/v1/resolve?locator=[email]"],
+    ["an apostrophe in the local part", "o'brien@example.org", "[email]"],
+    ["non-ASCII letters", "josé@exämple.de", "[email]"],
+  ])("redacts %s", (_case, input, expected) => {
+    expect(redactEmails(input)).toBe(expected);
+  });
+
+  it("leaves text without an address untouched", () => {
+    expect(redactEmails("urn:air:host39.org:weather · 100% uptime")).toBe("urn:air:host39.org:weather · 100% uptime");
   });
 });
 
