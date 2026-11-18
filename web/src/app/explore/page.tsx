@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { listIndexRecords } from "@/lib/nanda-api";
 import { JsonPanel } from "@/components/JsonPanel";
 import { PageShell } from "@/components/PageShell";
@@ -20,10 +21,23 @@ import {
   type Owner,
   type Protocol,
 } from "@/lib/entryCategory";
+import {
+  LINK_PRIVACY_NOTE,
+  discoveryLink,
+  isPersonalValue,
+  navigateDiscovery,
+  pageNumber,
+  selectedValues,
+  selectionParam,
+  useDiscoveryLocation,
+} from "@/lib/discoveryLocation";
 import { FilterSidebar } from "./FilterSidebar";
 
 const PAGE_SIZE = 9;
 const SKELETON_TILES = 6;
+// Browsers cap how often the address may change, so typing updates it once the
+// typing pauses rather than on every keystroke.
+const SEARCH_URL_DELAY_MS = 300;
 
 // ── Badges ──────────────────────────────────────────────────────────────────
 // Owner and protocol are decided in lib/entryCategory.ts. Each gets its own
@@ -126,11 +140,33 @@ export default function ExplorePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [search, setSearch] = useState("");
-  const [ownerFilters, setOwnerFilters] = useState<ReadonlySet<Owner>>(new Set());
-  const [protocolFilters, setProtocolFilters] = useState<ReadonlySet<Protocol>>(new Set());
-  const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState<IndexCatalogEntry | null>(null);
+  // Filters, page and the open entry live in the address bar, so the view
+  // survives a reload, follows back and forward, and can be shared as a link.
+  const { state } = useDiscoveryLocation();
+  const ownerFilters = useMemo(() => selectedValues(state.owner, OWNER_LABELS), [state.owner]);
+  const protocolFilters = useMemo(() => selectedValues(state.protocol, PROTOCOL_LABELS), [state.protocol]);
+  const page = pageNumber(state.page);
+  const selected = useMemo(
+    () => rows.find((row) => row.identifier === state.entry)?.record ?? null,
+    [rows, state.entry],
+  );
+
+  // The search box filters as you type; the address catches up when typing
+  // pauses. When the address changes underneath (back, forward, a pasted link)
+  // the box takes its value from the address.
+  const urlSearch = state.q ?? "";
+  const [search, setSearch] = useState(urlSearch);
+  const [syncedSearch, setSyncedSearch] = useState(urlSearch);
+  if (urlSearch !== syncedSearch) {
+    setSyncedSearch(urlSearch);
+    setSearch(urlSearch);
+  }
+
+  useEffect(() => {
+    if (search === urlSearch) return;
+    const handle = window.setTimeout(() => navigateDiscovery({ q: search, page: "" }, true), SEARCH_URL_DELAY_MS);
+    return () => window.clearTimeout(handle);
+  }, [search, urlSearch]);
 
   useEffect(() => {
     let cancelled = false;
@@ -152,13 +188,15 @@ export default function ExplorePage() {
   }, []);
 
   function toggleOwner(value: Owner) {
-    setOwnerFilters((previous) => toggled(previous, value));
-    setPage(1);
+    navigateDiscovery({ owner: selectionParam(toggled(ownerFilters, value)), page: "" });
   }
 
   function toggleProtocol(value: Protocol) {
-    setProtocolFilters((previous) => toggled(previous, value));
-    setPage(1);
+    navigateDiscovery({ protocol: selectionParam(toggled(protocolFilters, value)), page: "" });
+  }
+
+  function goToPage(target: number) {
+    navigateDiscovery({ page: target > 1 ? String(target) : "" });
   }
 
   // Each group is counted against the other group's selection, so an option's
@@ -212,9 +250,9 @@ export default function ExplorePage() {
       <div className="flex flex-col lg:flex-row gap-6">
         <FilterSidebar
           search={search}
-          onSearchChange={(v) => {
-            setSearch(v);
-            setPage(1);
+          onSearchChange={(value) => {
+            setSearch(value);
+            if (page !== 1) navigateDiscovery({ page: "" }, true);
           }}
           ownerFilters={ownerFilters}
           protocolFilters={protocolFilters}
@@ -224,10 +262,8 @@ export default function ExplorePage() {
           onToggleOwner={toggleOwner}
           onToggleProtocol={toggleProtocol}
           onClear={() => {
-            setOwnerFilters(new Set());
-            setProtocolFilters(new Set());
             setSearch("");
-            setPage(1);
+            navigateDiscovery({ owner: "", protocol: "", q: "", page: "" });
           }}
         />
 
@@ -262,7 +298,7 @@ export default function ExplorePage() {
                   <RegistryCard
                     key={item.record.identifier}
                     item={item}
-                    onSelect={() => setSelected(item.record)}
+                    onSelect={() => navigateDiscovery({ entry: item.identifier })}
                   />
                 ))}
               </div>
@@ -270,16 +306,23 @@ export default function ExplorePage() {
               <Pagination
                 page={currentPage}
                 total={totalPages}
-                onPrev={() => setPage((p) => Math.max(1, p - 1))}
-                onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
-                onGoto={(p) => setPage(p)}
+                onPrev={() => goToPage(Math.max(1, currentPage - 1))}
+                onNext={() => goToPage(Math.min(totalPages, currentPage + 1))}
+                onGoto={goToPage}
               />
             </>
           )}
         </div>
       </div>
 
-      <DetailDrawer record={selected} onClose={() => setSelected(null)} />
+      {/* A personal entry's note is shown in its drawer, which covers this part of the page. */}
+      {isPersonalValue(urlSearch) && <p className="mt-4 text-xs text-ink-medium">{LINK_PRIVACY_NOTE}</p>}
+      {loaded && state.entry && !selected && (
+        <p role="status" className="mt-4 text-sm text-ink-medium">
+          This shared entry is not available in the index.
+        </p>
+      )}
+      <DetailDrawer record={selected} onClose={() => navigateDiscovery({ entry: "" })} />
     </PageShell>
   );
 }
@@ -424,6 +467,15 @@ function DetailDrawer({ record, onClose }: { record: IndexCatalogEntry | null; o
             </div>
 
             <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+              <Link
+                href={discoveryLink("/resolve", { urn: record.identifier })}
+                className="inline-block rounded-control bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 transition"
+              >
+                Resolve this identifier
+              </Link>
+              {isPersonalValue(record.identifier) && (
+                <p className="text-xs text-ink-medium">{LINK_PRIVACY_NOTE}</p>
+              )}
               <div className="bg-surface-light rounded-card border border-line p-5 shadow-card">
                 {entryOps(record).domain && (
                   <p className="text-sm text-ink-medium break-all">{entryOps(record).domain}</p>

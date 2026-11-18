@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ExplorePage from "./page";
 
@@ -14,6 +15,7 @@ let root: Root;
 
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+  window.history.replaceState(null, "", "/explore");
   api.listIndexRecords.mockReset().mockResolvedValue([]);
   container = document.createElement("div");
   document.body.append(container);
@@ -254,5 +256,176 @@ describe("explore facets", () => {
     expect(container.textContent).toContain("Failed to fetch");
     expect(container.querySelectorAll(".animate-pulse")).toHaveLength(0);
     expect(allCounts()).not.toContain("0");
+  });
+});
+
+// ── Shareable view ──────────────────────────────────────────────────────────
+// Filters, page and the open entry live in the address bar.
+
+const SHARED_PERSONAL = "urn:air:host39.org:personal:ada@example.org";
+
+// Twelve personal MCP entries: two pages of results, one with a personal identifier.
+const SHARED_ENTRIES = Array.from({ length: 12 }, (_, i) => ({
+  ...prodEntry(i === 10 ? SHARED_PERSONAL : `urn:air:example.org:agent:${i}`, MCP, { resolutionRole: "personal-agent-card" }),
+  displayName: `Resource ${i}`,
+}));
+
+const query = () => new URLSearchParams(window.location.search);
+const fragment = () => new URLSearchParams(window.location.hash.slice(1));
+const checkbox = (name: RegExp) => screen.getByRole("checkbox", { name }) as HTMLInputElement;
+const searchBox = () => screen.getByRole("textbox", { name: "Search" }) as HTMLInputElement;
+
+async function renderShared(address = "/explore") {
+  window.history.replaceState(null, "", address);
+  api.listIndexRecords.mockResolvedValue(SHARED_ENTRIES as never);
+  await act(async () => root.render(<ExplorePage />));
+}
+
+describe("explore shareable view", () => {
+  it("restores facets, page and a selected personal entry from a link", async () => {
+    await renderShared(`/explore?owner=personal&protocol=mcp&page=2#entry=${encodeURIComponent(SHARED_PERSONAL)}`);
+    expect(screen.getByRole("dialog", { name: "Resource 10 details" })).toBeTruthy();
+    expect(checkbox(/Personal/).checked).toBe(true);
+    expect(checkbox(/MCP/).checked).toBe(true);
+    expect(checkbox(/SMB/).checked).toBe(false);
+    // Page 2 holds entries 9 to 11.
+    expect(screen.queryByRole("button", { name: "Resource 0" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Resource 9" })).toBeTruthy();
+  });
+
+  it("links the open entry to its trace, keeping a personal identifier in the fragment", async () => {
+    await renderShared(`/explore#entry=${encodeURIComponent(SHARED_PERSONAL)}`);
+    const link = screen.getByRole("link", { name: "Resolve this identifier" }) as HTMLAnchorElement;
+    expect(new URL(link.href).pathname).toBe("/resolve");
+    expect(new URL(link.href).search).toBe("");
+    expect(new URLSearchParams(new URL(link.href).hash.slice(1)).get("urn")).toBe(SHARED_PERSONAL);
+    // The note sits in the drawer, next to the link it describes.
+    expect(screen.getByRole("dialog").textContent).toContain("remain in browser history and shared links");
+  });
+
+  it("links an ordinary entry to its trace through the query string", async () => {
+    await renderShared("/explore?entry=urn%3Aair%3Aexample.org%3Aagent%3A0");
+    const link = screen.getByRole("link", { name: "Resolve this identifier" }) as HTMLAnchorElement;
+    expect(new URL(link.href).searchParams.get("urn")).toBe("urn:air:example.org:agent:0");
+    expect(container.textContent).not.toContain("remain in browser history and shared links");
+  });
+
+  it("ignores filter values the page does not offer", async () => {
+    await renderShared("/explore?owner=nobody,personal&protocol=toString&page=-4");
+    expect(checkbox(/Personal/).checked).toBe(true);
+    expect(container.querySelectorAll("[data-facet-option] input:checked")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Resource 0" })).toBeTruthy();
+  });
+
+  it("puts toggled facets in the address in a stable order, and returns to page 1", async () => {
+    await renderShared("/explore?page=2");
+    fireEvent.click(checkbox(/SMB/));
+    fireEvent.click(checkbox(/Personal/));
+    expect(query().get("owner")).toBe("personal,smb");
+    expect(query().get("page")).toBeNull();
+    fireEvent.click(checkbox(/SMB/));
+    expect(query().get("owner")).toBe("personal");
+  });
+
+  it("restores the previous filters with the back button", async () => {
+    await renderShared();
+    fireEvent.click(checkbox(/Personal/));
+    fireEvent.click(checkbox(/MCP/));
+    act(() => window.history.back());
+    await waitFor(() => expect(checkbox(/MCP/).checked).toBe(false));
+    expect(checkbox(/Personal/).checked).toBe(true);
+  });
+
+  it("opens and closes an entry through the address, so back reopens it", async () => {
+    await renderShared();
+    fireEvent.click(screen.getByRole("button", { name: "Resource 0" }));
+    expect(query().get("entry")).toBe("urn:air:example.org:agent:0");
+    expect(screen.getByRole("dialog", { name: "Resource 0 details" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Close details" }));
+    expect(query().get("entry")).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Resource 0 details" })).toBeNull();
+    act(() => window.history.back());
+    await waitFor(() => expect(screen.getByRole("dialog", { name: "Resource 0 details" })).toBeTruthy());
+  });
+
+  it("keeps the page in the address, omitting it for page 1", async () => {
+    await renderShared();
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(query().get("page")).toBe("2");
+    expect(screen.queryByRole("button", { name: "Resource 0" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+    expect(query().get("page")).toBeNull();
+    act(() => window.history.back());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Resource 9" })).toBeTruthy());
+  });
+
+  it("filters as you type and writes the search to the address once typing pauses", async () => {
+    await renderShared();
+    vi.useFakeTimers();
+    try {
+      const replace = vi.spyOn(window.history, "replaceState");
+      for (const value of ["R", "Re", "Resource 1"]) {
+        fireEvent.change(searchBox(), { target: { value } });
+        act(() => vi.advanceTimersByTime(250));
+      }
+      // The list narrows at once. Browsers cap how often the address may
+      // change, so it is left alone while the typing continues.
+      expect(screen.queryByRole("button", { name: "Resource 0" })).toBeNull();
+      expect(screen.getByRole("button", { name: "Resource 10" })).toBeTruthy();
+      expect(replace).not.toHaveBeenCalled();
+      act(() => vi.advanceTimersByTime(50));
+      expect(query().get("q")).toBe("Resource 1");
+      expect(replace).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    }
+  });
+
+  it("keeps a typed email search in the fragment and explains what that means", async () => {
+    await renderShared();
+    fireEvent.change(searchBox(), { target: { value: "ada@example.org" } });
+    await waitFor(() => expect(fragment().get("q")).toBe("ada@example.org"));
+    expect(query().get("q")).toBeNull();
+    expect(screen.getByRole("button", { name: "Resource 10" })).toBeTruthy();
+    expect(container.textContent).toContain("remain in browser history and shared links");
+  });
+
+  it("returns to page 1 as soon as the search changes", async () => {
+    await renderShared("/explore?page=2");
+    fireEvent.change(searchBox(), { target: { value: "Resource" } });
+    expect(query().get("page")).toBeNull();
+  });
+
+  it("fills the search box from a link and from back navigation", async () => {
+    await renderShared("/explore?q=Resource+1");
+    expect(searchBox().value).toBe("Resource 1");
+    expect(cards()).toHaveLength(3);
+    fireEvent.click(checkbox(/Personal/));
+    act(() => window.history.replaceState(null, "", "/explore"));
+    act(() => window.dispatchEvent(new PopStateEvent("popstate")));
+    await waitFor(() => expect(searchBox().value).toBe(""));
+    expect(cards()).toHaveLength(9);
+  });
+
+  it("clears the address along with the filters", async () => {
+    await renderShared("/explore?owner=personal&protocol=mcp&q=Resource&page=2");
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(window.location.search).toBe("");
+    expect(searchBox().value).toBe("");
+    expect(container.querySelectorAll("[data-facet-option] input:checked")).toHaveLength(0);
+  });
+
+  it("says so when a shared entry is no longer in the index", async () => {
+    await renderShared("/explore?entry=urn%3Aair%3Aexample.org%3Aagent%3Amissing");
+    expect(screen.getByRole("status").textContent).toBe("This shared entry is not available in the index.");
+    expect(screen.queryByRole("link", { name: "Resolve this identifier" })).toBeNull();
+  });
+
+  it("does not report a shared entry as missing while the index is still loading", async () => {
+    window.history.replaceState(null, "", "/explore?entry=urn%3Aair%3Aexample.org%3Aagent%3A0");
+    api.listIndexRecords.mockReturnValue(pending());
+    await act(async () => root.render(<ExplorePage />));
+    expect(container.textContent).not.toContain("not available in the index");
   });
 });
