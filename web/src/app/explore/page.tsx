@@ -8,49 +8,78 @@ import { ExploreActions } from "@/components/ExploreActions";
 import type { IndexCatalogEntry, TrustManifest } from "@/lib/nanda-types";
 import { identityStatus, entryCardStatus } from "@/lib/entryStatus";
 import { entryOps } from "@/lib/air";
-import { categoryOf, tallyCategories, type Category, type CategoryTally } from "@/lib/entryCategory";
+import {
+  OWNER_LABELS,
+  PROTOCOL_LABELS,
+  discoveryMethodOf,
+  inSelection,
+  ownerOf,
+  protocolOf,
+  tallyFacet,
+  type FacetTally,
+  type Owner,
+  type Protocol,
+} from "@/lib/entryCategory";
+import { FilterSidebar } from "./FilterSidebar";
 
 const PAGE_SIZE = 9;
 const SKELETON_TILES = 6;
 
-// ── Categories ──────────────────────────────────────────────────────────────
-// Which category an entry belongs to is decided in lib/entryCategory.ts.
+// ── Badges ──────────────────────────────────────────────────────────────────
+// Owner and protocol are decided in lib/entryCategory.ts. Each gets its own
+// soft, on-brand chip colour so a card reads at a glance.
 
-const CATEGORIES: { key: Category; label: string }[] = [
-  { key: "enterprise", label: "Enterprise" },
-  { key: "dns-svcb", label: "DNS SVCB" },
-  { key: "smb", label: "SMBs" },
-  { key: "personal", label: "Personal" },
-  { key: "mcp", label: "MCPs" },
-  { key: "skill", label: "Skills" },
-];
-
-const CATEGORY_LABEL: Record<Category, string> = {
-  enterprise: "Enterprise",
-  "dns-svcb": "DNS SVCB",
-  smb: "SMB",
-  personal: "Personal",
-  mcp: "MCP",
-  skill: "Skill",
-};
-
-// Soft, on-brand chip colors so each category reads at a glance.
-const CATEGORY_BADGE: Record<Category, string> = {
+const OWNER_BADGE: Record<Owner, string> = {
   enterprise: "bg-brand-200 text-brand-700",
-  "dns-svcb": "bg-accent-teal text-accent-teal-ink",
   smb: "bg-warning-soft text-warning",
   personal: "bg-[#dcf5e6] text-[#0f7a45]",
-  mcp: "bg-[#e7e3fb] text-[#4b3aa6]",
-  skill: "bg-[#fde7ef] text-[#b4185a]",
 };
 
-const FALLBACK_BADGE = "bg-surface-tag text-ink";
+const PROTOCOL_BADGE: Record<Protocol, string> = {
+  a2a: "bg-accent-teal text-accent-teal-ink",
+  mcp: "bg-[#e7e3fb] text-[#4b3aa6]",
+  skill: "bg-[#fde7ef] text-[#b4185a]",
+  catalog: "bg-surface-tag text-ink",
+};
+
+const FALLBACK_BADGE = { label: "Agent", className: "bg-surface-tag text-ink" };
+
+interface Badge {
+  label: string;
+  className: string;
+}
+
+/** The owner badge, then the protocol badge; a generic one when the entry has neither. */
+function badgesFor(owner: Owner | null, protocol: Protocol | null): Badge[] {
+  const badges = [
+    ...(owner ? [{ label: OWNER_LABELS[owner], className: OWNER_BADGE[owner] }] : []),
+    ...(protocol ? [{ label: PROTOCOL_LABELS[protocol], className: PROTOCOL_BADGE[protocol] }] : []),
+  ];
+  return badges.length > 0 ? badges : [FALLBACK_BADGE];
+}
+
+function BadgeList({ badges }: { badges: Badge[] }) {
+  return (
+    <span className="flex flex-wrap justify-end gap-1 flex-shrink-0">
+      {badges.map((badge) => (
+        <span
+          key={badge.label}
+          data-badge
+          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${badge.className}`}
+        >
+          {badge.label}
+        </span>
+      ))}
+    </span>
+  );
+}
 
 type Row = {
   record: IndexCatalogEntry;
-  category: Category | null;
-  badgeLabel: string;
-  badgeClass: string;
+  owner: Owner | null;
+  protocol: Protocol | null;
+  discovery: string;
+  badges: Badge[];
   name: string;
   identifier: string;
   date: string;
@@ -61,7 +90,8 @@ type Row = {
 };
 
 function mapRow(record: IndexCatalogEntry): Row {
-  const category = categoryOf(record);
+  const owner = ownerOf(record);
+  const protocol = protocolOf(record);
   const name = record.displayName || entryOps(record).orgId;
   const date = record.updatedAt ? new Date(record.updatedAt).toLocaleDateString() : "";
   const description = record.description || record.identifier || entryOps(record).domain || "";
@@ -77,9 +107,10 @@ function mapRow(record: IndexCatalogEntry): Row {
 
   return {
     record,
-    category,
-    badgeLabel: category ? CATEGORY_LABEL[category] : "Agent",
-    badgeClass: category ? CATEGORY_BADGE[category] : FALLBACK_BADGE,
+    owner,
+    protocol,
+    discovery: discoveryMethodOf(record),
+    badges: badgesFor(owner, protocol),
     name,
     identifier: record.identifier,
     date,
@@ -96,7 +127,8 @@ export default function ExplorePage() {
   const [error, setError] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
-  const [categoryFilters, setCategoryFilters] = useState<Set<Category>>(new Set());
+  const [ownerFilters, setOwnerFilters] = useState<ReadonlySet<Owner>>(new Set());
+  const [protocolFilters, setProtocolFilters] = useState<ReadonlySet<Protocol>>(new Set());
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<IndexCatalogEntry | null>(null);
 
@@ -119,20 +151,27 @@ export default function ExplorePage() {
     };
   }, []);
 
-  function toggleCategory(value: Category) {
-    setCategoryFilters((prev) => {
-      const next = new Set(prev);
-      if (next.has(value)) next.delete(value);
-      else next.add(value);
-      return next;
-    });
+  function toggleOwner(value: Owner) {
+    setOwnerFilters((previous) => toggled(previous, value));
     setPage(1);
   }
 
-  // Null until the index has loaded, so the sidebar never shows a "0" it hasn't counted.
-  const categoryTally = useMemo<CategoryTally | null>(
-    () => (loading || error ? null : tallyCategories(rows.map((r) => r.category))),
-    [rows, loading, error],
+  function toggleProtocol(value: Protocol) {
+    setProtocolFilters((previous) => toggled(previous, value));
+    setPage(1);
+  }
+
+  // Each group is counted against the other group's selection, so an option's
+  // count is the number of entries ticking it would show. Null until the index
+  // has loaded, so the sidebar never shows a "0" it hasn't counted.
+  const loaded = !loading && !error;
+  const ownerTally = useMemo<FacetTally<Owner> | null>(
+    () => (loaded ? tallyFacet(rows.filter((r) => inSelection(r.protocol, protocolFilters)).map((r) => r.owner)) : null),
+    [rows, loaded, protocolFilters],
+  );
+  const protocolTally = useMemo<FacetTally<Protocol> | null>(
+    () => (loaded ? tallyFacet(rows.filter((r) => inSelection(r.owner, ownerFilters)).map((r) => r.protocol)) : null),
+    [rows, loaded, ownerFilters],
   );
 
   const filtered = useMemo(() => {
@@ -147,12 +186,9 @@ export default function ExplorePage() {
       ) {
         return false;
       }
-      if (categoryFilters.size > 0 && (!r.category || !categoryFilters.has(r.category))) {
-        return false;
-      }
-      return true;
+      return inSelection(r.owner, ownerFilters) && inSelection(r.protocol, protocolFilters);
     });
-  }, [rows, search, categoryFilters]);
+  }, [rows, search, ownerFilters, protocolFilters]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -180,11 +216,16 @@ export default function ExplorePage() {
             setSearch(v);
             setPage(1);
           }}
-          categoryFilters={categoryFilters}
-          categoryTally={categoryTally}
-          onToggleCategory={toggleCategory}
+          ownerFilters={ownerFilters}
+          protocolFilters={protocolFilters}
+          ownerTally={ownerTally}
+          protocolTally={protocolTally}
+          total={loaded ? rows.length : null}
+          onToggleOwner={toggleOwner}
+          onToggleProtocol={toggleProtocol}
           onClear={() => {
-            setCategoryFilters(new Set());
+            setOwnerFilters(new Set());
+            setProtocolFilters(new Set());
             setSearch("");
             setPage(1);
           }}
@@ -243,108 +284,9 @@ export default function ExplorePage() {
   );
 }
 
-function FilterSidebar(props: {
-  search: string;
-  onSearchChange: (v: string) => void;
-  categoryFilters: Set<Category>;
-  categoryTally: CategoryTally | null;
-  onToggleCategory: (v: Category) => void;
-  onClear: () => void;
-}) {
-  const hasActive = props.categoryFilters.size > 0 || props.search.trim().length > 0;
-  return (
-    <aside className="lg:w-64 flex-shrink-0">
-      <div className="bg-surface-strong rounded-card border border-line p-4 space-y-5 sticky top-24">
-        <div>
-          <label
-            htmlFor="search"
-            className="block text-xs font-semibold uppercase tracking-wide text-ink-medium mb-1.5"
-          >
-            Search
-          </label>
-          <input
-            type="text"
-            id="search"
-            placeholder="Filter by name, identifier, or domain..."
-            value={props.search}
-            onChange={(e) => props.onSearchChange(e.target.value)}
-            className="w-full rounded-control border-2 border-line bg-surface-light px-3 py-2 text-sm text-ink placeholder:text-ink-weak focus:outline-none focus:border-brand-500"
-          />
-        </div>
-
-        <div>
-          <span className="block text-xs font-semibold uppercase tracking-wide text-ink-medium mb-2">
-            Category
-          </span>
-          <div className="space-y-1.5">
-            {CATEGORIES.map(({ key, label }) => (
-              <CategoryOption
-                key={key}
-                label={label}
-                count={props.categoryTally ? props.categoryTally.counts.get(key) ?? 0 : null}
-                checked={props.categoryFilters.has(key)}
-                onToggle={() => props.onToggleCategory(key)}
-              />
-            ))}
-          </div>
-          {props.categoryTally && <CategorySummary tally={props.categoryTally} />}
-        </div>
-
-        {hasActive && (
-          <button
-            onClick={props.onClear}
-            className="text-xs font-medium text-brand-600 hover:text-brand-700 transition-colors"
-          >
-            Clear filters
-          </button>
-        )}
-      </div>
-    </aside>
-  );
-}
-
-interface CategoryOptionProps {
-  label: string;
-  /** Null until the index has loaded. */
-  count: number | null;
-  checked: boolean;
-  onToggle: () => void;
-}
-
-function CategoryOption({ label, count, checked, onToggle }: CategoryOptionProps) {
-  const isEmpty = count === 0;
-  return (
-    <label
-      data-category
-      data-empty={String(isEmpty)}
-      className={`flex items-center justify-between gap-2 text-sm cursor-pointer ${
-        isEmpty ? "text-ink-weak opacity-60" : "text-ink"
-      }`}
-    >
-      <span className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={onToggle}
-          className="rounded border-line-strong text-brand-500 focus:ring-brand-500"
-        />
-        <span data-category-label>{label}</span>
-      </span>
-      <span data-category-count className="text-xs text-ink-weak tabular-nums">
-        {count === null ? "–" : count}
-      </span>
-    </label>
-  );
-}
-
-function CategorySummary({ tally }: { tally: CategoryTally }) {
-  const noun = tally.total === 1 ? "entry" : "entries";
-  return (
-    <p data-category-summary className="mt-2 text-xs text-ink-weak">
-      {tally.total} {noun}
-      {tally.uncategorised > 0 && ` · ${tally.uncategorised} uncategorised`}
-    </p>
-  );
+/** A copy of `selected` with `value` added if absent, removed if present. */
+function toggled<T>(selected: ReadonlySet<T>, value: T): ReadonlySet<T> {
+  return selected.has(value) ? new Set([...selected].filter((v) => v !== value)) : new Set([...selected, value]);
 }
 
 function LoadingSkeleton() {
@@ -386,13 +328,10 @@ function RegistryCard({ item, onSelect }: { item: Row; onSelect: () => void }) {
             {item.date ? ` • ${item.date}` : ""}
           </div>
         </div>
-        <span
-          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold flex-shrink-0 ${item.badgeClass}`}
-        >
-          {item.badgeLabel}
-        </span>
+        <BadgeList badges={item.badges} />
       </div>
       <div className="space-y-1 text-xs text-ink-medium">
+        <p>Discovery: {item.discovery}</p>
         <p title="Identity proof checks control of an email address or domain. It does not test the card or runtime.">{item.identity.label}</p>
         <p title={entryCardStatus(item.record).detail}>Card: {entryCardStatus(item.record).label}</p>
         <p>Endpoint: Not checked</p>
@@ -433,9 +372,7 @@ function DetailDrawer({ record, onClose }: { record: IndexCatalogEntry | null; o
     };
   }, [open, onClose]);
 
-  const category = record ? categoryOf(record) : null;
-  const badgeClass = category ? CATEGORY_BADGE[category] : FALLBACK_BADGE;
-  const badgeLabel = category ? CATEGORY_LABEL[category] : "Agent";
+  const badges = record ? badgesFor(ownerOf(record), protocolOf(record)) : [];
 
   return (
     <div
@@ -465,11 +402,7 @@ function DetailDrawer({ record, onClose }: { record: IndexCatalogEntry | null; o
                   <h2 className="font-semibold text-ink-strong text-xl truncate">
                     {record.displayName}
                   </h2>
-                  <span
-                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold flex-shrink-0 ${badgeClass}`}
-                  >
-                    {badgeLabel}
-                  </span>
+                  <BadgeList badges={badges} />
                 </div>
                 <p className="mt-0.5 font-mono text-xs text-ink-weak break-all">
                   {record.identifier}
@@ -535,6 +468,7 @@ function DetailDrawer({ record, onClose }: { record: IndexCatalogEntry | null; o
                       <span className="text-ink-weak">-</span>
                     )}
                   </DetailRow>
+                  <DetailRow label="Discovery">{discoveryMethodOf(record)}</DetailRow>
                   <DetailRow label="TTL">{entryOps(record).ttlSeconds}s</DetailRow>
                   <DetailRow label="Identity">
                     {identityStatus(record).label}. {identityStatus(record).checkedAt ? new Date(identityStatus(record).checkedAt!).toLocaleString(undefined, { timeZoneName: "short" }) : "Verification time not recorded."}
