@@ -1,13 +1,8 @@
 export const navigation = [
   { href: "/", label: "Home" },
   { href: "/contributors", label: "Contributors" },
-  { href: "/explore", label: "Explore" },
-  { href: "/query", label: "Discover" },
   { href: "/how-it-works", label: "How it works" },
-  { href: "/ongoing-projects", label: "Ongoing Projects" },
-  { href: "/resolve", label: "Resolve" },
-  { href: "/login", label: "Login" },
-  { href: "/dashboard", label: "Dashboard" },
+  { href: "/explore", label: "Explore" },
 ];
 
 // Links out to project resources, surfaced on the homepage.
@@ -16,7 +11,7 @@ export const externalLinks = {
   // Self-hosted PDF served by Caddy directly (see Caddyfile).
   // Update the version when replacing the PDF to refresh cached downloads.
   paper: "https://nandaindex.org/paper.pdf?v=069ea34a2038",
-  ietfDraft: "https://datatracker.ietf.org/doc/draft-raskar-agentic-web-federated-resolution/01/",
+  ietfDraft: "https://datatracker.ietf.org/doc/draft-raskar-agentic-web-federated-resolution/02/",
   ardSpec: "https://agenticresourcediscovery.org/",
   host39: "https://host39.org",
 };
@@ -42,7 +37,7 @@ export const architectureLayers = [
     hosted: "Primary resolver via NandaIndex",
   },
   {
-    layer: "Individual",
+    layer: "Personal AI agents",
     function: "No domain needed; identifier anchored to the card host, email as subject account",
     // Illustrative: real personal entries carry a real person's email.
     analogy: "urn:air:host39.org:personal:john@hotmail.com (illustrative)",

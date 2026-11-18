@@ -1,6 +1,20 @@
 import { Resend } from 'resend';
 import { buildConfig } from '../config/index.js';
 
+/** A purpose-specific code entered only on the authenticated Account settings page. */
+export async function sendAccountDeletionEmail(to: string, code: string): Promise<void> {
+  const config = buildConfig();
+  // Never print account-deletion credentials, even in development log mode.
+  if (config.email.smtpUrl === 'log') throw new Error('email delivery is not configured');
+  const { error } = await new Resend(config.email.smtpUrl).emails.send({
+    from: config.email.fromAddress, to,
+    subject: 'Confirm deletion of your NANDA Index account',
+    text: `You requested deletion of your NANDA Index account. Enter this code in Account settings to confirm:\n\n${code}\n\n`
+      + 'The code expires in 15 minutes and can be used once. Do not share it. If you did not request deletion, ignore this email.',
+  });
+  if (error) throw new Error('account deletion email failed');
+}
+
 /** A code, not an action link: only the authenticated requesting account can use it. */
 export async function sendOrgRecoveryEmail(to: string, token: string, orgId: string, claimantEmail: string): Promise<void> {
   const config = buildConfig();

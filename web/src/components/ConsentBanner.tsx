@@ -3,9 +3,13 @@
 import Link from "next/link";
 import { setAnalyticsConsent, useAnalyticsConsent } from "@/lib/consent";
 
-/** Asks once whether analytics may load; hidden after a choice. */
-export function ConsentBanner({ googleAnalytics, posthog }: { googleAnalytics: boolean; posthog: boolean }) {
-  const tools = [googleAnalytics && "Google Analytics", posthog && "PostHog"].filter(Boolean).join(" and ");
+/**
+ * Asks once whether analytics may load; hidden after a choice. PostHog is
+ * described by what it does ("session recordings") rather than named; /privacy,
+ * which the banner links to, names every tool.
+ */
+export function ConsentBanner({ googleAnalytics, recordsSessions }: { googleAnalytics: boolean; recordsSessions: boolean }) {
+  const tools = [googleAnalytics && "Google Analytics", recordsSessions && "session recordings"].filter(Boolean).join(" and ");
 
   // undefined during server rendering, so the banner never flashes for
   // visitors who have already chosen.
@@ -23,7 +27,7 @@ export function ConsentBanner({ googleAnalytics, posthog }: { googleAnalytics: b
       <div className="mx-auto flex max-w-7xl flex-col gap-3 text-sm text-ink-medium sm:flex-row sm:items-center sm:justify-between">
         <p>
           We&apos;d like to use {tools} to understand how the site is used
-          {posthog && ", including recordings of page interactions with all text and inputs masked"}. Nothing
+          {recordsSessions && ", with form inputs and personal details masked in recordings"}. Nothing
           loads unless you accept. <Link href="/privacy" className="underline hover:text-brand-600">Privacy</Link>
         </p>
         <div className="flex shrink-0 gap-2">

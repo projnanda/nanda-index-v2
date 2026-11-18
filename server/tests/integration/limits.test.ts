@@ -58,10 +58,12 @@ describe('Public limits, reserved ids and unverified trust data', () => {
 
     const user = await upsertUser({
       email: 'lim-user@example.com', displayName: null, avatarUrl: null, provider: 'google', providerId: 'lim-user-pid',
+      emailVerified: true,
     });
     userToken = fastify.jwt.sign({ userId: user.id, email: user.email, displayName: null });
     const operator = await upsertUser({
       email: OPERATOR_EMAIL, displayName: null, avatarUrl: null, provider: 'google', providerId: 'lim-operator-pid',
+      emailVerified: true,
     });
     operatorToken = fastify.jwt.sign({ userId: operator.id, email: operator.email, displayName: null });
   });

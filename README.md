@@ -10,6 +10,9 @@ Requester → NANDA Index → Registry / Agent Card Host → Agent Runtime
 
 NANDA Index does not host agents. It tells you where to find them.
 
+The proposed [ownership and signed resolution contract](server/TRUST_CONTRACT.md)
+defines proof freshness, pointer validity, and acceptance tests for #61 and #92.
+
 A worked example of the whole chain lives in [`demo/`](demo/): an agent that
 searches the index for two organisations, follows each to the agent it needs by a
 different route, books a restaurant, and leaves a signed record. MIT-licensed,
@@ -45,7 +48,7 @@ Four registration types:
 
 ## Stack
 
-- **API:** Fastify 5, TypeScript, Node.js 20
+- **API:** Fastify 5, TypeScript, Node.js 22
 - **Database:** PostgreSQL 16, postgres.js v3
 - **Frontend:** Next.js 16, TailwindCSS v4
 - **Auth:** Email/password + Google OAuth + GitHub OAuth, JWT
@@ -124,6 +127,11 @@ OAUTH_CALLBACK_BASE_URL=https://api.nandaindex.org
 SMTP_URL=re_YOUR_RESEND_API_KEY
 EMAIL_FROM=noreply@nandaindex.org
 
+# Get involved form recipients. Keep real addresses in the server environment.
+# A primary recipient is required for form delivery. CC is optional and comma-separated.
+COMMUNITY_CONTACT_EMAIL=
+COMMUNITY_CONTACT_CC=
+
 # URLs
 FRONTEND_URL=https://nandaindex.org
 NEXT_PUBLIC_NANDA_INDEX_API_URL=https://api.nandaindex.org
@@ -139,11 +147,82 @@ NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
 
 DB_MAX_CONNECTIONS=10
 
+# Extension namespaces — "open" (default) or "anchored". See "Extension
+# metadata" below; turning this on is a policy change, not a hardening step.
+EXTENSION_NAMESPACE_POLICY=open
+
 # Concierge demo at https://nandaindex.org/demo — all optional, defaults shown
 DEMO_BASE_URL=https://nandaindex.org/demo
 DEMO_RUN_LIMIT_PER_HOUR=3          # live runs per visitor per hour; 0 = unlimited
 DEMO_PUBLIC_INDEX_URL=https://api.nandaindex.org
 ```
+
+### What the API logs
+
+The API logs one line per request. The URL in that line has its query-string
+values masked unless the parameter is named in `LOGGABLE_QUERY_PARAMS`
+(`server/src/lib/logRedaction.ts`) — so `?q=`, `?locator=`, paging and filter
+values are logged, and anything else reads `name=[redacted]`.
+
+This is an allowlist, not a list of known secrets. Two credentials travel in
+query strings — the org verification token on `GET /api/v1/verify-email` and the
+OAuth authorization code on the provider callbacks — and a route added later
+could introduce a third, so a parameter is logged only once someone has decided
+it is safe to log. If you add a parameter whose value belongs in the log, add
+its name to that list; until then it is masked. Matching is exact, so `TOKEN` is
+masked even though `token` would be too.
+
+Logged URLs are truncated at 512 characters, which is far more than any real
+request and keeps a long query string from bloating the log.
+
+### Extension metadata
+
+`extensions` is where a registrant puts metadata the index itself does not
+model, keyed by reverse-DNS namespace as the AI Catalog format describes. It is
+published verbatim on every public read surface — `/api/v1/index/:org_id`,
+`/api/v1/index`, `/api/v1/search`, `/api/v1/resolve` and `/api/ard/agents` —
+so what goes in reaches every consumer that reads this index.
+
+Two rules apply to what you can put there, beyond the 16 KB and 6-level caps
+in `server/src/lib/jsonLimits.ts`.
+
+**Active-content URLs are rejected, always.** A value that begins
+`javascript:`, `vbscript:`, or `data:` followed by an HTML, SVG or XML media
+type is refused on create and on update, at any depth, including inside
+arrays. Control characters are stripped before the check, because browsers
+strip them too. The list is deliberately short: `data: 2026-01-01` and
+`about: the refunds agent` are ordinary metadata, and `data:image/png` is
+harmless, so none of them is affected. Markup is not filtered — `description`
+and `tags` have always been free text, and escaping belongs to whoever renders
+it.
+
+The `javascript:` and `vbscript:` tests have two tiers, because the scheme
+names are also ordinary English. Under a URL-shaped key — `url`, `uri`,
+`href`, `link`, `src`, or anything ending in one, singular or plural — any
+form is refused: a value there is going to be rendered as a link. Strictness
+is inherited, so everything nested under such a key stays strict, including
+`links: [{ "target": … }]`.
+
+Under any other key one narrow exemption applies, for prose that merely opens
+with a scheme name. After the colon there must be whitespace, and then nothing
+that can call, assign, terminate, quote, subscript or percent-encode. A skills
+list entry of `JavaScript: React`, or `JavaScript: Node.js, Deno & Bun`, is
+left alone; `javascript: alert(1)`, `javascript: %61lert%281%29` and
+`javascript: onerror=alert;throw 1` are all refused. Object keys get the same
+treatment as values.
+
+**Namespaces are open by default.** `EXTENSION_NAMESPACE_POLICY=anchored`
+restricts a registrant to `org.projectnanda` plus the reverse-DNS form of the
+domain they proved (`acme.com` → `com.acme`); an entry with no domain gets
+`org.projectnanda` only. This mirrors how identifiers already work — control
+of a domain is what entitles you to speak for it.
+
+It ships **off**, because it is a policy decision rather than a fix. Of the
+105 entries on the live index, 103 use only `org.projectnanda`, one uses the
+reverse-DNS of its own domain (which `anchored` accepts), and one publishes
+under a namespace belonging to neither — so switching this on would reject
+that registrant's next update. Decide what should happen to entries like it
+before turning it on.
 
 ### Concierge demo (`/demo`)
 
@@ -161,10 +240,11 @@ to exist first:
 curl -s https://nandaindex.org/demo/healthz          # → "did": "did:key:z6Mk…"
 
 # 2. Mint the host's grant for that DID, onto the volume the agent reads.
-#    HOST_SEED is the host's key material: keep it private and keep it, or no
-#    replacement or revocation can ever be minted for this host identity.
-docker compose -f docker-compose.prod.yml --env-file .env.prod exec \
-  -e AGENT_DID='did:key:z6Mk…' -e HOST_SEED='…' demo python tools/mint_grant.py
+#    host.seed is the host's key material (make one with --generate-seed): keep
+#    it private, offline and kept, or no replacement or revocation can ever be
+#    minted for this host identity. It goes in on stdin, never in a command.
+docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T \
+  -e AGENT_DID='did:key:z6Mk…' demo python tools/mint_grant.py --seed-file - < host.seed
 
 # 3. Restart so it loads the grant; it registers itself with the second index
 #    on start and renews every hour after that.
@@ -172,7 +252,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod restart demo
 curl -s https://nandaindex.org/demo/ui/authority     # names the same DID
 ```
 
-The grant expires after 90 days — repeat step 2 with the same `HOST_SEED`.
+The grant expires after 90 days — repeat step 2 with the same `host.seed`.
 Visitors see the last run replayed in the step-by-step player on load; each
 visitor may start `DEMO_RUN_LIMIT_PER_HOUR` live runs, because a live run sends
 real messages to two companies' agents and holds a real table.
@@ -243,7 +323,7 @@ interface IndexRecord {
   display_name:   string;
   domain:         string | null;   // null for personal (email-identity) entries
   registry_url:   string | null;   // catalog URL or agent card URL
-  ttl_seconds:    number;
+  ttl_seconds:    number;          // resolver cache hint (3600–604800, default 86400); listings never expire
   status:         "pending" | "active" | "suspended";
   email_verified: boolean;
   created_at:     string;
@@ -279,7 +359,7 @@ interface IndexRecord {
 | ARD directory | `urn:air:<domain>:registry:<name>` | `urn:air:acme.com:registry:ard` |
 | Personal | `urn:air:host39.org:personal:<email>` | `urn:air:host39.org:personal:john@hotmail.com` |
 
-Identifiers follow ARD's `urn:air:<publisher-FQDN>:<namespace...>:<short-name>`. The publisher FQDN must be the domain you verified; personal identifiers are derived from your verified email. The retired `urn:ai:*` forms are rejected.
+Identifiers follow ARD's `urn:air:<publisher-FQDN>:<namespace...>:<short-name>`. The publisher FQDN must be the domain you verified; personal identifiers are derived from your verified email. Host39 is the naming authority for personal URNs. The personal entry publisher block represents that naming authority, not the card author or hosting provider; the card may be hosted at any public URL. The retired `urn:ai:*` forms are rejected.
 
 ---
 
@@ -408,6 +488,23 @@ curl "https://api.nandaindex.org/api/v1/resolve?locator=urn:air:acme.com:agent:f
 
 ---
 
+## Organization email verification upgrade (migration 020)
+
+`organizations.verify_token` stores a SHA-256 hex digest. Email links and API
+payloads are unchanged. Migration 020 clears outstanding tokens and expiry values;
+ownership proofs, memberships, and publication status are preserved. Old links
+require a new email via `POST /api/v1/orgs/:org_id/resend-verification`.
+
+Stop all old API instances before deploying. The entrypoint applies migration 020
+before serving requests. Mixed versions are unsupported because old code writes
+plaintext tokens. For rollback, stop all instances and clear outstanding tokens
+and expiry values before starting the old version; users must request new links.
+
+`POST /api/v1/verify-email` uses `AUTH_RATE_LIMIT_MAX` (default `10`) and
+`AUTH_RATE_LIMIT_WINDOW` (default `1 minute`) per client IP per API instance.
+Excess requests return `429` with `Retry-After` without consuming tokens. Client
+IP selection follows `TRUST_PROXY_HOPS`. GET remains a non-consuming redirect.
+
 ## Health Check
 
 ```bash
@@ -420,3 +517,34 @@ curl https://api.nandaindex.org/health
 ## License
 
 Apache License 2.0 — see [LICENSE](LICENSE).
+
+### Identity, card checks, and endpoint availability
+
+Email and DNS TXT verification prove control of the registered identity. They do not prove that a card or agent runtime works. Explore labels the proof type explicitly. Proof timestamps are shown when recorded; older email proofs have an unknown timestamp.
+
+Registration and any update that supplies `registry_url` or `media_type` run a server-side check for A2A and MCP JSON cards. The check uses the public-address outbound guard, pinned DNS, no redirects, a three-second deadline, and a 256 KiB response limit. Results and check times are stored in a server-owned database column. Optional fields and protocol behavior are not certified. Unsupported artifacts and A2A custom protocol bindings show Not checked. A failed check warns the registrant and remains visible in Explore; it does not replace the identity activation requirement.
+
+The required discovery fields are also listed in the API reference at `/docs`:
+
+| Format | Required structural checks |
+| --- | --- |
+| Both | A JSON object with nonempty string `name`, `description`, and `version`. |
+| A2A | A nonempty `supportedInterfaces` array with nonempty `protocolBinding` and `protocolVersion` strings and an absolute URL without credentials in each entry. Core `JSONRPC`, `GRPC`, and `HTTP+JSON` bindings require HTTP(S) URLs. If `supportedInterfaces` is absent, a legacy HTTP(S) `url` is required. |
+| A2A | `capabilities` is an object; `defaultInputModes` and `defaultOutputModes` are nonempty arrays of nonempty strings. `skills` is an array, possibly empty. Each skill has nonempty `id`, `name`, and `description`, plus a `tags` array of nonempty strings, possibly empty. |
+| MCP | `$schema` equals `https://static.modelcontextprotocol.io/schemas/v1/server-card.schema.json`. `name` matches `^[a-zA-Z0-9.-]+/[a-zA-Z0-9._-]+$`. If `remotes` is present, it is an array whose entries have `type` of `streamable-http` or `sse` and an HTTP(S) `url` without credentials. |
+
+The API version supporting this correction must be deployed before owners can use it; older deployments reject `media_type` in updates. For an A2A card mistakenly registered as MCP, an authenticated entry administrator with a verified account can correct the declaration:
+
+```http
+PUT /api/v1/orgs/<org_id>
+Authorization: Bearer <entry-administrator-token>
+Content-Type: application/json
+
+{"media_type":"application/a2a-agent-card+json"}
+```
+
+The server uses the stored card URL when `registry_url` is omitted. It saves the type and the new validation result together, preserving the entry's identifier and verification evidence. Check the returned `card_validation.status`; correcting a label does not make a malformed or unreachable card valid. Corrections are limited to existing A2A and MCP card registrations; catalog and other artifact conversions are not supported. The reverse correction uses `application/mcp-server-card+json`.
+
+Re-saving only `registry_url` rechecks the existing declared type and cannot correct a mislabeled record. If the fetched card matches the other supported format, the validation detail identifies the mismatch. Other structural failures name the missing or invalid fields. The server does not silently infer or change the declaration. If another update changes the URL, type, domain, identifier, publisher, or extensions during validation, the API returns `409 CARD_CHANGED`; fetch the current record and retry.
+
+Endpoint availability remains Not checked. The card check never invokes the advertised runtime or follows nested URLs. Apply migration `022_card_checks_and_identity_timestamps.sql` before deploying this version; it leaves historical results unknown.

@@ -1,0 +1,11 @@
+# Keep the build context to what the Dockerfile copies: no secrets, no host
+# node_modules (macOS binaries) or build output, no tests.
+.env*
+node_modules
+dist
+coverage
+tests
+.git
+.claude
+*.log
+.DS_Store

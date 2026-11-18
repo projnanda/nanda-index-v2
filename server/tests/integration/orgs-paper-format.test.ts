@@ -30,7 +30,7 @@ describe('Org registration — paper-format index records', () => {
     await fastify.ready();
     const user = await upsertUser({
       email: 'pf-test@example.com', displayName: null, avatarUrl: null,
-      provider: 'google', providerId: 'pf-test-provider-id',
+      provider: 'google', providerId: 'pf-test-provider-id', emailVerified: true,
     });
     token = fastify.jwt.sign({ userId: user.id, email: user.email, displayName: null });
   });

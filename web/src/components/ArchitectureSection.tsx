@@ -7,7 +7,7 @@ export function ArchitectureSection() {
       <SectionHeading
         eyebrow="Who it serves"
         title="Three practical use cases"
-        description="NandaIndex serves enterprises with heterogeneous discovery, SMBs whose runtime and agent card live apart, and individuals without a domain name."
+        description="NandaIndex serves enterprises with heterogeneous discovery, SMBs whose runtime and agent card live apart, and personal AI agents whose owners do not control a domain."
       />
 
       <div className="overflow-hidden rounded-card border border-line">

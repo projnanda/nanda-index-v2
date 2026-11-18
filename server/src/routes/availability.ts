@@ -39,7 +39,7 @@ export async function registerAvailabilityRoute(fastify: FastifyInstance): Promi
   const config = buildConfig();
 
   fastify.get<{ Querystring: AvailabilityQuerystring }>('/api/v1/availability', {
-    preHandler: [fastify.authenticate],
+    preValidation: [fastify.authenticate],
     config: {
       rateLimit: {
         max: config.auth.rateLimitMax,

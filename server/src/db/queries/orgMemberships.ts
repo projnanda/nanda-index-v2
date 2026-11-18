@@ -1,4 +1,5 @@
 import { getSql } from '../client.js';
+import type { Sql, TransactionSql } from 'postgres';
 
 export interface OrgMembership {
   id: string;
@@ -16,8 +17,8 @@ export async function insertMembership(
   userId: string,
   orgId: string,
   role: 'admin' | 'member' = 'admin',
+  sql: Sql | TransactionSql = getSql(),
 ): Promise<OrgMembership> {
-  const sql = getSql();
   const rows = await sql<OrgMembership[]>`
     INSERT INTO org_memberships (user_id, org_id, role)
     VALUES (${userId}, ${orgId}, ${role})

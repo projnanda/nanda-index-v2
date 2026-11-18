@@ -1,10 +1,15 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import type { CaptureResult, CapturedNetworkRequest } from "posthog-js";
 import {
+  PERSONAL_DATA_CLASS,
+  REPLAY_MASK_CLASS,
   isPrivatePath,
+  redactEmails,
   scrubEvent,
   scrubNetworkRequest,
   scrubReplayAttribute,
+  scrubReplayText,
   stripQueryAndHash,
 } from "./analyticsPrivacy";
 
@@ -14,11 +19,23 @@ function event(overrides: Partial<CaptureResult> = {}): CaptureResult {
 }
 
 describe("isPrivatePath", () => {
-  it.each(["/reset-password", "/auth/callback", "/verify-email", "/verify-account"])("%s is private", (path) => {
+  it.each([
+    "/reset-password",
+    "/auth/callback",
+    "/verify-email",
+    "/verify-account",
+    "/login",
+    "/register",
+    "/forgot-password",
+    "/dashboard",
+    "/dashboard/",
+    "/dashboard/orgs/123",
+    "/dashboard/settings",
+  ])("%s is private", (path) => {
     expect(isPrivatePath(path)).toBe(true);
   });
 
-  it.each(["/", "/explore", "/dashboard", "/privacy", "/authors"])("%s is public", (path) => {
+  it.each(["/", "/explore", "/privacy", "/authors", "/login-help", "/dashboards", "/registries"])("%s is public", (path) => {
     expect(isPrivatePath(path)).toBe(false);
   });
 });
@@ -78,7 +95,7 @@ describe("scrubEvent", () => {
           $elements: [{ tag_name: "a", attr__href: "/reset-password?token=t" }],
         },
       }),
-      "/dashboard",
+      "/explore",
     );
 
     expect(scrubbed?.properties.$elements_chain).toBe('a:attr__href="/verify-email"href="/verify-email"nth-child="1";div');
@@ -88,7 +105,7 @@ describe("scrubEvent", () => {
   it("redacts email addresses anywhere in the event", () => {
     const scrubbed = scrubEvent(
       event({ event: "$autocapture", properties: { $el_text: "Signed in as Ada@Example.org" } }),
-      "/dashboard",
+      "/explore",
     );
 
     expect(scrubbed?.properties.$el_text).toBe("Signed in as [email]");
@@ -131,6 +148,65 @@ describe("scrubReplayAttribute", () => {
 
   it("leaves other attributes unchanged", () => {
     expect(scrubReplayAttribute("class", "h-9 rounded-control")).toBe("h-9 rounded-control");
+  });
+});
+
+describe("scrubReplayText", () => {
+  function element(html: string, selector: string): HTMLElement {
+    const root = document.createElement("div");
+    root.innerHTML = html;
+    return root.querySelector<HTMLElement>(selector)!;
+  }
+
+  it("keeps ordinary page text readable", () => {
+    const heading = element("<h2>Weather agent</h2>", "h2");
+    expect(scrubReplayText("Weather agent · verified by acme.example", heading)).toBe("Weather agent · verified by acme.example");
+  });
+
+  it("redacts email addresses shown on the page", () => {
+    const identity = element("<span>owner</span>", "span");
+    expect(scrubReplayText("Identity: Ada@Example.org (email)", identity)).toBe("Identity: [email] (email)");
+  });
+
+  it("masks every character of text marked as personal, keeping its shape", () => {
+    const name = element(`<span class="${REPLAY_MASK_CLASS}">x</span>`, "span");
+    expect(scrubReplayText("(Ada Lovelace)", name)).toBe("**** *********");
+  });
+
+  it("masks text nested anywhere inside an element marked as personal", () => {
+    const inner = element(`<div class="${REPLAY_MASK_CLASS}"><p><b>x</b></p></div>`, "b");
+    expect(scrubReplayText("Ada", inner)).toBe("***");
+  });
+
+  it("still redacts email addresses when the recorder gives no element", () => {
+    expect(scrubReplayText("write to ada@example.org")).toBe("write to [email]");
+    expect(scrubReplayText("write to ada@example.org", null)).toBe("write to [email]");
+  });
+
+  it("stars out an email inside a personal-data element rather than redacting it", () => {
+    const name = element(`<span class="${PERSONAL_DATA_CLASS}">x</span>`, "span");
+    expect(scrubReplayText("ada@example.org", name)).toBe("***************");
+  });
+});
+
+describe("PERSONAL_DATA_CLASS", () => {
+  it("masks replays and keeps the text out of autocaptured clicks", () => {
+    expect(PERSONAL_DATA_CLASS.split(" ")).toEqual([REPLAY_MASK_CLASS, "ph-sensitive"]);
+  });
+});
+
+describe("redactEmails", () => {
+  it.each([
+    ["every address in a string", "ada@example.org, bob@example.net", "[email], [email]"],
+    ["a URL-encoded @, as in a request URL", "/api/v1/resolve?locator=urn%3Aair%3Ahost39.org%3Apersonal%3Aada%40example.org", "/api/v1/resolve?locator=[email]"],
+    ["an apostrophe in the local part", "o'brien@example.org", "[email]"],
+    ["non-ASCII letters", "josé@exämple.de", "[email]"],
+  ])("redacts %s", (_case, input, expected) => {
+    expect(redactEmails(input)).toBe(expected);
+  });
+
+  it("leaves text without an address untouched", () => {
+    expect(redactEmails("urn:air:host39.org:weather · 100% uptime")).toBe("urn:air:host39.org:weather · 100% uptime");
   });
 });
 

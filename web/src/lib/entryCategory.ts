@@ -37,3 +37,20 @@ export function categoryOf(record: IndexCatalogEntry): Category | null {
   }
   return null;
 }
+
+/** Per-category totals for a loaded index, plus the entries that fit none. */
+export interface CategoryTally {
+  counts: ReadonlyMap<Category, number>;
+  uncategorised: number;
+  total: number;
+}
+
+/** Tally already-categorised entries; a null category counts as uncategorised. */
+export function tallyCategories(categories: readonly (Category | null)[]): CategoryTally {
+  const counts = categories.reduce<ReadonlyMap<Category, number>>(
+    (acc, c) => (c ? new Map(acc).set(c, (acc.get(c) ?? 0) + 1) : acc),
+    new Map(),
+  );
+  const categorised = [...counts.values()].reduce((sum, n) => sum + n, 0);
+  return { counts, uncategorised: categories.length - categorised, total: categories.length };
+}

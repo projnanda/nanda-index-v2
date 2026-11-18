@@ -1,3 +1,9 @@
+export interface CardValidation {
+  status: "valid" | "invalid" | "unavailable" | "not_checked";
+  checkedAt: string | null;
+  detail: string;
+}
+
 export type OrgStatus = "active" | "pending" | "suspended";
 
 export interface PublisherBlock {
@@ -55,6 +61,9 @@ export interface IndexRecord {
   ttl_seconds: number;
   status: OrgStatus;
   email_verified: boolean;
+  email_verified_at?: string | null;
+  domain_verified_at?: string | null;
+  card_validation?: CardValidation | null;
   domain_verified: boolean;
   created_at: string;
   updated_at: string;
@@ -248,6 +257,8 @@ export interface CreateOrgPayload {
 
 export interface UpdateOrgPayload {
   display_name?: string;
+  /** Correct an existing JSON card format and re-run its structural check. */
+  media_type?: "application/a2a-agent-card+json" | "application/mcp-server-card+json";
   domain?: string;
   registry_url?: string | null;
   ttl_seconds?: number;

@@ -1,3 +1,4 @@
+import type { CardValidation } from '../../services/cardValidation.js';
 export interface PublisherBlock {
   identifier: string;
   displayName: string;
@@ -54,9 +55,13 @@ export interface IndexRecord {
   display_name: string;
   domain: string | null;
   registry_url: string | null;
+  /** Resolver cache hint in seconds; not a listing lifetime (see TTL_SECONDS_DESCRIPTION). */
   ttl_seconds: number;
   status: 'pending' | 'active' | 'suspended';
   email_verified: boolean;
+  email_verified_at?: string | null;
+  domain_verified_at?: string | null;
+  card_validation?: CardValidation | null;
   domain_verified: boolean;
   created_at: string;
   updated_at: string;
@@ -110,6 +115,16 @@ export const EXTENSIONS_SCHEMA = {
   additionalProperties: { type: 'object', additionalProperties: true },
 } as const;
 
+/**
+ * What ttl_seconds means. It is stored and echoed, never enforced: no query
+ * filters on it and nothing expires a listing (listing depends only on
+ * status and moderation, see listListedEntries in db/queries/organizations.ts).
+ */
+export const TTL_SECONDS_DESCRIPTION =
+  'Cache hint for resolvers, like a DNS TTL: how many seconds a consumer may reuse this record before fetching it again ' +
+  '(3600 to 604800, default 86400). It is not a listing lifetime: a listing does not expire or need renewal, and stays ' +
+  'listed while status is active. The index itself does not send it as an HTTP cache header.';
+
 export const INDEX_RECORD_SCHEMA = {
   type: 'object',
   required: ['org_id', 'display_name', 'identifier', 'extensions', 'ttl_seconds', 'status', 'email_verified', 'domain_verified', 'created_at', 'updated_at'],
@@ -118,9 +133,12 @@ export const INDEX_RECORD_SCHEMA = {
     display_name:    { type: 'string' },
     domain:          { type: ['string', 'null'] },
     registry_url:    { type: ['string', 'null'] },
-    ttl_seconds:     { type: 'number' },
+    ttl_seconds:     { type: 'number', description: TTL_SECONDS_DESCRIPTION },
     status:          { type: 'string', enum: ['pending', 'active', 'suspended'] },
     email_verified:  { type: 'boolean' },
+    email_verified_at: { type: ['string', 'null'] },
+    domain_verified_at: { type: ['string', 'null'] },
+    card_validation: { type: ['object', 'null'], additionalProperties: true },
     domain_verified: { type: 'boolean' },
     created_at:      { type: 'string' },
     updated_at:      { type: 'string' },

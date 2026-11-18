@@ -7,9 +7,12 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { JsonPanel } from "@/components/JsonPanel";
 import { TableEmptyState } from "@/components/TableEmptyState";
 import { AgentCandidateCard } from "@/components/AgentCandidateCard";
-import { ApiError, getIndexRecord, searchIndexRecords, resolveAgent, fetchAgentRecord, agenticSearch } from "@/lib/nanda-api";
-import type { IndexRecord, IndexCatalogEntry, SearchResponse, ResolveResponse, CatalogEntry, AgenticSearchResponse } from "@/lib/nanda-types";
+import { ApiError, getIndexRecord, searchIndexRecords, resolveAgent, fetchRegistryHop, agenticSearch } from "@/lib/nanda-api";
+import { CatalogEntryNotFound } from "@/lib/catalogHop";
+import type { IndexRecord, IndexCatalogEntry, SearchResponse, ResolveResponse, CatalogEntry, CatalogDocument, AgenticSearchResponse } from "@/lib/nanda-types";
 import { entryOps } from "@/lib/air";
+import { noUrlExplanation } from "@/lib/svcbPointer";
+import { PERSONAL_DATA_CLASS } from "@/lib/analyticsPrivacy";
 
 // urn:air:<publisher-FQDN>:<namespace...>:<short-name>
 const URN_RE = /^urn:air:[^:\s]+(:[^:\s]+){2,}$/i;
@@ -23,6 +26,7 @@ interface QueryResult {
   search?: SearchResponse;
   resolve?: ResolveResponse;
   agent?: CatalogEntry | null;   // hop-2 agent record for URN queries
+  catalog?: CatalogDocument;     // hop-2 catalog, when the URN names a catalog itself
   agentError?: string;
   agentic?: AgenticSearchResponse;
 }
@@ -78,7 +82,7 @@ function IndexRecordCard({ org }: { org: IndexRecord }) {
 }
 
 export default function QueryPage() {
-  const [mode, setMode] = useState<Mode>("agentic");
+  const [mode, setMode] = useState<Mode>("search");
   const [query, setQuery] = useState("");
   const [result, setResult] = useState<QueryResult | null>(null);
   const [latency, setLatency] = useState<number | null>(null);
@@ -102,24 +106,25 @@ export default function QueryPage() {
       // URN input: hop 1 resolves via NANDA Index, hop 2 fetches the agent from the registry
       if (URN_RE.test(q)) {
         const indexData = await resolveAgent(q);
-        let agent = null;
+        let agent: CatalogEntry | null = null;
+        let catalog: CatalogDocument | undefined;
         let agentError: string | undefined;
         if (!indexData.entry.url) {
-          agentError = "This entry has no URL to follow (inline data or custom discovery).";
+          agentError = noUrlExplanation(indexData.entry);
         } else {
           try {
-            agent = await fetchAgentRecord(
-              indexData.entry.url,
-              indexData.identifier,
-              indexData.entry.type,
-            );
+            const hop = await fetchRegistryHop(indexData);
+            if (hop.kind === "catalog") catalog = hop.document;
+            else agent = hop.entry;
           } catch (err) {
             agentError = err instanceof ApiError
               ? `Registry returned ${err.status}: ${err.message}`
-              : "Could not reach the registry server.";
+              : err instanceof CatalogEntryNotFound
+                ? err.message
+                : "Could not reach the registry server.";
           }
         }
-        setResult({ kind: "resolve", resolve: indexData, agent, agentError });
+        setResult({ kind: "resolve", resolve: indexData, agent, catalog, agentError });
       } else if (mode === "org_id") {
         const data = await getIndexRecord(q);
         setResult({ kind: "single", single: data });
@@ -152,7 +157,7 @@ export default function QueryPage() {
   return (
     <PageShell
       title="Discover"
-      description="Look up an organization by org ID, keyword, URN, or a natural-language prompt."
+      description="Look up an organization by org ID, keyword, or URN."
     >
       <form
         className="space-y-4 rounded-3xl border border-black/10 bg-white p-5 shadow-sm"
@@ -161,7 +166,8 @@ export default function QueryPage() {
         {/* Mode selector, hidden when URN is detected */}
         {!isUrn && (
           <div className="flex flex-wrap gap-2">
-            {(["agentic", "search", "org_id"] as Mode[]).map((key) => (
+            {/* Agentic search is hidden for now; add "agentic" back first here and as the default mode to re-enable it. */}
+            {(["search", "org_id"] as Mode[]).map((key) => (
               <button
                 key={key}
                 type="button"
@@ -207,7 +213,7 @@ export default function QueryPage() {
 
       <div className="mt-6 space-y-4">
         {error && (
-          <div className="rounded-3xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+          <div className={`${PERSONAL_DATA_CLASS} rounded-3xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700`}>
             {error}
           </div>
         )}
@@ -229,12 +235,12 @@ export default function QueryPage() {
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
               {result.search.count === 0
                 ? "No results"
-                : `${result.search.count} result${result.search.count !== 1 ? "s" : ""} for "${result.search.query}"`}
+                : <>{result.search.count} result{result.search.count !== 1 ? "s" : ""} for &ldquo;<span className={PERSONAL_DATA_CLASS}>{result.search.query}</span>&rdquo;</>}
             </p>
             {result.search.results.length === 0 ? (
               <TableEmptyState
                 title="No organizations found"
-                description={`No active organizations match "${result.search.query}".`}
+                description={<>No active organizations match &ldquo;<span className={PERSONAL_DATA_CLASS}>{result.search.query}</span>&rdquo;.</>}
               />
             ) : (
               <div className="space-y-2">
@@ -243,7 +249,7 @@ export default function QueryPage() {
                 ))}
               </div>
             )}
-            <JsonPanel data={result.search} />
+            <JsonPanel data={result.search} mask />
           </>
         )}
 
@@ -253,7 +259,7 @@ export default function QueryPage() {
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
               {result.agentic.count === 0
                 ? "No candidates"
-                : `${result.agentic.count} candidate${result.agentic.count !== 1 ? "s" : ""} for "${result.agentic.query}"`}
+                : <>{result.agentic.count} candidate{result.agentic.count !== 1 ? "s" : ""} for &ldquo;<span className={PERSONAL_DATA_CLASS}>{result.agentic.query}</span>&rdquo;</>}
               <span className="ml-2 normal-case text-slate-400">
                 ({result.agentic.orgsQueried} org{result.agentic.orgsQueried !== 1 ? "s" : ""} queried, {result.agentic.tookMs}ms)
               </span>
@@ -266,7 +272,7 @@ export default function QueryPage() {
             {result.agentic.candidates.length === 0 ? (
               <TableEmptyState
                 title="No agent candidates found"
-                description={`No active agents match "${result.agentic.query}".`}
+                description={<>No active agents match &ldquo;<span className={PERSONAL_DATA_CLASS}>{result.agentic.query}</span>&rdquo;.</>}
               />
             ) : (
               <div className="space-y-2">
@@ -279,7 +285,7 @@ export default function QueryPage() {
                 ))}
               </div>
             )}
-            <JsonPanel data={result.agentic} />
+            <JsonPanel data={result.agentic} mask />
           </>
         )}
 
@@ -287,7 +293,7 @@ export default function QueryPage() {
         {result?.kind === "resolve" && result.resolve && (
           <>
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
-              Resolved: <span className="font-mono normal-case">{result.resolve.locator}</span>
+              Index match: <span className={`${PERSONAL_DATA_CLASS} font-mono normal-case`}>{result.resolve.locator}</span>
             </p>
 
             {/* Hop 1: NANDA Index record */}
@@ -301,10 +307,25 @@ export default function QueryPage() {
             {/* Hop 2: Agent record from the registry server */}
             <div>
               <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">
-                Hop 2: Agent record
+                {result.catalog ? "Hop 2: Catalog" : "Hop 2: Agent record"}
               </p>
-              {result.agentError ? (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+              {result.catalog ? (
+                <div className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm space-y-2">
+                  <p className="text-sm text-slate-600">
+                    This identifier names a catalog of {result.catalog.entries.length}{" "}
+                    {result.catalog.entries.length === 1 ? "entry" : "entries"}. Resolve one of their identifiers to continue.
+                  </p>
+                  <ul className="divide-y divide-black/5">
+                    {result.catalog.entries.map((entry) => (
+                      <li key={entry.identifier} className="py-2">
+                        <p className="text-sm font-semibold text-slate-950">{entry.displayName}</p>
+                        <p className="break-all font-mono text-xs text-slate-500">{entry.identifier}</p>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : result.agentError ? (
+                <div className={`${PERSONAL_DATA_CLASS} rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700`}>
                   {result.agentError}
                 </div>
               ) : result.agent ? (
@@ -335,7 +356,7 @@ export default function QueryPage() {
               ) : null}
             </div>
 
-            <JsonPanel data={{ hop1_index: result.resolve, hop2_agent: result.agent }} />
+            <JsonPanel data={{ hop1_index: result.resolve, hop2: result.catalog ?? result.agent }} mask />
           </>
         )}
 

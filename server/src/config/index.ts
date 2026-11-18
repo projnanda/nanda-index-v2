@@ -60,6 +60,8 @@ export interface JwtConfig {
 export interface EmailConfig {
   readonly smtpUrl: string;
   readonly fromAddress: string;
+  readonly communityTo: string;
+  readonly communityCc: readonly string[];
 }
 
 export interface CookieConfig {
@@ -73,10 +75,19 @@ export interface AuthConfig {
   readonly rateLimitWindow: string;
   /** Failed logins before an account is temporarily locked. */
   readonly maxLoginAttempts: number;
-  /** How long an account stays locked after hitting the threshold. */
+  /** Length of the first lock after hitting the threshold; each further
+   *  failure in the streak doubles it, up to lockoutMinutes. */
+  readonly initialLockoutMinutes: number;
+  /** Longest a lock may last (and the flat account-wide lock length). */
   readonly lockoutMinutes: number;
+  /** Failed logins for one email, from every network together, before each
+   *  further attempt waits out a lock of lockoutMinutes. */
+  readonly maxAccountLoginAttempts: number;
   /** Lifetime of a password-reset token. */
   readonly resetTokenTtlMinutes: number;
+  /** Hours an unverified email/password account holds its email. After
+   *  that, registering the same email replaces it (see passwordRegistration.ts). */
+  readonly unverifiedReclaimHours: number;
   /**
    * Password hashes allowed to run at once (see lib/password.ts). Defaults to
    * one less than the CPU count, leaving a core for the event loop. Set it
@@ -91,6 +102,9 @@ export interface ClaimsConfig {
   /** Max org create/update requests per window per client IP. */
   readonly writeRateLimitMax: number;
   readonly writeRateLimitWindow: string;
+  /** Max domain-challenge / verify-domain requests per window per client IP (each route counted apart). */
+  readonly domainVerifyRateLimitMax: number;
+  readonly domainVerifyRateLimitWindow: string;
   /** How many unproven (unverified) orgs one account may hold at once. */
   readonly maxUnprovenPerUser: number;
   /** How long an unproven org keeps its org_id slug before others may take it. */
@@ -126,6 +140,16 @@ export interface OutboundConfig {
    *  Local development only (e.g. a nanda-registry on localhost) — leaving it
    *  on in production re-opens SSRF into the internal network. */
   readonly allowPrivateHosts: boolean;
+}
+
+export interface ExtensionsConfig {
+  /**
+   * 'open' (default) accepts any reverse-DNS namespace in `extensions`.
+   * 'anchored' accepts only `org.projectnanda` and the reverse-DNS form of
+   * the domain the entry proved. See README — turning it on is a policy
+   * change, and one entry on the live index does not satisfy it today.
+   */
+  readonly namespacePolicy: 'open' | 'anchored';
 }
 
 export interface LlmEnrichmentConfig {
@@ -173,6 +197,7 @@ export interface Config {
   readonly apiBaseUrl: string;
   readonly federation: FederationConfig;
   readonly outbound: OutboundConfig;
+  readonly extensions: ExtensionsConfig;
   readonly llmEnrichment: LlmEnrichmentConfig;
   readonly analytics: AnalyticsConfig;
 }
@@ -186,12 +211,40 @@ export interface Config {
 const DEV_JWT_SECRET = 'dev-secret-change-in-production';
 const DEV_COOKIE_SECRET = 'dev-cookie-secret-change-in-production';
 const MIN_JWT_SECRET_LENGTH = 32;
+const MIN_COOKIE_SECRET_LENGTH = 32;
+/** SMTP_URL value that prints emails (live reset/verification links) to stdout. */
+const EMAIL_LOG_MODE = 'log';
+
+/**
+ * Anything that is not exactly `anchored` means `open`. That is deliberate —
+ * the policy fails open rather than locking registrants out of a misread env
+ * var — but it used to be silent, so `Anchored` or a trailing space turned off
+ * a policy the operator believed was on. Unrecognised values now say so.
+ */
+let namespacePolicyWarned = false;
+
+function readNamespacePolicy(): 'anchored' | 'open' {
+  const raw = optionalEnv('EXTENSION_NAMESPACE_POLICY', 'open');
+  if (raw === 'anchored') return 'anchored';
+  // buildConfig() runs per request on several routes, so without this the
+  // warning repeats for the life of the process — re-review on #133 counted
+  // 283 copies after about 150 requests.
+  if (raw !== 'open' && !namespacePolicyWarned) {
+    namespacePolicyWarned = true;
+    console.warn(
+      `WARNING: EXTENSION_NAMESPACE_POLICY="${raw}" is not recognised — using "open". ` +
+      'The only value that enables namespace anchoring is exactly "anchored".',
+    );
+  }
+  return 'open';
+}
 
 export function buildConfig(): Config {
   const rawSigningKey = process.env['SIGNING_PRIVATE_KEY'];
   const nodeEnv = optionalEnv('NODE_ENV', 'development');
   const jwtSecret = optionalEnv('JWT_SECRET', DEV_JWT_SECRET);
   const cookieSecret = optionalEnv('COOKIE_SECRET', DEV_COOKIE_SECRET);
+  const smtpUrl = optionalEnv('SMTP_URL', EMAIL_LOG_MODE);
 
   // Refuse to start in production with a weak or default JWT secret
   if (nodeEnv === 'production') {
@@ -205,6 +258,16 @@ export function buildConfig(): Config {
     }
     if (cookieSecret === DEV_COOKIE_SECRET) {
       console.error('FATAL: COOKIE_SECRET must be set in production — do not use the default dev secret');
+      process.exit(1);
+    }
+    if (cookieSecret.length < MIN_COOKIE_SECRET_LENGTH) {
+      console.error(`FATAL: COOKIE_SECRET must be at least ${MIN_COOKIE_SECRET_LENGTH} characters in production`);
+      process.exit(1);
+    }
+    // Log mode writes live password-reset and verification tokens to stdout,
+    // i.e. into docker logs. Only an explicit opt-in may run production that way.
+    if (smtpUrl === EMAIL_LOG_MODE && process.env['ALLOW_EMAIL_LOG_IN_PRODUCTION'] !== 'true') {
+      console.error('FATAL: SMTP_URL (Resend API key) must be set in production — "log" would print reset and verification tokens to the logs. Set ALLOW_EMAIL_LOG_IN_PRODUCTION=true to override.');
       process.exit(1);
     }
   }
@@ -231,8 +294,10 @@ export function buildConfig(): Config {
       expiresIn: optionalEnv('JWT_EXPIRES_IN', '1d'),
     },
     email: {
-      smtpUrl:     optionalEnv('SMTP_URL', 'log'),
+      smtpUrl:     smtpUrl,
       fromAddress: optionalEnv('EMAIL_FROM', 'noreply@nanda.local'),
+      communityTo: optionalEnv('COMMUNITY_CONTACT_EMAIL', '').trim(),
+      communityCc: optionalEnv('COMMUNITY_CONTACT_CC', '').split(',').map((address) => address.trim()).filter(Boolean),
     },
     cookie: {
       secret: cookieSecret,
@@ -245,11 +310,20 @@ export function buildConfig(): Config {
       maxLoginAttempts: parsePositiveInt(
         'AUTH_MAX_LOGIN_ATTEMPTS', optionalEnv('AUTH_MAX_LOGIN_ATTEMPTS', '5'),
       ),
+      initialLockoutMinutes: parsePositiveInt(
+        'AUTH_INITIAL_LOCKOUT_MINUTES', optionalEnv('AUTH_INITIAL_LOCKOUT_MINUTES', '1'),
+      ),
       lockoutMinutes: parsePositiveInt(
         'AUTH_LOCKOUT_MINUTES', optionalEnv('AUTH_LOCKOUT_MINUTES', '15'),
       ),
+      maxAccountLoginAttempts: parsePositiveInt(
+        'AUTH_MAX_ACCOUNT_LOGIN_ATTEMPTS', optionalEnv('AUTH_MAX_ACCOUNT_LOGIN_ATTEMPTS', '50'),
+      ),
       resetTokenTtlMinutes: parsePositiveInt(
         'AUTH_RESET_TOKEN_TTL_MINUTES', optionalEnv('AUTH_RESET_TOKEN_TTL_MINUTES', '60'),
+      ),
+      unverifiedReclaimHours: parsePositiveInt(
+        'AUTH_UNVERIFIED_RECLAIM_HOURS', optionalEnv('AUTH_UNVERIFIED_RECLAIM_HOURS', '48'),
       ),
       maxConcurrentHashes: parsePositiveInt(
         'AUTH_MAX_CONCURRENT_HASHES',
@@ -264,6 +338,11 @@ export function buildConfig(): Config {
         'ORG_WRITE_RATE_LIMIT_MAX', optionalEnv('ORG_WRITE_RATE_LIMIT_MAX', '30'),
       ),
       writeRateLimitWindow: optionalEnv('ORG_WRITE_RATE_LIMIT_WINDOW', '1 hour'),
+      // domain-challenge and verify-domain: each verify asks four resolvers.
+      domainVerifyRateLimitMax: parsePositiveInt(
+        'DOMAIN_VERIFY_RATE_LIMIT_MAX', optionalEnv('DOMAIN_VERIFY_RATE_LIMIT_MAX', '20'),
+      ),
+      domainVerifyRateLimitWindow: optionalEnv('DOMAIN_VERIFY_RATE_LIMIT_WINDOW', '10 minutes'),
       maxUnprovenPerUser: parsePositiveInt(
         'MAX_UNPROVEN_ORGS_PER_USER', optionalEnv('MAX_UNPROVEN_ORGS_PER_USER', '5'),
       ),
@@ -300,6 +379,9 @@ export function buildConfig(): Config {
     },
     outbound: {
       allowPrivateHosts: optionalEnv('OUTBOUND_ALLOW_PRIVATE_HOSTS', 'false') === 'true',
+    },
+    extensions: {
+      namespacePolicy: readNamespacePolicy(),
     },
     llmEnrichment: {
       apiKey: process.env['OPENAI_API_KEY'] || undefined,

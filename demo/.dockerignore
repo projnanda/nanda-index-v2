@@ -8,3 +8,5 @@ receipts/
 coverage.json
 **/*.egg-info
 tests/
+.env*
+.git

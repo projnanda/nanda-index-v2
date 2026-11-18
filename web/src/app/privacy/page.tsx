@@ -1,11 +1,17 @@
 import { PageShell } from "@/components/PageShell";
-import { DEFAULT_POSTHOG_HOST } from "@/lib/posthogHosts";
+import Link from "next/link";
+import { configuredPostHogHost } from "@/lib/posthogHosts";
 
-export const metadata = { title: "Privacy - NANDA Index" };
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Privacy",
+  description: "What NANDA Index collects and why.",
+};
 
 const gaId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 const posthogKey = process.env.NEXT_PUBLIC_POSTHOG_KEY;
-const posthogRegion = new URL(process.env.NEXT_PUBLIC_POSTHOG_HOST ?? DEFAULT_POSTHOG_HOST).hostname.startsWith("eu.")
+const posthogRegion = new URL(configuredPostHogHost(process.env.NEXT_PUBLIC_POSTHOG_HOST)).hostname.startsWith("eu.")
   ? "the EU"
   : "the US";
 
@@ -34,8 +40,18 @@ export default function PrivacyPage() {
           </p>
         </section>
         <section>
+          <h2 className="mb-2 font-display text-base font-semibold text-ink-strong">Community requests</h2>
+          <p>
+            The Get involved form collects your name, email, interest, and any organization,
+            working groups, or message you choose to provide. We send these details through Resend
+            to the NandaIndex team so we can respond. The form does not create an account or publish
+            your details in the Index. You can use the{' '}
+            <Link href="/get-involved" className="text-brand-600 underline">Get involved form</Link> to ask for your request to be deleted.
+          </p>
+        </section>
+        <section>
           <h2 className="mb-2 font-display text-base font-semibold text-ink-strong">Email delivery</h2>
-          <p>Verification and password-reset emails are sent through Resend.</p>
+          <p>Verification, password-reset, and community contact emails are sent through Resend.</p>
         </section>
         <section>
           <h2 className="mb-2 font-display text-base font-semibold text-ink-strong">Analytics</h2>
@@ -43,7 +59,7 @@ export default function PrivacyPage() {
           {(gaId || posthogKey) && (
             <p>
               Analytics load only if you accept them. They receive the page path (never the query string),
-              and sign-in, password-reset and verification pages are never measured. If you decline,
+              and sign-in, account dashboard, password-reset and verification pages are never measured. If you decline,
               nothing is loaded. You can change your choice at any time via &ldquo;Cookie settings&rdquo; in
               the footer.
             </p>
@@ -52,10 +68,12 @@ export default function PrivacyPage() {
           {posthogKey && (
             <>
               <p className="mt-3">
-                PostHog counts page views and clicks and records sessions (how pages are scrolled and
-                clicked) with every piece of text and every form input masked, so neither what the page
-                shows nor what you type is captured. It never receives the query string of a page or link,
-                or an email address, and does not link your activity to your account.
+                PostHog counts page views and clicks and records sessions: how pages are scrolled and
+                clicked, and the public content they showed. Every form input is masked, so nothing you
+                type is captured, even where a page shows it back to you, and your name and any email
+                address on the page are hidden. It never
+                receives the query string of a page or link, or an email address, and does not link your
+                activity to your account.
               </p>
               <p className="mt-3">
                 To tell visits apart, PostHog keeps a random identifier in a cookie and in your
@@ -75,8 +93,13 @@ export default function PrivacyPage() {
         <section>
           <h2 className="mb-2 font-display text-base font-semibold text-ink-strong">Contact</h2>
           <p>
-            To ask about or remove your data, delete your entries from the dashboard or contact the
-            NANDA Index team via the project&apos;s GitHub repository.
+            You can edit your display name, change your password, sign out every device, or delete
+            your account in <Link href="/dashboard/settings" className="text-brand-600 underline">Account settings</Link>.
+            Account deletion removes your profile, sign-in email, memberships, and account tokens.
+            You must first delete entries for which you are the only administrator. Shared entries
+            remain published with their existing public and contact data, including any email addresses
+            in those records. To ask about other data, use the{' '}
+            <Link href="/get-involved" className="text-brand-600 underline">Get involved form</Link>.
           </p>
         </section>
       </div>

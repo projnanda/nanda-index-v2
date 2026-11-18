@@ -7,12 +7,13 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import urlsplit
 
 from . import config
 from .agentfacts import AgentFactsError, Facts, facts_for
 from .discovery import entry_claims, org_catalog
 
-__all__ = ["Divergence", "Match", "Result", "search", "vocabulary"]
+__all__ = ["Divergence", "Match", "Result", "search", "vocabulary", "web_url"]
 
 #: Short, because a person is waiting on the answer. An organisation that has not
 #: replied in this long is reported as unreachable rather than as having nothing.
@@ -24,6 +25,23 @@ TIMEOUT_SECONDS = 8.0
 #: only there is a weaker claim that must not read like the stronger one.
 BY_AGENT = "agent"
 BY_ORG = "org"
+
+#: The only schemes passed on as an address. The page renders these as links on
+#: the index's own origin, and they come from third parties' documents: a
+#: ``javascript:`` address there would run on nandaindex.org when clicked.
+WEB_SCHEMES = ("http", "https")
+
+
+def web_url(value: Any) -> str:
+    """``value`` if it is an absolute http(s) URL with a host, else ``""``."""
+    text = str(value or "").strip()
+    try:
+        parts = urlsplit(text)
+    except ValueError:
+        return ""
+    if parts.scheme.lower() not in WEB_SCHEMES or not parts.netloc:
+        return ""
+    return text
 
 
 @dataclass(frozen=True)
@@ -194,7 +212,6 @@ def search(
                 source, skills, facts_url = BY_ORG, (), ""
             else:
                 skills = facts.skills
-                facts_url = facts.url
                 org_only = tuple(t for t in tags if t not in skills)
                 agent_only = tuple(s for s in skills if s not in tags)
                 if org_only or agent_only:
@@ -203,18 +220,18 @@ def search(
                     )
                 if wanted not in skills:
                     continue
-                source, facts_url = BY_AGENT, facts.url
+                source, facts_url = BY_AGENT, web_url(facts.url)
 
             matches.append(
                 Match(
                     org=org,
                     identifier=identifier,
                     display_name=str(entry.get("displayName") or identifier),
-                    url=str(entry["url"]),
+                    url=web_url(entry["url"]),
                     skills=tuple(skills),
                     tags=tags,
                     source=source,
-                    catalog_url=str(catalog.get("url") or ""),
+                    catalog_url=web_url(catalog.get("url")),
                     facts_url=facts_url,
                 )
             )

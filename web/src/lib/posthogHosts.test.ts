@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { posthogHosts } from "./posthogHosts";
+import { DEFAULT_POSTHOG_HOST, configuredPostHogHost, posthogHosts } from "./posthogHosts";
 
 describe("posthogHosts", () => {
   it("maps PostHog US Cloud to its assets and app hosts", () => {
@@ -24,5 +24,16 @@ describe("posthogHosts", () => {
       assets: "https://posthog.example.org",
       ui: "https://posthog.example.org",
     });
+  });
+});
+
+describe("configuredPostHogHost", () => {
+  it("uses the configured host", () => {
+    expect(configuredPostHogHost("https://eu.i.posthog.com")).toBe("https://eu.i.posthog.com");
+  });
+
+  // The Dockerfile passes an empty string when the build arg is missing.
+  it.each([undefined, "", "  "])("falls back to the default for %j", (value) => {
+    expect(configuredPostHogHost(value)).toBe(DEFAULT_POSTHOG_HOST);
   });
 });

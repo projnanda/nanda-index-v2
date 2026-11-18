@@ -1,7 +1,12 @@
+import { validateRegistrationCard } from '../services/cardValidation.js';
+import { JSON_CARD_MEDIA_TYPES } from '../lib/mediaTypes.js';
+import { allowAnyUrl, publicUrlGuard, assertPublicHttpUrl, OutboundUrlError, defaultHostLookup, withLookupTimeout } from '../lib/outboundUrl.js';
 import { randomBytes } from 'node:crypto';
+import { isIP } from 'node:net';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { findByOrgId, findProvenByDomain, findProvenByIdentifier, countUnprovenOrgsForUser, insertOrganization, updateOrganization, suspendOrganization, reactivateOrganization, deleteOrganization, issueDomainChallenge, markDomainVerified, renewVerifyToken, toIndexRecord, type Organization } from '../db/queries/organizations.js';
-import { insertMembership, checkMembership } from '../db/queries/orgMemberships.js';
+import { findByOrgId, findProvenByDomain, findProvenByIdentifier, countUnprovenOrgsForUser, updateOrganization, suspendOrganization, reactivateOrganization, deleteOrganization, issueDomainChallenge, markDomainVerified, renewVerifyToken, toIndexRecord, type Organization } from '../db/queries/organizations.js';
+import { checkMembership } from '../db/queries/orgMemberships.js';
+import { createOwnedOrganization } from '../db/queries/organizationRegistration.js';
 import { sendVerificationEmail } from '../services/email.js';
 import { generateRepresentativeQueries } from '../services/llmEnrichment.js';
 import { buildConfig } from '../config/index.js';
@@ -11,7 +16,7 @@ import {
   lookupDomainToken,
   CHALLENGE_TTL_MS,
 } from '../services/domainVerification.js';
-import { INDEX_RECORD_SCHEMA, TRUST_MANIFEST_SCHEMA, EXTENSIONS_SCHEMA } from '../types/api/index-record.js';
+import { INDEX_RECORD_SCHEMA, TRUST_MANIFEST_SCHEMA, EXTENSIONS_SCHEMA, TTL_SECONDS_DESCRIPTION } from '../types/api/index-record.js';
 import { apiErrorSchema } from '../types/api/common.js';
 import type { JwtPayload } from '../plugins/jwt.js';
 import type { TrustManifest } from '../types/api/index-record.js';
@@ -50,7 +55,8 @@ const UPDATE_ORG_BODY_SCHEMA = {
     display_name:     { type: 'string', minLength: 1, maxLength: 255 },
     domain:           { type: 'string', maxLength: 255 },
     registry_url:     { type: 'string', maxLength: 512 },
-    ttl_seconds:      { type: 'integer', minimum: 3600, maximum: 604800 },
+    media_type:       { type: 'string', enum: JSON_CARD_MEDIA_TYPES, description: 'Correct an existing A2A or MCP card declaration. Rechecks the submitted registry_url, or the stored URL when omitted, and preserves identity verification.' },
+    ttl_seconds:      { type: 'integer', minimum: 3600, maximum: 604800, description: TTL_SECONDS_DESCRIPTION },
     description:      { type: 'string', maxLength: 1000 },
     tags:             { type: 'array', items: { type: 'string', maxLength: 64 }, maxItems: 20 },
     version:          { type: 'string', maxLength: 64 },
@@ -154,6 +160,7 @@ interface CreateOrgBody {
 
 interface UpdateOrgBody {
   display_name?: string;
+  media_type?: string;
   domain?: string;
   registry_url?: string | null;
   ttl_seconds?: number;
@@ -169,11 +176,11 @@ interface UpdateOrgBody {
 
 interface ApiError {
   status: 400 | 409;
-  body: { error: string; detail: string };
+  body: { error: string; detail: string; field?: string };
 }
 
 const validationError = (detail: string): ApiError => ({ status: 400, body: { error: 'VALIDATION', detail } });
-const conflictError = (detail: string): ApiError => ({ status: 409, body: { error: 'CONFLICT', detail } });
+const conflictError = (detail: string, field?: string): ApiError => ({ status: 409, body: { error: 'CONFLICT', detail, ...(field ? { field } : {}) } });
 
 /**
  * A blank domain means "no domain": the entry is then anchored to host39 (personal)
@@ -195,6 +202,128 @@ function withoutBlankDomain(body: UpdateOrgBody): UpdateOrgBody {
   return rest;
 }
 
+/**
+ * Enforces the https:// the validation message has always promised. http:// is
+ * allowed only alongside OUTBOUND_ALLOW_PRIVATE_HOSTS — the same development
+ * escape hatch that lets fan-out reach a registry on localhost. A card fetched
+ * over plaintext can be rewritten in transit, and its contents now feed the
+ * stored cardValidation result.
+ */
+function registryUrlError(registryUrl: string): string | null {
+  // Mirrors validateRuntimeUrl in lib/entryProfile.ts: URL parsing on its own
+  // repairs a missing authority slash, backslashes and control characters, so
+  // `https:///evil` and `https://exa mple.com/x` have to be refused before
+  // parsing rather than after. Review on #135 found the prefix test accepting
+  // all of them.
+  if (/^https?:\/\/[^/\\\s]/i.test(registryUrl) && !/[\\\s\u0000-\u001f\u007f]/.test(registryUrl)) {
+    try {
+      const parsed = new URL(registryUrl);
+      if (parsed.hostname) {
+        // A directory entry carries no credentials, and `https://good.com@evil.invalid/`
+        // reads as the host before the @ to anyone skimming the published record.
+        // cardValidation already refuses these; the write path now matches.
+        if (parsed.username || parsed.password) {
+          return 'registry_url must not contain a username or password';
+        }
+        // `new URL` lowercases the protocol, so `HTTPS://…` is accepted here
+        // and by the web form's /i regex alike.
+        if (parsed.protocol === 'https:') return null;
+        if (parsed.protocol === 'http:' && buildConfig().outbound.allowPrivateHosts) return null;
+        return 'registry_url must start with https://';
+      }
+    } catch {
+      // Report a malformed URL through the same validation error.
+    }
+  }
+  return 'registry_url must be an absolute https:// URL';
+}
+
+/**
+ * Refuses a registry_url the index must not send anyone to.
+ *
+ * The outbound guard in lib/outboundUrl.ts already knows which addresses are
+ * private, loopback, link-local or otherwise reserved, and it protects this
+ * server when it fetches a registrant's card. Nothing was asking it at the
+ * point the index decides what to *publish*, so an entry could carry
+ * `https://127.0.0.1:5433/x.json` or `https://metadata.google.internal/...`
+ * and `/api/v1/index` would hand that to every consumer as the address to
+ * use. A directory that tells other people's software to fetch their own
+ * loopback is a defect even though this server never fetches it.
+ *
+ * The host is resolved here, so this costs a DNS lookup on create and on a
+ * changed registry_url. A host that does not resolve is still accepted:
+ * registering before DNS exists is ordinary — a new domain, a staged launch,
+ * a propagation window — and refusing it would also fail every registration
+ * whenever DNS is slow. The risk this guard exists for needs the host to
+ * really resolve to a private address, so that is the only case refused. A
+ * host that resolves publicly today and privately tomorrow is the same
+ * problem one step later, and belongs to periodic re-verification.
+ *
+ * OUTBOUND_ALLOW_PRIVATE_HOSTS turns the check off, the same way it already
+ * allows plaintext and lets fan-out reach a registry on localhost.
+ */
+const INTERNAL_ONLY_SUFFIXES = [
+  '.localhost', '.local', '.internal', '.home.arpa',
+  // RFC 6762 Appendix G: names people actually use for private networks.
+  '.lan', '.corp', '.home', '.intranet',
+];
+
+/** How long a registration will wait on DNS before giving up on the lookup. */
+const REGISTRY_URL_DNS_TIMEOUT_MS = 3000;
+
+/**
+ * Names reserved for use inside a single network. Address classification
+ * cannot catch these, because resolution depends on who is asking:
+ * `metadata.google.internal` does not resolve from a machine outside GCP, so
+ * the lookup below lets it pass, and it resolves to 169.254.169.254 for every
+ * consumer that does run there. A name that only means something inside a
+ * network has no meaning in a directory published to everyone, so it is
+ * refused by name rather than by address.
+ */
+function isInternalOnlyHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/\.+$/, '');
+  if (host === 'localhost') return true;
+  if (INTERNAL_ONLY_SUFFIXES.some((suffix) => host.endsWith(suffix))) return true;
+  // A name with no dot can only be resolved by a search domain, which means
+  // it names something inside one network. On GCE `metadata` reaches
+  // 169.254.169.254 that way, and on EC2 `instance-data` reaches it through
+  // ec2.internal — the same case as metadata.google.internal, spelled shorter.
+  // IP literals have no dots in IPv6 form, so they are excluded here and
+  // judged by address below.
+  return !host.includes('.') && isIP(host) === 0;
+}
+
+/**
+ * The address check needs DNS, and a slow resolver must not hold a
+ * registration open. `validateRegistrationCard` already races its own lookup
+ * against a timer for the same reason.
+ *
+ * A timeout is reported as "does not resolve", which is already the accepted
+ * outcome here: an entry whose host cannot be resolved right now is still
+ * published, and re-verification is what catches it later.
+ */
+const registryUrlLookup = withLookupTimeout(defaultHostLookup, REGISTRY_URL_DNS_TIMEOUT_MS);
+
+async function registryUrlReachabilityError(registryUrl: string): Promise<string | null> {
+  if (buildConfig().outbound.allowPrivateHosts) return null;
+  try {
+    const host = new URL(registryUrl).hostname.replace(/^\[|\]$/g, '');
+    if (isInternalOnlyHost(host)) {
+      return 'registry_url must be a public internet address — private, loopback, link-local and cloud metadata addresses are refused';
+    }
+  } catch {
+    // Shape is already checked by registryUrlError; fall through to the guard.
+  }
+  try {
+    await assertPublicHttpUrl(registryUrl, registryUrlLookup);
+    return null;
+  } catch (err) {
+    if (!(err instanceof OutboundUrlError)) throw err;
+    if (err.kind === 'unresolvable') return null;
+    return 'registry_url must be a public internet address — private, loopback, link-local and cloud metadata addresses are refused';
+  }
+}
+
 /** Checks the create body's hosting-path invariants; returns the first problem or null. */
 function validateCreateBody(body: CreateOrgBody, path: HostingPath): ApiError | null {
   if (path === 'personal' && body.domain) {
@@ -206,8 +335,9 @@ function validateCreateBody(body: CreateOrgBody, path: HostingPath): ApiError | 
   if (body.domain && !isFqdn(body.domain)) {
     return validationError('domain must be a valid hostname (e.g. acme.com)');
   }
-  if (!/^https?:\/\//.test(body.registry_url)) {
-    return validationError('registry_url must start with https://');
+  const registryError = registryUrlError(body.registry_url);
+  if (registryError) {
+    return validationError(registryError);
   }
   return null;
 }
@@ -220,13 +350,13 @@ function validateCreateBody(body: CreateOrgBody, path: HostingPath): ApiError | 
  * cannot block MIT.
  */
 async function findConflict(identifier: string, domain: string | null, selfOrgId?: string): Promise<ApiError | null> {
-  const byIdentifier = await findProvenByIdentifier(identifier);
-  if (byIdentifier && byIdentifier.orgId !== selfOrgId) {
-    return conflictError(`identifier "${identifier}" is already registered`);
-  }
   const byDomain = domain ? await findProvenByDomain(domain) : null;
   if (byDomain && byDomain.orgId !== selfOrgId) {
-    return conflictError(`domain "${domain}" is already registered`);
+    return conflictError(`domain "${domain}" is already registered`, 'domain');
+  }
+  const byIdentifier = await findProvenByIdentifier(identifier);
+  if (byIdentifier && byIdentifier.orgId !== selfOrgId) {
+    return conflictError(`identifier "${identifier}" is already registered`, 'identifier');
   }
   return null;
 }
@@ -235,7 +365,7 @@ async function findConflict(identifier: string, domain: string | null, selfOrgId
 async function findSlugConflict(orgId: string): Promise<ApiError | null> {
   const holder = await findByOrgId(orgId);
   if (!holder) return null;
-  if (!isAbandonedClaim(holder)) return conflictError(`org_id "${orgId}" is already taken`);
+  if (!isAbandonedClaim(holder)) return conflictError(`org_id "${orgId}" is already taken`, 'org_id');
   await deleteOrganization(holder.orgId);
   return null;
 }
@@ -245,7 +375,14 @@ function isUniqueViolation(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: unknown }).code === '23505';
 }
 
-const RACE_CONFLICT = conflictError('identifier or domain was registered concurrently — retry');
+function raceConflict(err: unknown): ApiError {
+  const constraint = (err as { constraint_name?: string }).constraint_name;
+  const field = constraint === 'organizations_org_id_key' ? 'org_id'
+    : constraint === 'uq_organizations_verified_domain' || constraint === 'organizations_domain_key' ? 'domain'
+    : constraint === 'uq_organizations_proven_identifier' || constraint === 'organizations_identifier_key' ? 'identifier'
+    : undefined;
+  return conflictError(field ? `${field} was registered concurrently; choose another value` : 'Registration conflicts with another entry; check its identifier and domain.', field);
+}
 
 /** Current stored entry as an EntryProfile, for updateEntryProfile. */
 function profileOf(org: Organization): EntryProfile {
@@ -286,9 +423,14 @@ function buildProfileOrError(body: CreateOrgBody, path: HostingPath): EntryProfi
  *   'member' — any member (admin or member) may proceed (read access)
  *   'admin'  — only admins may proceed (mutations: update/suspend/reactivate/delete)
  *
- * On failure it responds 403 and short-circuits the route. `checkMembership`
- * returns the full membership row, so the role comes from the same lookup that
- * confirms membership — no extra query.
+ * On failure it short-circuits the route: 404 NOT_FOUND when no org holds the
+ * org_id (never created, or deleted — deletion is a hard DELETE that cascades
+ * the memberships), 403 FORBIDDEN when it exists and the caller is not a member
+ * or lacks the role. The 404 reveals nothing new: any signed-in user can
+ * already learn whether an org_id is taken from GET /api/v1/availability.
+ * `checkMembership` returns the full membership row, so the role comes from the
+ * same lookup that confirms membership; the existence lookup runs only on the
+ * refusal path.
  */
 function requireOrgRole(level: 'member' | 'admin') {
   return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
@@ -297,6 +439,10 @@ function requireOrgRole(level: 'member' | 'admin') {
 
     const membership = await checkMembership(userId, org_id);
     if (!membership) {
+      if (!(await findByOrgId(org_id))) {
+        reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${org_id}" not found` });
+        return;
+      }
       reply.code(403).send({ error: 'FORBIDDEN', detail: 'you are not a member of this organization' });
       return;
     }
@@ -331,10 +477,15 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
   const orgWriteRateLimit = {
     rateLimit: { max: claims.writeRateLimitMax, timeWindow: claims.writeRateLimitWindow },
   };
+  // Each verify-domain asks four DNS resolvers about an admin-chosen name.
+  const domainVerifyRateLimit = {
+    rateLimit: { max: claims.domainVerifyRateLimitMax, timeWindow: claims.domainVerifyRateLimitWindow },
+  };
 
   // Create a new organization
   fastify.post<{ Body: CreateOrgBody }>('/api/v1/orgs', {
-    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, rejectOversizedJson],
+    preValidation: [fastify.authenticate],
+    preHandler: [fastify.requireVerifiedAccount, rejectOversizedJson],
     config: orgWriteRateLimit,
     schema: {
       tags: ['orgs'],
@@ -349,7 +500,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
           domain:        { type: 'string', maxLength: 255 },
           contact_email: { type: 'string', format: 'email' },
           registry_url:  { type: 'string', maxLength: 512 },
-          ttl_seconds:   { type: 'integer', minimum: 3600, maximum: 604800 },
+          ttl_seconds:   { type: 'integer', minimum: 3600, maximum: 604800, description: TTL_SECONDS_DESCRIPTION },
           identifier:    { type: 'string', maxLength: 512 },
           media_type:    { type: 'string', maxLength: 128, enum: ALLOWED_MEDIA_TYPES },
           description:   { type: 'string', maxLength: 1000 },
@@ -363,6 +514,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       },
       response: {
         201: INDEX_RECORD_SCHEMA,
+        401: apiErrorSchema,
         409: apiErrorSchema,
         400: apiErrorSchema,
         403: apiErrorSchema,
@@ -379,6 +531,9 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
     if (isReservedOrgId(body.org_id) && !(await isOperator(user.userId))) {
       return reply.code(400).send({ error: 'RESERVED_ORG_ID', detail: `org_id "${body.org_id}" is reserved — choose another` });
     }
+
+    const unreachable = await registryUrlReachabilityError(body.registry_url);
+    if (unreachable) return reply.code(400).send({ error: 'VALIDATION', detail: unreachable });
 
     const profile = buildProfileOrError(body, path);
     if ('status' in profile) return reply.code(profile.status).send(profile.body);
@@ -408,9 +563,12 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       buildConfig().llmEnrichment,
     );
 
-    let org: Organization;
+    const cardValidation = await validateRegistrationCard(body.registry_url, profile.mediaType, {
+      guard: buildConfig().outbound.allowPrivateHosts ? allowAnyUrl : publicUrlGuard,
+    });
+    let org: Organization | null;
     try {
-      org = await insertOrganization({
+      org = await createOwnedOrganization({
         orgId:                body.org_id,
         displayName:          body.display_name,
         domain:               body.domain?.toLowerCase() ?? null,
@@ -429,13 +587,19 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
         version:              body.version,
         trustManifest:        body.trust_manifest,
         representativeQueries,
-      });
+        cardValidation,
+      }, user.userId, user.tokenVersion ?? 0);
     } catch (err) {
-      if (isUniqueViolation(err)) return reply.code(RACE_CONFLICT.status).send(RACE_CONFLICT.body);
+      if (isUniqueViolation(err)) {
+        const conflict = raceConflict(err);
+        return reply.code(conflict.status).send(conflict.body);
+      }
       throw err;
     }
 
-    await insertMembership(user.userId, org.orgId, 'admin');
+    if (!org) {
+      return reply.code(401).send({ error: 'UNAUTHORIZED', detail: 'session expired; please sign in again' });
+    }
     await sendVerificationEmail(body.contact_email, verifyToken, body.org_id);
     fastify.analytics.capture('entry_registered', {
       hosting_path: path,
@@ -448,7 +612,8 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Get own org (must be member)
   fastify.get<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id', {
-    preHandler: [fastify.authenticate, requireOrgRole('member')],
+    preValidation: [fastify.authenticate],
+    preHandler: [requireOrgRole('member')],
     schema: {
       tags: ['orgs'],
       summary: 'Get your organization',
@@ -474,7 +639,9 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Issue a DNS TXT challenge for the org's domain, or return the unexpired one
   fastify.post<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/domain-challenge', {
-    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, requireOrgRole('admin')],
+    preValidation: [fastify.authenticate],
+    preHandler: [fastify.requireVerifiedAccount, requireOrgRole('admin')],
+    config: domainVerifyRateLimit,
     schema: {
       tags: ['orgs'],
       summary: 'Issue a DNS TXT challenge to prove domain ownership',
@@ -520,7 +687,9 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Check the DNS TXT record and, on success, mark the domain verified + activate
   fastify.post<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/verify-domain', {
-    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, requireOrgRole('admin')],
+    preValidation: [fastify.authenticate],
+    preHandler: [fastify.requireVerifiedAccount, requireOrgRole('admin')],
+    config: domainVerifyRateLimit,
     schema: {
       tags: ['orgs'],
       summary: 'Verify the DNS TXT challenge and activate the organization',
@@ -569,7 +738,8 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
     let updated: Organization | null;
     try {
-      updated = await markDomainVerified(org.orgId);
+      // Applies only if the org still has the domain and challenge just checked.
+      updated = await markDomainVerified(org.orgId, { domain: org.domain, challenge: org.domainChallenge });
     } catch (err) {
       // Another registrant proved this domain an instant earlier — first proof wins.
       if (isUniqueViolation(err)) {
@@ -578,7 +748,13 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       throw err;
     }
     if (!updated) {
-      return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
+      if (!(await findByOrgId(org.orgId))) {
+        return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
+      }
+      return reply.code(409).send({
+        error: 'DOMAIN_CHANGED',
+        detail: 'the domain or challenge changed while verifying; request a new challenge',
+      });
     }
     fastify.analytics.capture('entry_domain_verified');
 
@@ -587,7 +763,8 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Update own org's index record
   fastify.put<{ Params: { org_id: string }; Body: UpdateOrgBody }>('/api/v1/orgs/:org_id', {
-    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, requireOrgRole('admin'), rejectUnknownUpdateFields, rejectOversizedJson],
+    preValidation: [fastify.authenticate],
+    preHandler: [fastify.requireVerifiedAccount, requireOrgRole('admin'), rejectUnknownUpdateFields, rejectOversizedJson],
     config: orgWriteRateLimit,
     schema: {
       tags: ['orgs'],
@@ -621,15 +798,33 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
         return reply.code(400).send({ error: 'VALIDATION', detail: 'domain must be a valid hostname (e.g. acme.com)' });
       }
     }
-    if (body.registry_url != null && !/^https?:\/\//.test(body.registry_url)) {
-      return reply.code(400).send({ error: 'VALIDATION', detail: 'registry_url must start with https://' });
+    // Only on change. An entry registered before this rule has a stored
+    // http:// URL, and the dashboard resends registry_url on every save — so
+    // checking unconditionally locked those owners out of editing anything,
+    // with an error naming a value they had not touched (review on #135).
+    if (body.registry_url != null && body.registry_url !== current.registryUrl) {
+      const registryError = registryUrlError(body.registry_url);
+      if (registryError) {
+        return reply.code(400).send({ error: 'VALIDATION', detail: registryError });
+      }
+      const changedUnreachable = await registryUrlReachabilityError(body.registry_url);
+      if (changedUnreachable) {
+        return reply.code(400).send({ error: 'VALIDATION', detail: changedUnreachable });
+      }
     }
 
-    const next = updateEntryProfile(profileOf(current), {
-      domain: body.domain,
-      publisherDisplayName: body.publisher?.displayName,
-      extensions: body.extensions,
-    });
+    let next: EntryProfile;
+    try {
+      next = updateEntryProfile(profileOf(current), {
+        domain: body.domain,
+        mediaType: body.media_type,
+        publisherDisplayName: body.publisher?.displayName,
+        extensions: body.extensions,
+      });
+    } catch (err) {
+      if (err instanceof EntryProfileError) return reply.code(400).send(validationError(err.message).body);
+      throw err;
+    }
     const conflict = await findConflict(next.identifier, body.domain?.toLowerCase() ?? null, current.orgId);
     if (conflict) return reply.code(conflict.status).send(conflict.body);
 
@@ -648,6 +843,12 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
           )
         : undefined;
 
+    const recheckCard = body.registry_url !== undefined || body.media_type !== undefined;
+    const cardValidation = recheckCard
+      ? await validateRegistrationCard(body.registry_url ?? current.registryUrl, next.mediaType, {
+          guard: buildConfig().outbound.allowPrivateHosts ? allowAnyUrl : publicUrlGuard,
+        })
+      : undefined;
     let updated: Organization | null;
     try {
       updated = await updateOrganization(request.params.org_id, {
@@ -655,6 +856,9 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
         domain:          body.domain?.toLowerCase(),
         identifier:      next.identifier,
         registryUrl:     body.registry_url,
+        // Only write the supplied type; unrelated edits must not restore a stale one.
+        mediaType:       body.media_type,
+        expectedCard:    recheckCard ? current : undefined,
         ttlSeconds:      body.ttl_seconds,
         description:     body.description,
         tags:            body.tags,
@@ -665,12 +869,19 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
         // No ?? null here: undefined (omitted) must stay distinct from null (clear).
         trustManifest:   body.trust_manifest,
         representativeQueries,
+        cardValidation,
       });
     } catch (err) {
-      if (isUniqueViolation(err)) return reply.code(RACE_CONFLICT.status).send(RACE_CONFLICT.body);
+      if (isUniqueViolation(err)) {
+        const conflict = raceConflict(err);
+        return reply.code(conflict.status).send(conflict.body);
+      }
       throw err;
     }
     if (!updated) {
+      if (recheckCard && await findByOrgId(request.params.org_id)) {
+        return reply.code(409).send({ error: 'CARD_CHANGED', detail: 'The card or entry profile changed during validation. Fetch the current record and retry your update.' });
+      }
       return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
     }
 
@@ -679,7 +890,8 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Resend the contact-email verification link (the previous one stops working).
   fastify.post<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/resend-verification', {
-    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, requireOrgRole('admin')],
+    preValidation: [fastify.authenticate],
+    preHandler: [fastify.requireVerifiedAccount, requireOrgRole('admin')],
     config: {
       rateLimit: { max: buildConfig().auth.rateLimitMax, timeWindow: buildConfig().auth.rateLimitWindow },
     },
@@ -723,7 +935,8 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Suspend org
   fastify.delete<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/suspend', {
-    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, requireOrgRole('admin'), rejectIfTakenDown],
+    preValidation: [fastify.authenticate],
+    preHandler: [fastify.requireVerifiedAccount, requireOrgRole('admin'), rejectIfTakenDown],
     schema: {
       tags: ['orgs'],
       summary: 'Suspend your organization',
@@ -749,7 +962,8 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Reactivate a suspended org
   fastify.post<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/reactivate', {
-    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, requireOrgRole('admin'), rejectIfTakenDown],
+    preValidation: [fastify.authenticate],
+    preHandler: [fastify.requireVerifiedAccount, requireOrgRole('admin'), rejectIfTakenDown],
     schema: {
       tags: ['orgs'],
       summary: 'Reactivate a suspended organization',
@@ -784,7 +998,8 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Hard-delete org
   fastify.delete<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id', {
-    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, requireOrgRole('admin')],
+    preValidation: [fastify.authenticate],
+    preHandler: [fastify.requireVerifiedAccount, requireOrgRole('admin')],
     schema: {
       tags: ['orgs'],
       summary: 'Permanently delete your organization',

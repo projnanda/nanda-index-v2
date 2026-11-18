@@ -17,16 +17,21 @@ export function hashAccountVerifyToken(token: string): string {
 
 /**
  * Mints a fresh verification token for an unverified account, replacing any
- * outstanding one, and returns the RAW token to email. Returns null when the
+ * outstanding one, and returns the RAW token with the address it is bound to
+ * (the account's email at the moment of the write). Mail it to exactly that
+ * address: an email read earlier may have changed in between. Returns null when the
  * resend cooldown is still running (or the account is already verified) — the
  * check and the write are one UPDATE so concurrent requests cannot both send.
  */
-export async function issueAccountVerifyToken(userId: string): Promise<string | null> {
+export async function issueAccountVerifyToken(
+  userId: string,
+): Promise<{ token: string; email: string } | null> {
   const token = randomBytes(32).toString('hex');
   const sql = getSql();
-  const rows = await sql<{ id: string }[]>`
+  const rows = await sql<{ emailVerifyTokenEmail: string }[]>`
     UPDATE users
     SET email_verify_token            = ${hashAccountVerifyToken(token)},
+        email_verify_token_email      = email,
         email_verify_token_expires_at = NOW() + make_interval(hours => ${ACCOUNT_VERIFY_TTL_HOURS}),
         email_verify_sent_at          = NOW(),
         updated_at                    = NOW()
@@ -34,15 +39,16 @@ export async function issueAccountVerifyToken(userId: string): Promise<string | 
       AND email_verified = FALSE
       AND (email_verify_sent_at IS NULL
            OR email_verify_sent_at <= NOW() - make_interval(secs => ${ACCOUNT_VERIFY_RESEND_COOLDOWN_SECONDS}))
-    RETURNING id
+    RETURNING email_verify_token_email
   `;
-  return rows.length > 0 ? token : null;
+  return rows[0] ? { token, email: rows[0].emailVerifyTokenEmail } : null;
 }
 
 /**
  * Marks the account owning an unexpired token as verified and clears the
- * token (single use). Returns the verified user, or null for an unknown,
- * used, or expired token.
+ * token (single use). The account's email must still be the address the token
+ * was mailed to, so a link never verifies a different address. Returns the
+ * verified user, or null for an unknown, used, expired or rebound token.
  */
 export async function consumeAccountVerifyToken(token: string): Promise<User | null> {
   const sql = getSql();
@@ -50,10 +56,12 @@ export async function consumeAccountVerifyToken(token: string): Promise<User | n
     UPDATE users
     SET email_verified                = TRUE,
         email_verify_token            = NULL,
+        email_verify_token_email      = NULL,
         email_verify_token_expires_at = NULL,
         updated_at                    = NOW()
     WHERE email_verify_token = ${hashAccountVerifyToken(token)}
       AND email_verify_token_expires_at > NOW()
+      AND email_verify_token_email = email
     RETURNING *
   `;
   return rows[0] ?? null;

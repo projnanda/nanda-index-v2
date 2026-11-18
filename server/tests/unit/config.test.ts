@@ -100,7 +100,8 @@ describe('buildConfig', () => {
     process.env.NODE_ENV = 'production';
     // JWT_SECRET and COOKIE_SECRET must be set in production (auth hardening)
     process.env.JWT_SECRET = 'a-secret-that-is-long-enough-for-production-use';
-    process.env.COOKIE_SECRET = 'a-production-cookie-secret';
+    process.env.COOKIE_SECRET = 'a-production-cookie-secret-of-32-plus-chars';
+    process.env.SMTP_URL = 're_production_key';
     process.env.SIGNING_KEY_ID = 'custom';
     process.env.DB_MAX_CONNECTIONS = '20';
 
@@ -112,6 +113,25 @@ describe('buildConfig', () => {
 
     delete process.env.JWT_SECRET;
     delete process.env.COOKIE_SECRET;
+  });
+
+  it('exits in production when COOKIE_SECRET is shorter than 32 characters', () => {
+    process.env.DATABASE_URL = 'x';
+    process.env.NODE_ENV = 'production';
+    process.env.JWT_SECRET = 'a-secret-that-is-long-enough-for-production-use';
+    process.env.COOKIE_SECRET = 'x'.repeat(31);
+    const exitSpy = mockExit();
+
+    expect(() => buildConfig()).toThrow('__mock_exit__');
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('accepts a short COOKIE_SECRET outside production', () => {
+    process.env.DATABASE_URL = 'x';
+    process.env.NODE_ENV = 'development';
+    process.env.COOKIE_SECRET = 'short';
+
+    expect(buildConfig().cookie.secret).toBe('short');
   });
 
   it('exits when DATABASE_URL is missing', () => {
@@ -141,6 +161,23 @@ describe('buildConfig', () => {
     expect(cfg.email.smtpUrl).toBe('log');
   });
 
+  it('reads community recipients from server environment and ignores empty CC entries', () => {
+    process.env.DATABASE_URL = 'x';
+    process.env.COMMUNITY_CONTACT_EMAIL = ' contact@example.org ';
+    process.env.COMMUNITY_CONTACT_CC = ' reviewer-one@example.org, , reviewer-two@example.org, ';
+    expect(buildConfig().email).toMatchObject({
+      communityTo: 'contact@example.org',
+      communityCc: ['reviewer-one@example.org', 'reviewer-two@example.org'],
+    });
+  });
+
+  it('leaves community recipients unset until an operator configures them', () => {
+    process.env.DATABASE_URL = 'x';
+    delete process.env.COMMUNITY_CONTACT_EMAIL;
+    delete process.env.COMMUNITY_CONTACT_CC;
+    expect(buildConfig().email).toMatchObject({ communityTo: '', communityCc: [] });
+  });
+
   it('applies cookie + auth defaults', () => {
     process.env.DATABASE_URL = 'x';
     delete process.env.NODE_ENV;
@@ -149,14 +186,29 @@ describe('buildConfig', () => {
     delete process.env.AUTH_MAX_LOGIN_ATTEMPTS;
     delete process.env.AUTH_LOCKOUT_MINUTES;
     delete process.env.AUTH_RESET_TOKEN_TTL_MINUTES;
+    delete process.env.AUTH_UNVERIFIED_RECLAIM_HOURS;
+    delete process.env.AUTH_INITIAL_LOCKOUT_MINUTES;
 
     const cfg = buildConfig();
     expect(cfg.cookie.secret).toBe('dev-cookie-secret-change-in-production');
     expect(cfg.auth.rateLimitMax).toBe(10);
     expect(cfg.auth.rateLimitWindow).toBe('1 minute');
     expect(cfg.auth.maxLoginAttempts).toBe(5);
+    expect(cfg.auth.initialLockoutMinutes).toBe(1);
     expect(cfg.auth.lockoutMinutes).toBe(15);
     expect(cfg.auth.resetTokenTtlMinutes).toBe(60);
+    expect(cfg.auth.unverifiedReclaimHours).toBe(48);
+  });
+
+  it('throttles domain verification per IP by default, overridable from env', () => {
+    process.env.DATABASE_URL = 'x';
+    delete process.env.DOMAIN_VERIFY_RATE_LIMIT_MAX;
+    delete process.env.DOMAIN_VERIFY_RATE_LIMIT_WINDOW;
+    expect(buildConfig().claims).toMatchObject({ domainVerifyRateLimitMax: 20, domainVerifyRateLimitWindow: '10 minutes' });
+
+    process.env.DOMAIN_VERIFY_RATE_LIMIT_MAX = '5';
+    process.env.DOMAIN_VERIFY_RATE_LIMIT_WINDOW = '1 hour';
+    expect(buildConfig().claims).toMatchObject({ domainVerifyRateLimitMax: 5, domainVerifyRateLimitWindow: '1 hour' });
   });
 
   it('caps concurrent password hashes at CPU count minus one (min 1), overridable from env', () => {
@@ -255,5 +307,55 @@ describe('buildConfig', () => {
 
     delete process.env.JWT_SECRET;
     delete process.env.NODE_ENV;
+  });
+
+  describe('email delivery in production', () => {
+    function productionEnv() {
+      process.env.DATABASE_URL = 'x';
+      process.env.NODE_ENV = 'production';
+      process.env.JWT_SECRET = 'a-secret-that-is-long-enough-for-production-use';
+      process.env.COOKIE_SECRET = 'a-production-cookie-secret-of-32-plus-chars';
+    }
+
+    // 'log' prints live reset and verification links to stdout (docker logs).
+    it.each([['log'], [undefined], ['   ']])('exits when SMTP_URL is %j', (smtpUrl) => {
+      productionEnv();
+      if (smtpUrl === undefined) delete process.env.SMTP_URL;
+      else process.env.SMTP_URL = smtpUrl;
+      delete process.env.ALLOW_EMAIL_LOG_IN_PRODUCTION;
+
+      const exitSpy = mockExit();
+      expect(() => buildConfig()).toThrow('__mock_exit__');
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('starts with a real SMTP_URL (Resend API key)', () => {
+      productionEnv();
+      process.env.SMTP_URL = 're_production_key';
+      expect(buildConfig().email.smtpUrl).toBe('re_production_key');
+    });
+
+    it('starts in log mode only with the explicit override', () => {
+      productionEnv();
+      process.env.SMTP_URL = 'log';
+      process.env.ALLOW_EMAIL_LOG_IN_PRODUCTION = 'true';
+      expect(buildConfig().email.smtpUrl).toBe('log');
+    });
+
+    it('does not treat a non-"true" override as consent', () => {
+      productionEnv();
+      process.env.SMTP_URL = 'log';
+      process.env.ALLOW_EMAIL_LOG_IN_PRODUCTION = '1';
+      const exitSpy = mockExit();
+      expect(() => buildConfig()).toThrow('__mock_exit__');
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('keeps log mode as the default outside production', () => {
+      process.env.DATABASE_URL = 'x';
+      delete process.env.NODE_ENV;
+      delete process.env.SMTP_URL;
+      expect(buildConfig().email.smtpUrl).toBe('log');
+    });
   });
 });

@@ -17,6 +17,18 @@ import { createConcurrencyLimit } from './concurrencyLimit.js';
 
 const BCRYPT_ROUNDS = 10;
 
+// bcrypt only uses the first 72 bytes. Apply this policy when choosing a new
+// password, never when verifying an existing one: older credentials may be longer.
+export const newPasswordSchema = { type: 'string', minLength: 8 } as const;
+
+export function newPasswordError(password: string): string | null {
+  if (Array.from(password).length < 8) return 'must contain at least 8 characters';
+  if (Buffer.byteLength(password, 'utf8') > 72) {
+    return 'must use no more than 72 UTF-8 bytes; accented letters and emoji can use more than one byte';
+  }
+  return null;
+}
+
 // Unknown emails (and OAuth-only accounts) are compared against this hash so
 // a failed login costs one bcrypt compare either way — response time must not
 // reveal whether an account exists.

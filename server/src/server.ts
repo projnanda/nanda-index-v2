@@ -1,6 +1,9 @@
 import { fileURLToPath } from 'url';
-import Fastify from 'fastify';
+import Fastify, { type FastifyServerOptions } from 'fastify';
 import { buildConfig } from './config/index.js';
+import { serializeRequest } from './lib/logRedaction.js';
+import { trustPrivateProxyHops } from './lib/trustProxy.js';
+import { formatSchemaErrors } from './lib/validationErrors.js';
 import { registerErrorHandler } from './plugins/errorHandler.js';
 import { registerHelmet } from './plugins/helmet.js';
 import { registerCors } from './plugins/cors.js';
@@ -14,6 +17,7 @@ import { registerOAuthPlugin } from './plugins/oauth.js';
 import { registerHealthRoute } from './routes/health.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerAccountVerificationRoutes } from './routes/account-verification.js';
+import { registerAccountSettingsRoutes } from './routes/account-settings.js';
 import { registerIndexRecordRoutes } from './routes/index-records.js';
 import { registerOrgRoutes } from './routes/orgs.js';
 import { registerOrgRecoveryRoute } from './routes/org-recovery.js';
@@ -24,11 +28,42 @@ import { registerSearchRoutes } from './routes/search.js';
 import { registerAgenticSearchRoutes } from './routes/agentic-search.js';
 import { registerArdRoutes } from './routes/ard.js';
 import { registerResolveRoute } from './routes/resolve.js';
+import { registerCommunityRoutes } from './routes/community.js';
 
 const MAX_BODY_BYTES = 64 * 1024;
 
+/**
+ * Logger options, with the request serializer that keeps query-string secrets
+ * out of the log (lib/logRedaction.ts). The serializer is set here rather than
+ * per route so a route added later is covered without anyone remembering to.
+ *
+ * `base` is spread last deliberately: a caller-supplied `level` is overridden,
+ * because the serializer and the environment's level are a pair we do not want
+ * a test or an operator to half-replace. Pass `logger: false` to silence it.
+ */
+function buildLoggerOptions(
+  nodeEnv: string,
+  logger: BuildServerOptions['logger'],
+): FastifyServerOptions['logger'] {
+  if (logger === false) return false;
+  const base = {
+    level: nodeEnv === 'production' ? 'info' : 'debug',
+    serializers: { req: serializeRequest },
+  };
+  // `true` means "the default logger"; an object is a test or an operator
+  // supplying its own options, which must not be able to drop the serializer.
+  return typeof logger === 'object' && logger !== null
+    ? { ...logger, ...base, serializers: { ...logger.serializers, ...base.serializers } }
+    : base;
+}
+
 export interface BuildServerOptions {
-  logger?: boolean;
+  /**
+   * `false` silences the logger (what most integration tests pass). Anything
+   * else is merged into the logger options, so a test can supply a destination
+   * stream and assert on what was actually written.
+   */
+  logger?: boolean | FastifyServerOptions['logger'];
 }
 
 /**
@@ -44,15 +79,16 @@ export async function buildServer(options: BuildServerOptions = {}) {
     // 16 KB (lib/jsonLimits.ts). 64 KB leaves headroom for that and rejects
     // anything bigger before it is parsed (Fastify's default is 1 MB).
     bodyLimit: MAX_BODY_BYTES,
+    // Same text as Fastify's default, except a `const` failure names
+    // the expected value ("must be equal to \"DELETE\"").
+    schemaErrorFormatter: formatSchemaErrors,
     // Behind Caddy, request.ip must be the visitor's address, not the proxy's —
     // otherwise every per-IP rate limit is one bucket shared by all users.
-    // Only the configured number of hops is trusted, so a client reaching the
-    // API directly cannot pick its own address via X-Forwarded-For.
-    ...(config.trustProxyHops > 0 ? { trustProxy: config.trustProxyHops } : {}),
-    logger:
-      options.logger === false
-        ? false
-        : { level: config.nodeEnv === 'production' ? 'info' : 'debug' },
+    // Only the configured number of hops, each on a private network, is
+    // trusted, so a client reaching the API directly cannot pick its own
+    // address via X-Forwarded-For.
+    ...(config.trustProxyHops > 0 ? { trustProxy: trustPrivateProxyHops(config.trustProxyHops) } : {}),
+    logger: buildLoggerOptions(config.nodeEnv, options.logger),
   });
 
   // Error handler first — wraps all subsequent plugin/route errors
@@ -74,6 +110,7 @@ export async function buildServer(options: BuildServerOptions = {}) {
   await registerHealthRoute(fastify);
   await registerAuthRoutes(fastify);
   await registerAccountVerificationRoutes(fastify);
+  await registerAccountSettingsRoutes(fastify);
   await registerIndexRecordRoutes(fastify);
   await registerOrgRoutes(fastify);
   await registerOrgRecoveryRoute(fastify);
@@ -84,6 +121,7 @@ export async function buildServer(options: BuildServerOptions = {}) {
   await registerAgenticSearchRoutes(fastify);
   await registerArdRoutes(fastify);
   await registerResolveRoute(fastify);
+  await registerCommunityRoutes(fastify);
 
   return { fastify, config };
 }

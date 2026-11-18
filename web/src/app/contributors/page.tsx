@@ -1,7 +1,14 @@
 import Image from "next/image";
 import { PageShell } from "@/components/PageShell";
 import { CONTRIBUTOR_QUOTES } from "@/lib/contributor-quotes";
+import { CONTRIBUTOR_BITMAP } from "@/lib/contributor-logos";
 import { externalLinks } from "@/lib/site-data";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Contributors",
+  description: "Nanda Index is being designed, reviewed, and supported by its design partners.",
+};
 
 type Person = {
   name: string;
@@ -13,6 +20,24 @@ type Paper = {
   href: string;
   authors: Person[];
 };
+
+const ADVISORS: Person[] = [
+  { name: "Mike Hamilton", organization: "Former CIO at Cloudflare" },
+  { name: "Andrew Trask", organization: "OpenMined" },
+];
+
+const COMMITTEES = [
+  {
+    id: "steering-committee",
+    title: "Steering Committee",
+    members: ["Ramesh Raskar", "Vijoy Pandey", "Sam Sharaf", "Rahul Todkar"],
+  },
+  {
+    id: "technical-steering-committee",
+    title: "Technical Steering Committee",
+    members: ["Pradyumna Chari", "Luca Muscariello", "Ankit Kumar Nath", "Hema Seshadri", "John Zinky"],
+  },
+] as const;
 
 const CONTRIBUTORS: Person[] = [
   { name: "Ankit Kumar Nath", organization: "Nasiko and ProjectNANDA.org" },
@@ -85,7 +110,15 @@ const PAPERS: Paper[] = [
   },
 ];
 
-function PeopleTable({ caption, people }: { caption: string; people: Person[] }) {
+function PeopleTable({
+  caption,
+  people,
+  organizationHeading = "Organization",
+}: {
+  caption: string;
+  people: Person[];
+  organizationHeading?: string;
+}) {
   return (
     <table className="w-full table-fixed border-collapse text-left text-sm">
       <caption className="sr-only">{caption}</caption>
@@ -95,7 +128,7 @@ function PeopleTable({ caption, people }: { caption: string; people: Person[] })
             Name
           </th>
           <th scope="col" className="py-2 text-xs font-bold uppercase tracking-wide text-ink-weak">
-            Organization
+            {organizationHeading}
           </th>
         </tr>
       </thead>
@@ -115,9 +148,17 @@ export default function ContributorsPage() {
   return (
     <PageShell
       title="Contributors"
-      description="Nanda Index is being designed, reviewed, and supported by a large collective."
+      description="Nanda Index is being designed, reviewed, and supported by its design partners."
     >
       <nav aria-label="On this page" className="mb-8 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+        <a href="#advisors" className="text-brand-600 hover:text-brand-700 hover:underline">
+          Advisors
+        </a>
+        {COMMITTEES.map(({ id, title }) => (
+          <a key={id} href={`#${id}`} className="text-brand-600 hover:text-brand-700 hover:underline">
+            {title}
+          </a>
+        ))}
         <a href="#research-authors" className="text-brand-600 hover:text-brand-700 hover:underline">
           Research authors
         </a>
@@ -127,11 +168,14 @@ export default function ContributorsPage() {
       </nav>
       <div className="max-w-3xl space-y-12">
         <div id="community-perspectives" className="scroll-mt-24">
+          <h2 className="mb-6 font-display text-2xl font-semibold text-ink-strong sm:text-3xl">
+            Design Partners
+          </h2>
           <Image
-            src="/contributors/contributor-logos-tab-11-v3.png"
-            alt="Contributor logos: Google, Cisco, Akamai Cloud, PayPal, AGI House, Cognizant, Commerce, Ericsson, GSMA, HCLTech, Hello Haven, Hexaware, Inkbox, Kyndryl, L&T Technology Services, Maritime, Mitsubishi Electric, Nasiko, Nebius, Nutanix, Ora, Suki, TCS, TinyFish, Wand AI, Wipro, WorkOS, MIT Media Lab, and Project NANDA."
-            width={874}
-            height={802}
+            src={CONTRIBUTOR_BITMAP.src}
+            alt={CONTRIBUTOR_BITMAP.alt}
+            width={CONTRIBUTOR_BITMAP.width}
+            height={CONTRIBUTOR_BITMAP.height}
             sizes="(min-width: 832px) 768px, calc(100vw - 64px)"
             className="mb-8 h-auto w-full bg-white"
           />
@@ -169,6 +213,26 @@ export default function ContributorsPage() {
               </figure>
             ))}
           </div>
+        </div>
+
+        <section id="advisors" aria-labelledby="advisors-heading" className="scroll-mt-24">
+          <h2 id="advisors-heading" className="mb-4 font-display text-lg font-semibold text-ink-strong">
+            Advisors
+          </h2>
+          <PeopleTable caption="NandaIndex advisors" people={ADVISORS} organizationHeading="Role or affiliation" />
+        </section>
+
+        <div className="grid gap-8 sm:grid-cols-2">
+          {COMMITTEES.map(({ id, title, members }) => (
+            <section key={id} id={id} aria-labelledby={`${id}-heading`} className="scroll-mt-24">
+              <h2 id={`${id}-heading`} className="mb-4 font-display text-lg font-semibold text-ink-strong">
+                {title}
+              </h2>
+              <ul className="list-disc space-y-1.5 pl-5 text-sm text-ink">
+                {members.map((name) => <li key={name}>{name}</li>)}
+              </ul>
+            </section>
+          ))}
         </div>
 
         <section id="research-authors" aria-labelledby="research-authors-heading" className="scroll-mt-24">

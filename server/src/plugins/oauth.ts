@@ -28,6 +28,9 @@ const GITHUB_CONFIGURATION = {
  */
 export async function registerOAuthPlugin(fastify: FastifyInstance): Promise<void> {
   const config = buildConfig();
+  // The state cookie stays httpOnly and SameSite=Lax (the plugin defaults);
+  // in production it is also Secure, so it never travels over plain http.
+  const cookie = { secure: config.nodeEnv === 'production' };
 
   if (config.oauth.googleClientId && config.oauth.googleClientSecret) {
     await fastify.register(oauth2, {
@@ -41,6 +44,7 @@ export async function registerOAuthPlugin(fastify: FastifyInstance): Promise<voi
       },
       scope: ['profile', 'email'],
       startRedirectPath: '/auth/google',
+      cookie,
       callbackUri: `${config.oauth.callbackBaseUrl}/auth/google/callback`,
     });
   }
@@ -57,6 +61,7 @@ export async function registerOAuthPlugin(fastify: FastifyInstance): Promise<voi
       },
       scope: ['user:email'],
       startRedirectPath: '/auth/github',
+      cookie,
       callbackUri: `${config.oauth.callbackBaseUrl}/auth/github/callback`,
     });
   }

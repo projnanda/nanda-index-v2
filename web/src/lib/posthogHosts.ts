@@ -8,6 +8,14 @@
 
 export const DEFAULT_POSTHOG_HOST = "https://us.i.posthog.com";
 
+/**
+ * The configured ingestion host, or the default. Empty counts as unset: the
+ * Dockerfile passes an empty string when the build arg is missing.
+ */
+export function configuredPostHogHost(value: string | undefined): string {
+  return value?.trim() || DEFAULT_POSTHOG_HOST;
+}
+
 export interface PostHogHosts {
   /** Event ingestion and remote config (proxied at /ingest). */
   readonly api: string;

@@ -33,9 +33,10 @@ interface IndexListQuerystring {
  *                                still need domain verification separately)
  */
 export async function registerIndexRecordRoutes(fastify: FastifyInstance): Promise<void> {
+  const config = buildConfig();
   // Counting every listed entry costs the same on every page, so the total is
   // reused for INDEX_STATS_CACHE_SECONDS; the page itself is always live.
-  const listedTotal = cacheFor(buildConfig().indexStatsCacheSeconds * 1000, countListedEntries);
+  const listedTotal = cacheFor(config.indexStatsCacheSeconds * 1000, countListedEntries);
 
   // List index entries. Paged so one request cannot pull the whole index; the
   // body stays a bare array (existing clients keep working) and the total
@@ -116,6 +117,9 @@ export async function registerIndexRecordRoutes(fastify: FastifyInstance): Promi
   // Email verification — marks contact email verified. Activates personal
   // (no-domain) orgs outright; domain-based orgs still need domain verification.
   fastify.post<{ Body: { token: string } }>('/api/v1/verify-email', {
+    config: {
+      rateLimit: { max: config.auth.rateLimitMax, timeWindow: config.auth.rateLimitWindow },
+    },
     schema: {
       tags: ['auth'],
       summary: 'Verify org contact email (activates personal orgs; others still need domain verification)',
@@ -129,6 +133,7 @@ export async function registerIndexRecordRoutes(fastify: FastifyInstance): Promi
         400: apiErrorSchema,
         404: apiErrorSchema,
         409: apiErrorSchema,
+        429: apiErrorSchema,
       },
     },
   }, async (request, reply) => {

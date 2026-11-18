@@ -1,4 +1,10 @@
 import { PageShell } from "@/components/PageShell";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Ongoing Projects",
+  description: "Websites and publications from the NANDA ecosystem.",
+};
 
 type ProjectLink = {
   title: string;

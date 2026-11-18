@@ -134,7 +134,7 @@ def test_minting_and_loading_cannot_disagree_about_where_the_grant_lives(granted
     agent_did = "did:key:z6MkiHzPvgJZL8Dp4UwV7PUGQJVPCJX8DZxMhx1Fj1JwDQKe"
     monkeypatch.setenv("AGENT_DID", agent_did)
     monkeypatch.delenv("HOST_SEED", raising=False)
-    assert mint.main() == 0
+    assert mint.main([]) == 0
 
     assert (tmp_path / "grant.json").is_file(), "minted outside the directory the agent reads"
     assert (tmp_path / "grant-receipt.json").is_file()

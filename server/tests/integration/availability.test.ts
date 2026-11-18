@@ -34,6 +34,7 @@ async function signedInUser(fastify: FastifyInstance, name: string): Promise<str
     avatarUrl:   null,
     provider:    'google',
     providerId:  `${name}-provider-id`,
+    emailVerified: true,
   });
   return fastify.jwt.sign({ userId: user.id, email: user.email, displayName: null });
 }

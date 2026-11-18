@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { PERSONAL_DATA_CLASS } from "@/lib/analyticsPrivacy";
 import { prettyJson } from "@/lib/utils";
 
-export function JsonPanel({ data }: { data: unknown }) {
+/** `mask` hides the JSON from session replays: set it when the data repeats what the visitor typed. */
+export function JsonPanel({ data, mask = false }: { data: unknown; mask?: boolean }) {
   const [copied, setCopied] = useState(false);
   const json = prettyJson(data);
 
@@ -26,7 +28,7 @@ export function JsonPanel({ data }: { data: unknown }) {
           {copied ? "Copied" : "Copy JSON"}
         </button>
       </div>
-      <pre className="max-h-[60vh] overflow-auto whitespace-pre-wrap break-all p-4 font-mono text-xs leading-6">{json}</pre>
+      <pre className={`${mask ? `${PERSONAL_DATA_CLASS} ` : ""}max-h-[60vh] overflow-auto whitespace-pre-wrap break-all p-4 font-mono text-xs leading-6`}>{json}</pre>
     </div>
   );
 }

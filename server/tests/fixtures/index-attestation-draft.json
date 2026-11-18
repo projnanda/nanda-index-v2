@@ -1,0 +1,22 @@
+{
+  "payload": {
+    "schemaVersion": "nanda-index-attestation-draft-1",
+    "issuer": "https://index.example.test",
+    "keyId": "fixture-key-1",
+    "algorithm": "ed25519",
+    "locator": "urn:air:publisher.example.test:agent:orders",
+    "entryIdentifier": "urn:air:publisher.example.test:catalog:root",
+    "match": "publisher",
+    "url": "https://publisher.example.test/catalog.json",
+    "mediaType": "application/ai-catalog+json",
+    "generation": "registration-fixture-1",
+    "revision": 7,
+    "ownershipVerifiedAt": "2030-01-01T00:00:00Z",
+    "ownershipExpiresAt": "2030-01-02T00:00:00Z",
+    "issuedAt": "2030-01-01T12:00:00Z",
+    "expiresAt": "2030-01-01T12:05:00Z"
+  },
+  "canonicalJson": "{\"algorithm\":\"ed25519\",\"entryIdentifier\":\"urn:air:publisher.example.test:catalog:root\",\"expiresAt\":\"2030-01-01T12:05:00Z\",\"generation\":\"registration-fixture-1\",\"issuedAt\":\"2030-01-01T12:00:00Z\",\"issuer\":\"https://index.example.test\",\"keyId\":\"fixture-key-1\",\"locator\":\"urn:air:publisher.example.test:agent:orders\",\"match\":\"publisher\",\"mediaType\":\"application/ai-catalog+json\",\"ownershipExpiresAt\":\"2030-01-02T00:00:00Z\",\"ownershipVerifiedAt\":\"2030-01-01T00:00:00Z\",\"revision\":7,\"schemaVersion\":\"nanda-index-attestation-draft-1\",\"url\":\"https://publisher.example.test/catalog.json\"}",
+  "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAugqFV2ee/E+E8GRrRMLYmvXdK/7bNLQG3rVtbj2zTas=\n-----END PUBLIC KEY-----\n",
+  "signature": "bEik+u0EAOEQ6Orx82hMfOSvKPPwlcw6Lb+g0zZeffrlcR9XQJw9VcMEfaGQAJQIFTb++dPu1v5QQc3kOTivCg=="
+}

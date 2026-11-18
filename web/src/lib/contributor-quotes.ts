@@ -17,13 +17,17 @@ export const CONTRIBUTOR_QUOTES: readonly ContributorQuote[] = [
     text:
       "Agents built by small businesses and individuals will soon outnumber enterprise agents, and most of them will never own a discovery endpoint. A combination of AI Catalog, ARD, and the thin resolution layer of NandaIndex will allow every agent to be found.",
     attribution: "Sam Sharaf and Junjie Bu, Google",
-    logo: null,
+    logo: CONTRIBUTOR_LOGOS["Google"],
   },
   {
     text:
       "The agentic web won’t run on one directory. It will be many independently operated registries and platforms, and agents have to be discoverable across all of them. AGNTCY’s Agent Directory and NandaIndex solve complementary halves of that problem, and doing it on open standards is how it scales.",
     attribution: "Vijoy Pandey, SVP/GM, Outshift by Cisco",
     logo: CONTRIBUTOR_LOGOS["Cisco"],
+    post: {
+      title: "Building a Switchboard for the Internet of Agents: Integrating AGNTCY Directory and NANDA Index",
+      href: "https://outshift.cisco.com/blog/ai-ml/outshift-mit-agentic-web",
+    },
   },
   {
     text:
@@ -39,9 +43,21 @@ export const CONTRIBUTOR_QUOTES: readonly ContributorQuote[] = [
   },
   {
     text:
+      "DNS helped the Internet scale by allowing independent organizations to manage their own names while remaining part of a globally interoperable system. AI agents will need similar principles of openness, distributed discovery, and interoperability. NandaIndex is an promising coalition to explore how these principles can support an Internet of AI Agents, while building on the infrastructure and standards that already exist.",
+    attribution: "Paul Mockapetris, Inventor of DNS in 1983",
+    logo: null,
+  },
+  {
+    text:
+      "As we move toward an Internet where AI agents act on behalf of people and organizations, discovery and trust will become foundational challenges. NandaIndex offers an evolving approach to connecting independent agent discovery systems, and I'm encouraged to see the community exploring how these pieces can work together through open standards.",
+    attribution: "Ken Adler, Technical Fellow, Agentic IAM, Indeed",
+    logo: null,
+  },
+  {
+    text:
       "In just the last few months, we have seen AI agents acting on behalf of consumers and businesses dramatically rise. For an open agentic economy to scale, agents must be able to discover relevant services across fragmented ecosystems. An open discovery effort like NandaIndex is an important step in that direction, and we welcome the industry conversation on how verified identity, trust, and secure commerce can be built on top of them.",
     attribution: "Arjun Chittoor, VP, PayPal",
-    logo: CONTRIBUTOR_LOGOS["PayPal"],
+    logo: null,
   },
   {
     text:
@@ -58,6 +74,18 @@ export const CONTRIBUTOR_QUOTES: readonly ContributorQuote[] = [
       title: "GSMA: Connecting the Mobile World to the Open Agentic Web",
       href: "https://lnkd.in/p/gAz42Dzm",
     },
+  },
+  {
+    text:
+      "In mission-critical environments, AI must do more than demonstrate intelligence—it must be reliable, accountable, and designed to support human decision-making. At Motorola Solutions, we're bringing AI into communications, video security, and command center workflows where these principles matter most. As intelligent systems become increasingly agentic, open initiatives like NandaIndex can help establish the discovery infrastructure needed for independently developed agents to find one another, while preserving the security, control, and trust these environments demand.",
+    attribution: "Dr. Mahesh Saptharishi, Executive Vice President and CTO, Motorola Solutions",
+    logo: CONTRIBUTOR_LOGOS["Motorola Solutions"],
+  },
+  {
+    text:
+      "The future of the connected home isn't about adding more apps or devices—it's about making technology work together effortlessly for people. At TELUS, we're building intelligent, connected experiences that bring together entertainment, smart home devices, and digital services. As personal AI agents become the interface to these experiences, open initiatives like NandaIndex can help agents discover and interact across independent platforms, making connected living simpler, more useful, and more accessible.",
+    attribution: "Amit Nag, Vice President, Connected Products & Experiences, TELUS",
+    logo: null,
   },
   {
     text:
@@ -101,9 +129,21 @@ export const CONTRIBUTOR_QUOTES: readonly ContributorQuote[] = [
   },
   {
     text:
+      "The future of AI will be built by networks of collaborating agents, not isolated assistants. With S.Space, people and their agents, including agents built by different people on different frameworks, work together in shared rooms. But an Internet of AI Agents also needs a way for agents to find each other beyond any one space. Initiatives like NandaIndex can help connect these independent ecosystems through open, federated discovery.",
+    attribution: "Qingyun Wu, Co-founder & CEO, AG2 (S.Space)",
+    logo: CONTRIBUTOR_LOGOS["AG2"],
+  },
+  {
+    text:
       "From launching the first MCP servers integrated with NandaIndex in April 2025 to supporting MIT courses and students working on the earliest versions of the NANDA platform, ME-US has been part of this journey from the beginning. We believe NandaIndex can play a foundational role in enabling an open agentic web where businesses, developers, and individuals can connect and collaborate across platforms.",
     attribution: "Zafer Sahinoglu, VP of Innovation, Mitsubishi Electric",
     logo: CONTRIBUTOR_LOGOS["Mitsubishi Electric"],
+  },
+  {
+    text:
+      "The next generation of AI agents won't live only in data centers. They will increasingly operate in robots, industrial machines, sensors, and devices at the physical edge. At Analog Devices, our work on Physical Intelligence is helping make these systems intelligent, responsive, and efficient under real-world constraints. NandaIndex is a promising initiative toward an open agentic web where cloud-based and physical AI agents can discover one another and collaborate across platforms.",
+    attribution: "Massimiliano “Max” Versace, Vice President of Emergent AI, Analog Devices",
+    logo: null,
   },
   {
     text:

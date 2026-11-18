@@ -26,6 +26,10 @@
 }
 
 nandaindex.org {
+	# Cloudflare Origin Certificate (15-year, trusted only by Cloudflare's edge).
+	# Lives on the droplet in ./certs, never in git. Replaces Let's Encrypt,
+	# whose renewals fail once the droplet only accepts Cloudflare traffic.
+	tls /etc/caddy/certs/origin.pem /etc/caddy/certs/origin.key
 	import hsts
 
 	handle /paper.pdf {
@@ -37,6 +41,10 @@ nandaindex.org {
 	# /demo/.well-known/agent-card.json and it answers A2A on POST /demo/, so the
 	# prefix is stripped and everything under it goes to the demo service.
 	# GET /demo and GET /demo/ land on the page; POST /demo/ stays A2A.
+	# This prefix shares the web app's origin (and its localStorage session),
+	# and Next's headers never reach it. The demo sends its own CSP, nosniff,
+	# Referrer-Policy and X-Frame-Options (demo/src/concierge/security.py), so
+	# its tests can check them; the complete fix is a host of its own.
 	redir /demo /demo/ui/ 302
 	@demo_page {
 		path /demo/
@@ -57,6 +65,8 @@ nandaindex.org {
 }
 
 api.nandaindex.org {
+	# Same Origin Certificate as above (it covers *.nandaindex.org).
+	tls /etc/caddy/certs/origin.pem /etc/caddy/certs/origin.key
 	import hsts
 	reverse_proxy server:3001 {
 		import to_app
