@@ -7,6 +7,9 @@ import { PERSONAL_DATA_CLASS } from "@/lib/analyticsPrivacy";
 import { clearAuthToken, getAuthToken, isTokenExpired, parseJwtPayload, subscribeAuthChanges } from "@/lib/auth";
 import { logout } from "@/lib/nanda-api";
 
+// Opens the shared sign-in page directly in account-creation mode.
+const REGISTER_HREF = "/login?mode=register";
+
 const actionClass = "inline-flex min-h-10 items-center justify-center rounded-control border-2 border-line px-4 py-2 text-sm font-medium text-ink hover:border-line-strong transition";
 
 export function ExploreActions() {
@@ -38,9 +41,12 @@ export function ExploreActions() {
           <button onClick={() => void signOut()} className={actionClass}>Sign out</button>
         </>
       ) : (
-        <Link href="/login" className="inline-flex min-h-10 items-center justify-center rounded-control bg-brand-800 px-5 py-2 text-sm font-medium text-white hover:bg-brand-700 transition">
-          Sign in
-        </Link>
+        <>
+          <Link href="/login" className="inline-flex min-h-10 items-center justify-center rounded-control bg-brand-800 px-5 py-2 text-sm font-medium text-white hover:bg-brand-700 transition">
+            Sign in
+          </Link>
+          <Link href={REGISTER_HREF} className={actionClass}>Create account</Link>
+        </>
       )}
       <Link href="/query" className={actionClass}>Discover</Link>
       <Link href="/resolve" className={actionClass}>Resolve</Link>
