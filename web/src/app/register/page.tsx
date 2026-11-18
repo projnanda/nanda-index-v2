@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-// Registration now requires OAuth — redirect to login which leads to dashboard/orgs/new
+// Account creation shares the sign-in page and opens in registration mode.
 export default function RegisterRedirectPage() {
-  redirect("/login");
+  redirect("/login?mode=register");
 }
