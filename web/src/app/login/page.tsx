@@ -143,18 +143,18 @@ function LoginForm({ mode }: { mode: Mode }) {
           <form onSubmit={onSubmit} className="space-y-3">
             {mode === "register" && (
               <>
-              <label htmlFor="display-name" className="sr-only">Display name (optional)</label>
-              <input
-                id="display-name"
-                name="display_name"
-                type="text"
-                autoComplete="nickname"
-                maxLength={255}
-                placeholder="Display name (optional)"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                className={inputClass}
-              />
+                <label htmlFor="display-name" className="sr-only">Display name (optional)</label>
+                <input
+                  id="display-name"
+                  name="display_name"
+                  type="text"
+                  autoComplete="nickname"
+                  maxLength={255}
+                  placeholder="Display name (optional)"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  className={inputClass}
+                />
               </>
             )}
             <label htmlFor="email" className="sr-only">Email</label>

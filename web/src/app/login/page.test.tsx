@@ -2,6 +2,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { metadata } from "./layout";
 import LoginPage from "./page";
 
 const state = vi.hoisted(() => ({
@@ -102,5 +103,12 @@ describe("registration URL state", () => {
     rerender(<LoginPage />);
     expect(heading()).toBe("Sign in");
     expect(screen.getByText(/Your session expired/)).toBeTruthy();
+  });
+});
+
+describe("login route metadata", () => {
+  it("describes both sign-in and account creation, for individuals too", () => {
+    expect(metadata.description).toMatch(/create an account/i);
+    expect(metadata.description).not.toMatch(/organization's index record/i);
   });
 });
