@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { generateKeyPairSync } from 'node:crypto';
 import {
   canonicalize,
-  generateChallengeNonce,
   signCanonical,
   verifyCanonical,
   verifySignature,
@@ -50,16 +49,62 @@ describe('canonicalize', () => {
     expect(() => canonicalize(NaN)).toThrow(/non-finite/);
     expect(() => canonicalize(Infinity)).toThrow(/non-finite/);
   });
-});
 
-describe('generateChallengeNonce', () => {
-  it('returns 64 hex chars (32 bytes)', () => {
-    const nonce = generateChallengeNonce();
-    expect(nonce).toMatch(/^[0-9a-f]{64}$/);
+  // A Date has no own enumerable keys, so walking it like a plain object
+  // emits "{}" for every date: a signature over it would not bind the time.
+  it('rejects Date values instead of emitting {}', () => {
+    expect(() => canonicalize({ verifiedAt: new Date('2026-11-05T00:00:00Z') }))
+      .toThrow(/plain object.*Date/);
   });
 
-  it('returns a different value on each call', () => {
-    expect(generateChallengeNonce()).not.toBe(generateChallengeNonce());
+  it('rejects other non-plain objects (Map, Set, Buffer, class instances)', () => {
+    class Pointer { readonly url = 'https://example.com'; }
+    expect(() => canonicalize({ m: new Map([['a', 1]]) })).toThrow(/plain object.*Map/);
+    expect(() => canonicalize({ s: new Set([1]) })).toThrow(/plain object.*Set/);
+    expect(() => canonicalize({ b: Buffer.from('x') })).toThrow(/plain object.*Buffer/);
+    expect(() => canonicalize(new Pointer())).toThrow(/plain object.*Pointer/);
+  });
+
+  it('rejects objects with an inherited prototype, naming it as such', () => {
+    expect(() => canonicalize(Object.create({ inherited: 1 })))
+      .toThrow(/plain object.*custom prototype/);
+  });
+
+  it('reads arrays by index, ignoring an own Symbol.iterator', () => {
+    const items = [1, 2, 3];
+    Object.defineProperty(items, Symbol.iterator, {
+      value: function* () { yield 'substituted'; },
+    });
+    expect(canonicalize(items)).toBe('[1,2,3]');
+  });
+
+  // Code-unit order puts U+1F600 (surrogates D83D DE00) before U+FFFF;
+  // code-point order would not.
+  it('sorts keys by UTF-16 code unit, not code point', () => {
+    const emoji = '\u{1F600}';
+    const last = '￿';
+    expect(canonicalize({ [last]: 1, [emoji]: 2 })).toBe(
+      `{${JSON.stringify(emoji)}:2,${JSON.stringify(last)}:1}`,
+    );
+  });
+
+  it('accepts null-prototype objects', () => {
+    const bare = Object.assign(Object.create(null) as Record<string, unknown>, { b: 1, a: 2 });
+    expect(canonicalize(bare)).toBe('{"a":2,"b":1}');
+  });
+
+  it('rejects undefined object values rather than dropping them', () => {
+    expect(() => canonicalize({ a: 1, b: undefined })).toThrow(/undefined/);
+  });
+
+  it('rejects sparse arrays instead of emitting invalid JSON', () => {
+    expect(() => canonicalize([1, , 3])).toThrow(/undefined/);
+  });
+
+  it('rejects bigint, symbol and function values', () => {
+    expect(() => canonicalize({ n: 1n })).toThrow(/bigint/);
+    expect(() => canonicalize({ s: Symbol('x') })).toThrow(/symbol/);
+    expect(() => canonicalize({ f: () => 1 })).toThrow(/function/);
   });
 });
 
@@ -95,11 +140,24 @@ describe('signCanonical / verifyCanonical', () => {
   });
 });
 
-describe('verifySignature (raw bytes — challenge nonce flow)', () => {
-  it('verifies an ed25519 signature over a raw nonce', () => {
+describe('signCanonical / verifyCanonical — top-level record type', () => {
+  // Object rest copies own keys onto a fresh plain object, so the type
+  // check has to run on the caller's record before signature_value is
+  // stripped, or a Date would be signed as "{}".
+  it('refuses a non-plain top-level record instead of signing {}', () => {
     const { privatePem, publicPem } = ed25519PemKeypair();
-    const nonce = generateChallengeNonce();
-    // The "client" signs the nonce hex bytes directly
+    const date = new Date('2026-11-05T00:00:00Z') as unknown as Record<string, unknown>;
+    expect(() => signCanonical(date, privatePem)).toThrow(/plain object.*Date/);
+    const signatureOverEmpty = signCanonical({}, privatePem);
+    expect(() => verifyCanonical(date, signatureOverEmpty, publicPem, 'ed25519'))
+      .toThrow(/plain object.*Date/);
+  });
+});
+
+describe('verifySignature (raw bytes)', () => {
+  it('verifies an ed25519 signature over the raw canonical bytes', () => {
+    const { privatePem, publicPem } = ed25519PemKeypair();
+    const nonce = 'a'.repeat(64);
     const signature = signCanonical({ nonce }, privatePem);
     // signCanonical wraps in canonical JSON, so the verify side must do the same
     expect(verifySignature(`{"nonce":${JSON.stringify(nonce)}}`, signature, publicPem, 'ed25519')).toBe(true);

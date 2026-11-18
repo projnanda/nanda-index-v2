@@ -1,7 +1,14 @@
+/**
+ * Canonical JSON and Ed25519 signing primitives.
+ *
+ * No route signs or verifies anything with these yet: index-issued
+ * resolution assertions are designed in TRUST_CONTRACT.md and tracked in
+ * #92. tests/unit/index-attestation-contract.test.ts pins the canonical
+ * bytes those assertions will use.
+ */
 import {
   createPrivateKey,
   createPublicKey,
-  randomBytes,
   sign as cryptoSign,
   verify as cryptoVerify,
 } from 'node:crypto';
@@ -9,54 +16,83 @@ import {
 export type SigningAlgorithm = 'ed25519' | 'rsa-sha256';
 
 /**
- * Serializes `value` to canonical JSON per CLAUDE.md §4.5:
- *   - Object keys sorted lexicographically (recursively)
+ * Serializes `value` to canonical JSON:
+ *   - Object keys sorted by UTF-16 code unit (recursively)
  *   - No whitespace
- *   - UTF-8
  *   - Arrays preserve insertion order
  *
  * The output is the byte sequence the signer signs and the verifier
- * verifies. Two implementations producing the same record MUST produce
- * the same canonical bytes — the cross-implementation contract.
+ * verifies, so two implementations given the same record must produce the
+ * same bytes.
+ *
+ * Accepts only JSON values: null, booleans, finite numbers, strings, arrays
+ * and plain objects. Anything else throws rather than being coerced. A Date
+ * walked like an object becomes "{}", so a signature over it would not cover
+ * the time; convert dates to ISO strings before signing.
  */
 export function canonicalize(value: unknown): string {
   if (value === null) return 'null';
-  if (typeof value === 'boolean') return value ? 'true' : 'false';
-  if (typeof value === 'number') {
-    if (!Number.isFinite(value)) {
-      throw new Error('canonicalize: non-finite numbers are not representable');
-    }
-    return JSON.stringify(value);
+  switch (typeof value) {
+    case 'boolean':
+      return value ? 'true' : 'false';
+    case 'number':
+      return canonicalizeNumber(value);
+    case 'string':
+      return JSON.stringify(value);
+    case 'object':
+      return Array.isArray(value) ? canonicalizeArray(value) : canonicalizeObject(value);
+    case 'undefined':
+      throw new Error('canonicalize: undefined is not representable; omit the field or use null');
+    default:
+      throw new Error(`canonicalize: unsupported type ${typeof value}`);
   }
-  if (typeof value === 'string') return JSON.stringify(value);
-  if (Array.isArray(value)) {
-    return '[' + value.map(canonicalize).join(',') + ']';
+}
+
+function canonicalizeNumber(value: number): string {
+  if (!Number.isFinite(value)) {
+    throw new Error('canonicalize: non-finite numbers are not representable');
   }
-  if (typeof value === 'object') {
-    const obj = value as Record<string, unknown>;
-    const keys = Object.keys(obj).sort();
-    return (
-      '{' +
-      keys
-        .map((k) => JSON.stringify(k) + ':' + canonicalize(obj[k]))
-        .join(',') +
-      '}'
+  return JSON.stringify(value);
+}
+
+function canonicalizeArray(values: readonly unknown[]): string {
+  // Read by index, not through the iterator: an own Symbol.iterator could
+  // substitute other items. A hole reads as undefined and throws, where
+  // map() would skip it and join() would emit invalid JSON like "[1,,3]".
+  const items = Array.from({ length: values.length }, (_, i) => canonicalize(values[i]));
+  return '[' + items.join(',') + ']';
+}
+
+function canonicalizeObject(value: object): string {
+  assertPlainObject(value);
+  const record = value as Record<string, unknown>;
+  const members = Object.keys(record)
+    .sort()
+    .map((key) => JSON.stringify(key) + ':' + canonicalize(record[key]));
+  return '{' + members.join(',') + '}';
+}
+
+function assertPlainObject(value: object): void {
+  const proto: unknown = Object.getPrototypeOf(value);
+  if (proto !== Object.prototype && proto !== null) {
+    throw new Error(
+      `canonicalize: only plain objects are representable (got ${describeNonPlain(value)})`,
     );
   }
-  throw new Error(`canonicalize: unsupported type ${typeof value}`);
+}
+
+function describeNonPlain(value: object): string {
+  const name: unknown = (value as { constructor?: { name?: unknown } }).constructor?.name;
+  // "Object" here means Object.create(someProto) or another realm's object;
+  // printing it would read as "only plain objects (got Object)".
+  return typeof name === 'string' && name !== '' && name !== 'Object'
+    ? name
+    : 'an object with a custom prototype';
 }
 
 /**
- * Generates a 32-byte cryptographically random nonce as 64-char hex.
- * Used by the registration challenge flow (POST /api/v1/register).
- */
-export function generateChallengeNonce(): string {
-  return randomBytes(32).toString('hex');
-}
-
-/**
- * Signs the canonical-JSON projection of `record` using the GARR root
- * private key (ed25519 in v1; CLAUDE.md "v1 simplifications").
+ * Signs the canonical-JSON projection of `record` with an Ed25519 private
+ * key (PEM). crypto.sign's algorithm argument is null, as Ed25519 requires.
  *
  * Strips `signature_value` from the record before serialization — the
  * signature must never sign over itself.
@@ -67,16 +103,16 @@ export function signCanonical(
   record: Record<string, unknown>,
   privateKeyPem: string,
 ): string {
+  // Before the rest copy below, which would turn any object into a plain one.
+  assertPlainObject(record);
   const { signature_value: _strip, ...payload } = record;
   const data = Buffer.from(canonicalize(payload), 'utf8');
   const key = createPrivateKey(privateKeyPem);
-  // ed25519: algorithm parameter must be null (the curve is implicit in the key)
   return cryptoSign(null, data, key).toString('base64');
 }
 
 /**
- * Verifies a signature over arbitrary data — used both for canonical
- * record verification and raw nonce verification (challenge response).
+ * Verifies a base64 signature over raw bytes.
  *
  * `algorithm` selects the verifier:
  *   - 'ed25519'    → algorithm parameter null (curve is implicit in key)
@@ -96,12 +132,9 @@ export function verifySignature(
 }
 
 /**
- * Verifies a signature over the canonical-JSON projection of `record`,
- * stripping `signature_value` first (the signature does not sign itself).
- *
- * Use this for read-path verification of EntityOwner records and the
- * root manifest. For raw nonce challenge verification, call
- * `verifySignature` directly.
+ * Counterpart of signCanonical: verifies a signature over the canonical-JSON
+ * projection of `record`, stripping `signature_value` first (the signature
+ * does not sign itself).
  */
 export function verifyCanonical(
   record: Record<string, unknown>,
@@ -109,6 +142,7 @@ export function verifyCanonical(
   publicKeyPem: string,
   algorithm: SigningAlgorithm,
 ): boolean {
+  assertPlainObject(record);
   const { signature_value: _strip, ...payload } = record;
   return verifySignature(
     canonicalize(payload),
@@ -116,34 +150,4 @@ export function verifyCanonical(
     publicKeyPem,
     algorithm,
   );
-}
-
-/**
- * Derives the public key PEM from a private key PEM.
- * Used by the resolver to verify EntityOwner root signatures without
- * requiring a separate public key env var.
- */
-export function derivePublicKey(privateKeyPem: string): string {
-  return createPublicKey(privateKeyPem).export({ type: 'spki', format: 'pem' }) as string;
-}
-
-/**
- * Verifies an AgentCard signature per §2.5 of the NANDA Layer 2 spec.
- *
- * AgentCards use `signature` as the signature field (not `signature_value`).
- * Strips `signature` before canonicalizing — the signature must not sign itself.
- *
- * @param card          - AgentCard as a plain object
- * @param signatureB64  - base64-encoded signature from the card's `signature` field
- * @param publicKeyPem  - EntityOwner public key (PEM) from the GARR registry
- * @param algorithm     - signing algorithm declared in the EntityOwner record
- */
-export function verifyAgentCardSignature(
-  card: Record<string, unknown>,
-  signatureB64: string,
-  publicKeyPem: string,
-  algorithm: SigningAlgorithm,
-): boolean {
-  const { signature: _strip, ...payload } = card;
-  return verifySignature(canonicalize(payload), signatureB64, publicKeyPem, algorithm);
 }
