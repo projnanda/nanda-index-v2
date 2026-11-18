@@ -53,8 +53,12 @@ describe("explore page structure", () => {
   });
 });
 
-// ── Category counts ─────────────────────────────────────────────────────────
+// ── Owner and protocol facets ───────────────────────────────────────────────
 // Entries shaped exactly like production GET /api/v1/index (Nov 2026).
+
+const A2A = "application/a2a-agent-card+json";
+const MCP = "application/mcp-server-card+json";
+const CATALOG = "application/ai-catalog+json";
 
 function prodEntry(identifier: string, type: string, ext: Record<string, unknown>, tags: string[] = []) {
   const domain = identifier.split(":")[2] ?? null;
@@ -84,37 +88,63 @@ function prodEntry(identifier: string, type: string, ext: Record<string, unknown
   };
 }
 
+const PERSONAL_MCP = "urn:air:host39.org:personal:jane@example.com";
+const PERSONAL_A2A = "urn:air:host39.org:personal:sam@example.com";
+const PLAIN_MCP = "urn:air:tools.example.com:mcp:search";
+const SVCB_POINTER = "urn:air:svcb.example.org:agent:pointer";
+
 const PROD_ENTRIES = [
-  prodEntry("urn:air:travel26.net:catalog:root", "application/ai-catalog+json",
+  prodEntry("urn:air:travel26.net:catalog:root", CATALOG,
     { resolutionRole: "nested-ai-catalog", preferredDiscovery: "ai-catalog" }, ["enterprise", "travel"]),
-  prodEntry("urn:air:astrocity.org:catalog:root", "application/ai-catalog+json", {}, ["general ai"]),
-  prodEntry("urn:air:svcb.example.org:agent:pointer", "application/a2a-agent-card+json",
-    { resolutionRole: "dns-svcb-pointer" }),
-  prodEntry("urn:air:bakery.example.com:agent:orders", "application/a2a-agent-card+json",
-    { resolutionRole: "smb-agent-card" }, ["smb"]),
-  prodEntry("urn:air:host39.org:personal:jane@example.com", "application/mcp-server-card+json",
-    { resolutionRole: "personal-agent-card", domain: null }, ["personal-agent"]),
-  // Fits no category: an A2A card with no resolutionRole and no telling tags.
-  prodEntry("urn:air:nandadaily.org:agent:nanda-daily", "application/a2a-agent-card+json", {}),
+  prodEntry("urn:air:astrocity.org:catalog:root", CATALOG, {}, ["general ai"]),
+  // Any domain owner can publish through DNS SVCB, so this has no owner.
+  prodEntry(SVCB_POINTER, A2A, { resolutionRole: "dns-svcb-pointer" }),
+  prodEntry("urn:air:bakery.example.com:agent:orders", A2A, { resolutionRole: "smb-agent-card" }, ["smb"]),
+  prodEntry(PERSONAL_MCP, MCP, { resolutionRole: "personal-agent-card", domain: null }, ["personal-agent"]),
+  prodEntry(PERSONAL_A2A, A2A, { resolutionRole: "personal-agent-card", domain: null }, ["personal-agent"]),
+  prodEntry(PLAIN_MCP, MCP, {}),
+  // No owner: an A2A card with no resolutionRole and no telling tags.
+  prodEntry("urn:air:nandadaily.org:agent:nanda-daily", A2A, {}),
 ];
 
 const pending = () => new Promise<never>(() => {});
 
-function categoryRow(label: string): HTMLElement {
-  const rows = Array.from(container.querySelectorAll<HTMLElement>("[data-category]"));
-  const row = rows.find((r) => r.querySelector("[data-category-label]")?.textContent === label);
-  if (!row) throw new Error(`no category row labelled ${label}`);
-  return row;
+function facetOption(label: string): HTMLElement {
+  const options = Array.from(container.querySelectorAll<HTMLElement>("[data-facet-option]"));
+  const option = options.find((o) => o.querySelector("[data-facet-label]")?.textContent === label);
+  if (!option) throw new Error(`no facet option labelled ${label}`);
+  return option;
 }
 
-const countOf = (label: string) => categoryRow(label).querySelector("[data-category-count]")?.textContent ?? "";
-const allCounts = () => Array.from(container.querySelectorAll("[data-category-count]")).map((c) => c.textContent);
+const countOf = (label: string) => facetOption(label).querySelector("[data-facet-count]")?.textContent ?? "";
+const allCounts = () => Array.from(container.querySelectorAll("[data-facet-count]")).map((c) => c.textContent);
+const cards = () => Array.from(container.querySelectorAll<HTMLElement>("article"));
+const cardFor = (identifier: string) => cards().find((card) => card.textContent?.includes(identifier));
 
-describe("explore category counts", () => {
-  it("does not show a count of 0 for every category before the index has loaded", async () => {
+async function toggle(label: string) {
+  await act(async () => facetOption(label).querySelector("input")!.click());
+}
+
+async function renderLoaded() {
+  api.listIndexRecords.mockResolvedValue(PROD_ENTRIES as never);
+  await act(async () => root.render(<ExplorePage />));
+}
+
+describe("explore facets", () => {
+  it("groups the options under Owner and Protocol, with no combined Category group", async () => {
+    await renderLoaded();
+    const legends = Array.from(container.querySelectorAll("fieldset > legend")).map((l) => l.textContent);
+    expect(legends).toEqual(["Owner", "Protocol"]);
+    const labels = (legend: string) =>
+      Array.from(container.querySelectorAll(`fieldset[data-facet="${legend}"] [data-facet-label]`)).map((l) => l.textContent);
+    expect(labels("owner")).toEqual(["Enterprise", "SMB", "Personal"]);
+    expect(labels("protocol")).toEqual(["A2A", "MCP", "Agent Skill", "Catalog"]);
+  });
+
+  it("does not show a count of 0 for any option before the index has loaded", async () => {
     api.listIndexRecords.mockReturnValue(pending());
     await act(async () => root.render(<ExplorePage />));
-    expect(container.querySelectorAll("[data-category]")).toHaveLength(6);
+    expect(container.querySelectorAll("[data-facet-option]")).toHaveLength(7);
     expect(allCounts()).not.toContain("0");
   });
 
@@ -126,29 +156,96 @@ describe("explore category counts", () => {
     expect(status?.textContent).toContain("Loading entries");
   });
 
-  it("counts live entries from a production-shaped payload", async () => {
-    api.listIndexRecords.mockResolvedValue(PROD_ENTRIES as never);
-    await act(async () => root.render(<ExplorePage />));
+  it("counts owners and protocols independently from a production-shaped payload", async () => {
+    await renderLoaded();
     expect(countOf("Enterprise")).toBe("2");
-    expect(countOf("DNS SVCB")).toBe("1");
-    expect(countOf("SMBs")).toBe("1");
+    expect(countOf("SMB")).toBe("1");
+    expect(countOf("Personal")).toBe("2");
+    expect(countOf("A2A")).toBe("4");
+    expect(countOf("MCP")).toBe("2");
+    expect(countOf("Agent Skill")).toBe("0");
+    expect(countOf("Catalog")).toBe("2");
+    expect(cards()).toHaveLength(PROD_ENTRIES.length);
+  });
+
+  it("returns every entry with an MCP media type when MCP is selected, personal ones included", async () => {
+    await renderLoaded();
+    await toggle("MCP");
+    expect(cards()).toHaveLength(2);
+    expect(cardFor(PERSONAL_MCP)).toBeDefined();
+    expect(cardFor(PLAIN_MCP)).toBeDefined();
+  });
+
+  it("combines the two groups with AND: Personal + MCP shows only the personal MCP entry", async () => {
+    await renderLoaded();
+    await toggle("Personal");
+    expect(cards()).toHaveLength(2);
+    await toggle("MCP");
+    expect(cards()).toHaveLength(1);
+    expect(cardFor(PERSONAL_MCP)).toBeDefined();
+  });
+
+  it("combines choices within a group with OR", async () => {
+    await renderLoaded();
+    await toggle("Personal");
+    await toggle("SMB");
+    expect(cards()).toHaveLength(3);
+  });
+
+  it("unticking an option removes its filter", async () => {
+    await renderLoaded();
+    await toggle("MCP");
+    await toggle("MCP");
+    expect(cards()).toHaveLength(PROD_ENTRIES.length);
+  });
+
+  it("counts each group against the other group's selection, so a count predicts the result", async () => {
+    await renderLoaded();
+    await toggle("Personal");
+    expect(countOf("MCP")).toBe("1");
+    expect(countOf("A2A")).toBe("1");
+    expect(countOf("Catalog")).toBe("0");
+    // A group's own selection does not narrow its own counts.
+    expect(countOf("Enterprise")).toBe("2");
+    await toggle("MCP");
     expect(countOf("Personal")).toBe("1");
-    expect(container.querySelectorAll("article")).toHaveLength(PROD_ENTRIES.length);
+    expect(countOf("Enterprise")).toBe("0");
   });
 
-  it("de-emphasises categories that have no entries", async () => {
-    api.listIndexRecords.mockResolvedValue(PROD_ENTRIES as never);
-    await act(async () => root.render(<ExplorePage />));
-    expect(categoryRow("Skills").getAttribute("data-empty")).toBe("true");
-    expect(categoryRow("Enterprise").getAttribute("data-empty")).toBe("false");
+  it("de-emphasises options that would return no entries", async () => {
+    await renderLoaded();
+    expect(facetOption("Agent Skill").getAttribute("data-empty")).toBe("true");
+    expect(facetOption("Enterprise").getAttribute("data-empty")).toBe("false");
   });
 
-  it("reports entries that fit no category instead of silently dropping them", async () => {
-    api.listIndexRecords.mockResolvedValue(PROD_ENTRIES as never);
-    await act(async () => root.render(<ExplorePage />));
-    const summary = container.querySelector("[data-category-summary]")?.textContent ?? "";
-    expect(summary).toContain("6 entries");
-    expect(summary).toContain("1 uncategorised");
+  it("reports the total, and the entries with no owner, instead of silently dropping them", async () => {
+    await renderLoaded();
+    expect(container.querySelector("[data-entry-summary]")?.textContent).toBe("8 entries");
+    const unspecified = (facet: string) =>
+      container.querySelector(`fieldset[data-facet="${facet}"] [data-facet-unspecified]`)?.textContent ?? null;
+    expect(unspecified("owner")).toBe("3 unspecified");
+    expect(unspecified("protocol")).toBeNull();
+  });
+
+  it("clears both groups with Clear filters", async () => {
+    await renderLoaded();
+    await toggle("Personal");
+    await toggle("MCP");
+    const clear = Array.from(container.querySelectorAll("button")).find((b) => b.textContent === "Clear filters")!;
+    await act(async () => clear.click());
+    expect(cards()).toHaveLength(PROD_ENTRIES.length);
+    expect(container.querySelectorAll("[data-facet-option] input:checked")).toHaveLength(0);
+  });
+
+  it("labels each card with its owner, its protocol and how it is discovered", async () => {
+    await renderLoaded();
+    const badges = (identifier: string) =>
+      Array.from(cardFor(identifier)!.querySelectorAll("[data-badge]")).map((b) => b.textContent);
+    expect(badges(PERSONAL_MCP)).toEqual(["Personal", "MCP"]);
+    expect(badges(PLAIN_MCP)).toEqual(["MCP"]);
+    expect(badges(SVCB_POINTER)).toEqual(["A2A"]);
+    expect(cardFor(SVCB_POINTER)!.textContent).toContain("Discovery: DNS SVCB");
+    expect(cardFor(PERSONAL_MCP)!.textContent).not.toContain("DNS SVCB");
   });
 
   it("shows the error state, not zeros or blank tiles, when the index fails to load", async () => {
