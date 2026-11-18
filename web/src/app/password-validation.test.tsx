@@ -5,13 +5,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import LoginPage from './login/page';
 import ResetPasswordPage from './reset-password/page';
 
+const RESET_QUERY = 'token=test-reset-token';
 const router = vi.hoisted(() => ({ replace: vi.fn() }));
+// The login page reads its mode from the URL, so each test picks its own query.
+const location = vi.hoisted(() => ({ query: '' }));
 vi.mock('next/navigation', () => ({
   useRouter: () => router,
-  useSearchParams: () => new URLSearchParams('token=test-reset-token'),
+  useSearchParams: () => new URLSearchParams(location.query),
 }));
 
 beforeEach(() => {
+  location.query = RESET_QUERY;
   localStorage.clear();
   vi.clearAllMocks();
   vi.stubGlobal(
@@ -36,8 +40,8 @@ afterEach(() => {
 describe('new password validation in authentication forms', () => {
   it('blocks an oversized registration password before sending it', async () => {
     const user = userEvent.setup();
+    location.query = 'mode=register';
     render(<LoginPage />);
-    await user.click(screen.getByRole('button', { name: 'Create account' }));
     await user.type(screen.getByPlaceholderText('Email'), 'new@example.com');
     await user.type(screen.getByPlaceholderText('Password'), 'é'.repeat(37));
     await user.click(screen.getAllByRole('button', { name: 'Create account' }).at(-1)!);
