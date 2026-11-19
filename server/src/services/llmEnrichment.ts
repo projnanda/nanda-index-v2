@@ -8,6 +8,18 @@ export interface OrgEnrichmentInput {
 }
 
 const MAX_QUERIES = 5;
+const MAX_QUERY_LENGTH = 120;
+
+/**
+ * The model's output is untrusted: the prompt carries the registrant's own
+ * description and tags, and whatever comes back is indexed for search. Control
+ * and other non-printing characters become spaces, whitespace is collapsed,
+ * and the result is cut to MAX_QUERY_LENGTH code points.
+ */
+function sanitizeQuery(query: string): string {
+  const text = query.replace(/[\p{C}\s]+/gu, ' ').trim();
+  return Array.from(text).slice(0, MAX_QUERY_LENGTH).join('').trimEnd();
+}
 
 function buildPrompt(org: OrgEnrichmentInput): string {
   return [
@@ -68,7 +80,9 @@ export async function generateRepresentativeQueries(
     if (!isQueriesPayload(parsed)) return [];
 
     return parsed.queries
-      .filter((q): q is string => typeof q === 'string' && q.trim().length > 0)
+      .filter((q): q is string => typeof q === 'string')
+      .map(sanitizeQuery)
+      .filter((q) => q.length > 0)
       .slice(0, MAX_QUERIES);
   } catch {
     return [];
